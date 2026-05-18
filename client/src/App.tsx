@@ -13,6 +13,7 @@ import {
   Wrench,
 } from "lucide-react";
 
+import { AssistantHtml } from "@/components/assistant-html";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -367,12 +368,18 @@ export default function App() {
                     </p>
                     <div
                       className={cn(
-                        "whitespace-pre-wrap text-sm leading-7 text-foreground [overflow-wrap:anywhere] md:text-[15px]",
+                        "text-sm leading-7 text-foreground [overflow-wrap:anywhere] md:text-[15px]",
                         message.role === "user" &&
-                          "rounded-3xl bg-muted px-4 py-2.5",
+                          "whitespace-pre-wrap rounded-3xl bg-muted px-4 py-2.5",
                       )}
                     >
-                      {message.content || (
+                      {message.content ? (
+                        message.role === "assistant" ? (
+                          <AssistantHtml html={message.content} />
+                        ) : (
+                          message.content
+                        )
+                      ) : (
                         <span className="inline-flex items-center gap-1.5 py-1">
                           <LoaderCircle
                             className="size-4 animate-spin text-muted-foreground"

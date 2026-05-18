@@ -90,3 +90,150 @@
     min-height: 100svh;
   }
 }
+
+@layer components {
+  .assistant-html {
+    max-width: none;
+    color: var(--foreground);
+    font-size: inherit;
+    line-height: inherit;
+    overflow-wrap: anywhere;
+  }
+
+  .assistant-html > :first-child {
+    margin-top: 0;
+  }
+
+  .assistant-html > :last-child {
+    margin-bottom: 0;
+  }
+
+  .assistant-html p {
+    margin: 0.75rem 0;
+  }
+
+  .assistant-html h2,
+  .assistant-html h3,
+  .assistant-html h4 {
+    margin: 1.35rem 0 0.55rem;
+    color: var(--foreground);
+    font-weight: 650;
+    letter-spacing: 0;
+  }
+
+  .assistant-html h2 {
+    font-size: 1.08rem;
+    line-height: 1.55rem;
+  }
+
+  .assistant-html h3 {
+    font-size: 1rem;
+    line-height: 1.45rem;
+  }
+
+  .assistant-html h4 {
+    font-size: 0.94rem;
+    line-height: 1.35rem;
+  }
+
+  .assistant-html ul,
+  .assistant-html ol {
+    margin: 0.75rem 0;
+    padding-left: 1.25rem;
+  }
+
+  .assistant-html ul {
+    list-style: disc;
+  }
+
+  .assistant-html ol {
+    list-style: decimal;
+  }
+
+  .assistant-html li {
+    margin: 0.22rem 0;
+    padding-left: 0.1rem;
+  }
+
+  .assistant-html li > p {
+    margin: 0.25rem 0;
+  }
+
+  .assistant-html a {
+    color: var(--primary);
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .assistant-html strong {
+    font-weight: 650;
+  }
+
+  .assistant-html blockquote {
+    margin: 0.95rem 0;
+    border-left: 3px solid var(--primary);
+    padding: 0.2rem 0 0.2rem 0.9rem;
+    color: var(--muted-foreground);
+  }
+
+  .assistant-html hr {
+    margin: 1.2rem 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .assistant-html :not(pre) > code,
+  .assistant-html kbd {
+    border: 1px solid var(--border);
+    border-radius: 0.4rem;
+    background: var(--muted);
+    padding: 0.1rem 0.35rem;
+    font-family:
+      "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.88em;
+  }
+
+  .assistant-html pre {
+    margin: 0.9rem 0;
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: oklch(0.97 0 0);
+    padding: 0.85rem 1rem;
+    line-height: 1.6;
+  }
+
+  .assistant-html pre code {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    font-family:
+      "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.88em;
+  }
+
+  .assistant-html table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 0.95rem 0;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 0.92em;
+  }
+
+  .assistant-html th,
+  .assistant-html td {
+    border: 1px solid var(--border);
+    padding: 0.5rem 0.65rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .assistant-html th {
+    background: var(--muted);
+    font-weight: 650;
+  }
+}
