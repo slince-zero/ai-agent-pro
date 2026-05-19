@@ -3,6 +3,7 @@ import express, { type Response } from "express";
 import cors from "cors";
 import OpenAI from "openai";
 import type { ChatCompletionCreateParamsStreaming } from "openai/resources/chat/completions";
+import { findToolForInput } from "./tools/index.js";
 
 const app = express();
 const model = process.env.DEEPSEEK_MODEL || "deepseek-v4-pro";
@@ -31,23 +32,36 @@ function writeSse(res: Response, event: ServerEvent) {
   res.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
-// 1. 安全 CORS
-app.use(cors({
-  origin: process.env.NODE_ENV === "production" ? false : true
-}));
+function getLatestUserInput(messages: ClientMessage[]) {
+  return [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
+}
+
+function getSystemPrompt() {
+  return [
+    "你是一个前端项目分析助手，擅长分析 React/Vite/TypeScript 项目。",
+    "输出格式要求：",
+    "1. 回答正文必须是可直接嵌入页面的安全、语义化 HTML 片段，不要输出 Markdown，也不要使用 ```html 代码围栏。",
+    "2. 只使用这些标签：p、h2、h3、h4、ul、ol、li、strong、em、code、pre、table、thead、tbody、tr、th、td、blockquote、hr、a、br、kbd。",
+    "3. 不要输出 script、style、svg、iframe、form、input、button、img 标签，不要输出 style/class/id 属性或任何 on* 事件属性。",
+    "4. 代码示例使用 <pre><code>...</code></pre>，代码里的 < 和 > 必须分别写成 &lt; 和 &gt;。",
+    "5. 优先把结论放在开头；需要步骤、风险、对比时使用列表或表格。"
+  ].join("\n");
+}
+
+app.use(
+  cors({
+    origin: process.env.NODE_ENV === "production" ? false : true,
+  }),
+);
 
 app.use(express.json());
 
-// 2. 校验 API Key
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error("缺少 OPENAI_API_KEY 环境变量");
-}
-
-// 3. DeepSeek 必须配置 baseURL
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  baseURL: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com",
-});
+const openai = process.env.OPENAI_API_KEY
+  ? new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      baseURL: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com",
+    })
+  : null;
 
 app.post("/api/chat", async (req, res) => {
   try {
@@ -58,7 +72,6 @@ app.post("/api/chat", async (req, res) => {
       return res.status(400).json({ error: "messages 必须是 user/assistant 消息数组" });
     }
 
-    // SSE 响应头
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -69,6 +82,25 @@ app.post("/api/chat", async (req, res) => {
       clientClosed = true;
     });
 
+    const latestUserInput = getLatestUserInput(messages);
+    const tool = findToolForInput(latestUserInput);
+
+    if (tool) {
+      const result = await tool.run({ input: latestUserInput });
+
+      if (!clientClosed && !res.writableEnded) {
+        writeSse(res, { type: "text", text: result.html });
+        writeSse(res, { type: "done" });
+        res.end();
+      }
+
+      return;
+    }
+
+    if (!openai) {
+      throw new Error("缺少 OPENAI_API_KEY 环境变量");
+    }
+
     const streamParams: ChatCompletionCreateParamsStreaming & {
       thinking: { type: "disabled" };
     } = {
@@ -77,17 +109,9 @@ app.post("/api/chat", async (req, res) => {
       messages: [
         {
           role: "system",
-          content: [
-            "你是一个前端项目分析助手，擅长分析 React/Vite/TypeScript 项目。",
-            "输出格式要求：",
-            "1. 回答正文必须是可直接嵌入页面的安全、语义化 HTML 片段，不要输出 Markdown，也不要使用 ```html 代码围栏。",
-            "2. 只使用这些标签：p、h2、h3、h4、ul、ol、li、strong、em、code、pre、table、thead、tbody、tr、th、td、blockquote、hr、a、br、kbd。",
-            "3. 不要输出 script、style、svg、iframe、form、input、button、img 标签，不要输出 style/class/id 属性或任何 on* 事件属性。",
-            "4. 代码示例使用 <pre><code>...</code></pre>，代码里的 < 和 > 必须分别写成 &lt; 和 &gt;。",
-            "5. 优先把结论放在开头；需要步骤、风险、对比时使用列表或表格。"
-          ].join("\n")
+          content: getSystemPrompt(),
         },
-        ...messages
+        ...messages,
       ],
       // DeepSeek V4 默认是 thinking mode；禁用后前端能更快收到可展示的 content。
       thinking: { type: "disabled" },
@@ -109,19 +133,18 @@ app.post("/api/chat", async (req, res) => {
     }
 
   } catch (error) {
-    // 6. 全局错误捕获（最重要）
     console.error("Chat API 错误：", error);
 
     if (res.headersSent) {
       if (!res.writableEnded) {
-        writeSse(res, { type: "error", error: "模型接口请求失败，请查看 server 终端日志。" });
+        writeSse(res, { type: "error", error: "请求处理失败，请查看 server 终端日志。" });
         res.end();
       }
       return;
     }
 
     if (!res.writableEnded) {
-      res.status(500).json({ error: "模型接口请求失败，请查看 server 终端日志。" });
+      res.status(500).json({ error: "请求处理失败，请查看 server 终端日志。" });
     }
   }
 });

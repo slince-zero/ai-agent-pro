@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
   Bot,
   Code2,
+  GitBranch,
   LoaderCircle,
   MessageSquareText,
   Plus,
@@ -31,6 +32,11 @@ type ServerEvent =
   | { type: "error"; error: string };
 
 const promptPresets = [
+  {
+    label: "读取 GitHub 仓库",
+    prompt: "https://github.com/facebook/react",
+    icon: GitBranch,
+  },
   {
     label: "检查组件结构",
     prompt: "帮我检查 React 组件结构",
@@ -111,6 +117,7 @@ export default function App() {
   }
 
   async function sendMessage() {
+    debugger;
     const content = input.trim();
     if (!content || isSending) return;
 
@@ -368,7 +375,7 @@ export default function App() {
                     </p>
                     <div
                       className={cn(
-                        "text-sm leading-7 text-foreground [overflow-wrap:anywhere] md:text-[15px]",
+                        "text-sm leading-7 text-foreground wrap-anywhere md:text-[15px]",
                         message.role === "user" &&
                           "whitespace-pre-wrap rounded-3xl bg-muted px-4 py-2.5",
                       )}
@@ -403,7 +410,7 @@ export default function App() {
         </div>
 
         <form
-          className="shrink-0 bg-gradient-to-t from-background via-background to-background/70 px-3 pb-4 pt-3 md:px-6 md:pb-6"
+          className="shrink-0 bg-linear-to-t from-background via-background to-background/70 px-3 pb-4 pt-3 md:px-6 md:pb-6"
           onSubmit={(event) => {
             event.preventDefault();
             void sendMessage();
@@ -416,9 +423,9 @@ export default function App() {
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleComposerKeyDown}
-              placeholder="发送消息给 AI Project Agent"
+              placeholder="发送消息或粘贴 GitHub 仓库链接"
               rows={1}
-              className="max-h-[180px] min-h-10 resize-none border-0 bg-transparent px-3 py-2.5 text-base shadow-none focus-visible:ring-0 md:text-sm"
+              className="max-h-45 min-h-10 resize-none border-0 bg-transparent px-3 py-2.5 text-base shadow-none focus-visible:ring-0 md:text-sm"
             />
             <Button
               className="size-10 rounded-full"
