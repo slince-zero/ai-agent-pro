@@ -117,7 +117,6 @@ export default function App() {
   }
 
   async function sendMessage() {
-    debugger;
     const content = input.trim();
     if (!content || isSending) return;
 
