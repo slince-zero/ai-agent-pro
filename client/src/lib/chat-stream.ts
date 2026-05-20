@@ -2,11 +2,13 @@ import type { Message, ServerEvent } from "@/types/chat";
 
 type StreamChatHandlers = {
   onText: (text: string) => void;
+  onToolCall?: (name: string, args: unknown) => void;
+  onToolResult?: (name: string, preview: string) => void;
 };
 
 export async function streamChatResponse(
   messages: Message[],
-  { onText }: StreamChatHandlers,
+  handlers: StreamChatHandlers,
 ) {
   const response = await fetch("http://localhost:3003/api/chat", {
     method: "POST",
@@ -38,12 +40,12 @@ export async function streamChatResponse(
     buffer = events.pop() ?? "";
 
     for (const event of events) {
-      if (handleServerEvent(event, onText)) return;
+      if (handleServerEvent(event, handlers)) return;
     }
   }
 }
 
-function handleServerEvent(event: string, onText: (text: string) => void) {
+function handleServerEvent(event: string, handlers: StreamChatHandlers) {
   for (const line of event.split("\n")) {
     if (!line.startsWith("data:")) continue;
 
@@ -52,16 +54,20 @@ function handleServerEvent(event: string, onText: (text: string) => void) {
 
     const data = JSON.parse(rawData) as ServerEvent;
 
-    if (data.type === "text") {
-      onText(data.text);
-    }
-
-    if (data.type === "error") {
-      throw new Error(data.error);
-    }
-
-    if (data.type === "done") {
-      return true;
+    switch (data.type) {
+      case "text":
+        handlers.onText(data.text);
+        break;
+      case "tool_call":
+        handlers.onToolCall?.(data.name, data.args);
+        break;
+      case "tool_result":
+        handlers.onToolResult?.(data.name, data.preview);
+        break;
+      case "error":
+        throw new Error(data.error);
+      case "done":
+        return true;
     }
   }
 

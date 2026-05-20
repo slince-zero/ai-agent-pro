@@ -2,6 +2,8 @@ import type { Response } from "express";
 
 export type ServerEvent =
   | { type: "text"; text: string }
+  | { type: "tool_call"; name: string; args: unknown }
+  | { type: "tool_result"; name: string; preview: string }
   | { type: "done" }
   | { type: "error"; error: string };
 

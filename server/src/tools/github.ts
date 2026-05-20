@@ -1,10 +1,9 @@
-import { escapeHtml, formatDate } from "../utils/html.js";
 import type { AppTool } from "./types.js";
 
-type GitHubRepoRef = {
-  owner: string;
-  repo: string;
-  url: string;
+type GitHubRepoLookupArgs = {
+  owner?: string;
+  repo?: string;
+  url?: string;
 };
 
 type GitHubRepoApiResponse = {
@@ -23,22 +22,6 @@ type GitHubRepoApiResponse = {
   updated_at?: unknown;
 };
 
-type GitHubRepoSummary = {
-  defaultBranch: string;
-  description: string;
-  forks: number;
-  fullName: string;
-  homepage: string;
-  language: string;
-  license: string;
-  openIssues: number;
-  pushedAt: string;
-  stars: number;
-  topics: string[];
-  updatedAt: string;
-  url: string;
-};
-
 const githubRepoPattern =
   /(?:https?:\/\/(?:www\.)?github\.com\/[^\s<>()]+|git@github\.com:[^\s<>()]+)/i;
 
@@ -46,7 +29,7 @@ function normalizeRepoName(repo: string) {
   return repo.replace(/\.git$/i, "");
 }
 
-export function parseGitHubRepoUrl(input: string): GitHubRepoRef | null {
+function parseGitHubRepoUrl(input: string) {
   const match = input.match(githubRepoPattern);
   if (!match) return null;
 
@@ -57,33 +40,21 @@ export function parseGitHubRepoUrl(input: string): GitHubRepoRef | null {
       .replace("git@github.com:", "")
       .split("/")
       .filter(Boolean);
-
     if (!owner || !repo) return null;
-
-    return {
-      owner,
-      repo: normalizeRepoName(repo),
-      url: `https://github.com/${owner}/${normalizeRepoName(repo)}`,
-    };
+    return { owner, repo: normalizeRepoName(repo) };
   }
 
   try {
     const url = new URL(rawUrl);
     const [owner, repo] = url.pathname.split("/").filter(Boolean);
-
     if (!owner || !repo) return null;
-
-    return {
-      owner,
-      repo: normalizeRepoName(repo),
-      url: `https://github.com/${owner}/${normalizeRepoName(repo)}`,
-    };
+    return { owner, repo: normalizeRepoName(repo) };
   } catch {
     return null;
   }
 }
 
-function toStringValue(value: unknown, fallback = "未知") {
+function toStringValue(value: unknown, fallback = "") {
   return typeof value === "string" && value.trim() ? value : fallback;
 }
 
@@ -97,112 +68,110 @@ function toTopics(value: unknown) {
     : [];
 }
 
-async function fetchGitHubRepo(ref: GitHubRepoRef): Promise<GitHubRepoSummary> {
-  const response = await fetch(
-    `https://api.github.com/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}`,
-    {
-      headers: {
-        Accept: "application/vnd.github+json",
-        ...(process.env.GITHUB_TOKEN
-          ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
-          : {}),
-        "User-Agent": "ai-pro-agent",
+function resolveRef(args: GitHubRepoLookupArgs) {
+  if (args.owner && args.repo) {
+    return { owner: args.owner, repo: normalizeRepoName(args.repo) };
+  }
+  if (args.url) {
+    return parseGitHubRepoUrl(args.url);
+  }
+  return null;
+}
+
+export const githubRepoTool: AppTool<GitHubRepoLookupArgs> = {
+  name: "github_repository_lookup",
+  description:
+    "查询单个公开 GitHub 仓库的元数据：描述、stars、forks、open issues、主要语言、默认分支、最近更新、最近推送、许可证、homepage、topics。当用户提到 GitHub 仓库链接、想要某个仓库的概况或对比多个仓库时调用。每次只查询一个仓库，需要查询多个时分别多次调用。",
+  parameters: {
+    type: "object",
+    properties: {
+      owner: {
+        type: "string",
+        description: "GitHub 组织或用户名，例如 'vercel'。优先使用 owner+repo。",
+      },
+      repo: {
+        type: "string",
+        description: "仓库名，例如 'next.js'，不要带 .git 后缀。",
+      },
+      url: {
+        type: "string",
+        description:
+          "完整的 GitHub 仓库 URL，例如 'https://github.com/vercel/next.js'。当无法直接拆分 owner/repo 时使用。",
       },
     },
-  );
-
-  if (!response.ok) {
-    throw new Error(`GitHub API 请求失败：${response.status}`);
-  }
-
-  const data = (await response.json()) as GitHubRepoApiResponse;
-
-  return {
-    defaultBranch: toStringValue(data.default_branch),
-    description: toStringValue(data.description, "暂无描述"),
-    forks: toNumberValue(data.forks_count),
-    fullName: toStringValue(data.full_name, `${ref.owner}/${ref.repo}`),
-    homepage: toStringValue(data.homepage, ""),
-    language: toStringValue(data.language),
-    license: toStringValue(data.license?.spdx_id),
-    openIssues: toNumberValue(data.open_issues_count),
-    pushedAt: toStringValue(data.pushed_at),
-    stars: toNumberValue(data.stargazers_count),
-    topics: toTopics(data.topics),
-    updatedAt: toStringValue(data.updated_at),
-    url: toStringValue(data.html_url, ref.url),
-  };
-}
-
-function renderGitHubRepoHtml(repo: GitHubRepoSummary) {
-  const topics =
-    repo.topics.length > 0
-      ? `<p>${repo.topics.map((topic) => `<code>${escapeHtml(topic)}</code>`).join(" ")}</p>`
-      : "";
-
-  return [
-    `<h2>GitHub 仓库概览</h2>`,
-    `<p><strong><a href="${escapeHtml(repo.url)}" rel="noreferrer">${escapeHtml(repo.fullName)}</a></strong></p>`,
-    `<p>${escapeHtml(repo.description)}</p>`,
-    `<table><tbody>`,
-    `<tr><th>Stars</th><td>${repo.stars.toLocaleString("zh-CN")}</td></tr>`,
-    `<tr><th>Forks</th><td>${repo.forks.toLocaleString("zh-CN")}</td></tr>`,
-    `<tr><th>Open Issues</th><td>${repo.openIssues.toLocaleString("zh-CN")}</td></tr>`,
-    `<tr><th>主要语言</th><td>${escapeHtml(repo.language)}</td></tr>`,
-    `<tr><th>默认分支</th><td><code>${escapeHtml(repo.defaultBranch)}</code></td></tr>`,
-    `<tr><th>许可证</th><td>${escapeHtml(repo.license)}</td></tr>`,
-    `<tr><th>最近更新</th><td>${escapeHtml(formatDate(repo.updatedAt))}</td></tr>`,
-    `<tr><th>最近推送</th><td>${escapeHtml(formatDate(repo.pushedAt))}</td></tr>`,
-    repo.homepage
-      ? `<tr><th>Homepage</th><td><a href="${escapeHtml(repo.homepage)}" rel="noreferrer">${escapeHtml(repo.homepage)}</a></td></tr>`
-      : "",
-    `</tbody></table>`,
-    topics,
-  ].join("");
-}
-
-function getGitHubErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message.startsWith("GitHub API 请求失败：404")) {
-    return "没有找到这个 GitHub 仓库，请确认链接是否正确，或仓库是否为公开仓库。";
-  }
-
-  if (error instanceof Error && error.message.startsWith("GitHub API 请求失败：")) {
-    return `${error.message}，可以稍后重试，或检查是否触发了 GitHub API 限流。`;
-  }
-
-  return "连接 GitHub API 超时或失败，请确认当前网络能访问 api.github.com 后重试。";
-}
-
-function renderGitHubRepoErrorHtml(ref: GitHubRepoRef, error: unknown) {
-  return [
-    `<h2>GitHub 仓库读取失败</h2>`,
-    `<p>${escapeHtml(getGitHubErrorMessage(error))}</p>`,
-    `<p>仓库链接：<a href="${escapeHtml(ref.url)}" rel="noreferrer">${escapeHtml(ref.url)}</a></p>`,
-  ].join("");
-}
-
-export const githubRepoTool: AppTool = {
-  name: "github_repository_lookup",
-  description: "读取公开 GitHub 仓库的基础信息。",
-  canHandle: (input) => parseGitHubRepoUrl(input) !== null,
-  async run({ input }) {
-    const ref = parseGitHubRepoUrl(input);
+    additionalProperties: false,
+  },
+  async run(args) {
+    const ref = resolveRef(args);
     if (!ref) {
-      throw new Error("没有找到有效的 GitHub 仓库链接");
+      return JSON.stringify({
+        error:
+          "缺少有效的仓库定位参数：请同时提供 owner 和 repo，或提供完整的 url。",
+      });
     }
 
+    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(
+      ref.owner,
+    )}/${encodeURIComponent(ref.repo)}`;
+
+    let response: Response;
     try {
-      const repo = await fetchGitHubRepo(ref);
-
-      return {
-        html: renderGitHubRepoHtml(repo),
-      };
+      response = await fetch(apiUrl, {
+        headers: {
+          Accept: "application/vnd.github+json",
+          ...(process.env.GITHUB_TOKEN
+            ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
+            : {}),
+          "User-Agent": "ai-pro-agent",
+        },
+      });
     } catch (error) {
-      console.error("GitHub 仓库工具错误：", error);
-
-      return {
-        html: renderGitHubRepoErrorHtml(ref, error),
-      };
+      return JSON.stringify({
+        error: `网络请求失败：${(error as Error).message}`,
+        owner: ref.owner,
+        repo: ref.repo,
+      });
     }
+
+    if (response.status === 404) {
+      return JSON.stringify({
+        error: `仓库 ${ref.owner}/${ref.repo} 不存在或非公开仓库。`,
+      });
+    }
+
+    if (!response.ok) {
+      return JSON.stringify({
+        error: `GitHub API 请求失败：HTTP ${response.status}`,
+        hint:
+          response.status === 403
+            ? "可能触发了未认证 API 限流，可配置 GITHUB_TOKEN 后重试。"
+            : undefined,
+      });
+    }
+
+    const data = (await response.json()) as GitHubRepoApiResponse;
+
+    return JSON.stringify(
+      {
+        full_name: toStringValue(data.full_name, `${ref.owner}/${ref.repo}`),
+        url: toStringValue(
+          data.html_url,
+          `https://github.com/${ref.owner}/${ref.repo}`,
+        ),
+        description: toStringValue(data.description, ""),
+        stars: toNumberValue(data.stargazers_count),
+        forks: toNumberValue(data.forks_count),
+        open_issues: toNumberValue(data.open_issues_count),
+        language: toStringValue(data.language, ""),
+        default_branch: toStringValue(data.default_branch, ""),
+        license: toStringValue(data.license?.spdx_id, ""),
+        homepage: toStringValue(data.homepage, ""),
+        updated_at: toStringValue(data.updated_at, ""),
+        pushed_at: toStringValue(data.pushed_at, ""),
+        topics: toTopics(data.topics),
+      },
+      null,
+      2,
+    );
   },
 };

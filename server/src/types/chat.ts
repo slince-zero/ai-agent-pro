@@ -12,7 +12,3 @@ export function isClientMessage(message: unknown): message is ClientMessage {
     typeof candidate.content === "string"
   );
 }
-
-export function getLatestUserInput(messages: ClientMessage[]) {
-  return [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
-}

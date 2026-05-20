@@ -1,8 +1,20 @@
+import type { ChatCompletionTool } from "openai/resources/chat/completions";
 import { githubRepoTool } from "./github.js";
 import type { AppTool } from "./types.js";
 
-const tools: AppTool[] = [githubRepoTool];
+const tools: AppTool<never>[] = [githubRepoTool as AppTool<never>];
 
-export function findToolForInput(input: string) {
-  return tools.find((tool) => tool.canHandle(input)) ?? null;
+export const toolDispatch: Record<string, AppTool<never>> = Object.fromEntries(
+  tools.map((tool) => [tool.name, tool]),
+);
+
+export function getOpenAITools(): ChatCompletionTool[] {
+  return tools.map((tool) => ({
+    type: "function",
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters as Record<string, unknown>,
+    },
+  }));
 }

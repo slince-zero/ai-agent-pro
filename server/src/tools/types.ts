@@ -1,14 +1,13 @@
-export type ToolContext = {
-  input: string;
+export type JsonSchema = {
+  type: "object";
+  properties: Record<string, unknown>;
+  required?: readonly string[];
+  additionalProperties?: boolean;
 };
 
-export type ToolResponse = {
-  html: string;
-};
-
-export type AppTool = {
+export type AppTool<Args = Record<string, unknown>> = {
   name: string;
   description: string;
-  canHandle: (input: string) => boolean;
-  run: (context: ToolContext) => Promise<ToolResponse>;
+  parameters: JsonSchema;
+  run: (args: Args) => Promise<string>;
 };
