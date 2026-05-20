@@ -161,6 +161,26 @@ function renderGitHubRepoHtml(repo: GitHubRepoSummary) {
   ].join("");
 }
 
+function getGitHubErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.startsWith("GitHub API 请求失败：404")) {
+    return "没有找到这个 GitHub 仓库，请确认链接是否正确，或仓库是否为公开仓库。";
+  }
+
+  if (error instanceof Error && error.message.startsWith("GitHub API 请求失败：")) {
+    return `${error.message}，可以稍后重试，或检查是否触发了 GitHub API 限流。`;
+  }
+
+  return "连接 GitHub API 超时或失败，请确认当前网络能访问 api.github.com 后重试。";
+}
+
+function renderGitHubRepoErrorHtml(ref: GitHubRepoRef, error: unknown) {
+  return [
+    `<h2>GitHub 仓库读取失败</h2>`,
+    `<p>${escapeHtml(getGitHubErrorMessage(error))}</p>`,
+    `<p>仓库链接：<a href="${escapeHtml(ref.url)}" rel="noreferrer">${escapeHtml(ref.url)}</a></p>`,
+  ].join("");
+}
+
 export const githubRepoTool: AppTool = {
   name: "github_repository_lookup",
   description: "读取公开 GitHub 仓库的基础信息。",
@@ -171,10 +191,18 @@ export const githubRepoTool: AppTool = {
       throw new Error("没有找到有效的 GitHub 仓库链接");
     }
 
-    const repo = await fetchGitHubRepo(ref);
+    try {
+      const repo = await fetchGitHubRepo(ref);
 
-    return {
-      html: renderGitHubRepoHtml(repo),
-    };
+      return {
+        html: renderGitHubRepoHtml(repo),
+      };
+    } catch (error) {
+      console.error("GitHub 仓库工具错误：", error);
+
+      return {
+        html: renderGitHubRepoErrorHtml(ref, error),
+      };
+    }
   },
 };
