@@ -1,0 +1,91 @@
+import { Bot, MessageSquareText, Plus } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
+import type { PromptPreset } from "@/types/chat";
+
+type SidebarProps = {
+  isSending: boolean;
+  presets: PromptPreset[];
+  onNewChat: () => void;
+  onSelectPrompt: (prompt: string) => void;
+};
+
+export function Sidebar({
+  isSending,
+  presets,
+  onNewChat,
+  onSelectPrompt,
+}: SidebarProps) {
+  return (
+    <aside className="hidden h-svh min-w-0 flex-col border-r bg-muted/30 md:flex">
+      <div className="flex h-16 shrink-0 items-center gap-3 px-3">
+        <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+          <Bot className="size-5" aria-hidden="true" />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">AI Project Agent</p>
+          <p className="text-xs text-muted-foreground">前端工作区</p>
+        </div>
+      </div>
+
+      <div className="px-3">
+        <Button
+          className="h-10 w-full justify-start rounded-xl"
+          variant="outline"
+          onClick={onNewChat}
+          disabled={isSending}
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          新对话
+        </Button>
+      </div>
+
+      <div className="mt-5 px-3">
+        <div className="mb-2 flex items-center justify-between px-1">
+          <p className="text-xs font-medium text-muted-foreground">快捷提示</p>
+          <MessageSquareText
+            className="size-3.5 text-muted-foreground"
+            aria-hidden="true"
+          />
+        </div>
+        <ScrollArea className="h-[calc(100svh-14rem)]">
+          <div className="space-y-1 pr-2">
+            {presets.map((preset) => {
+              const Icon = preset.icon;
+
+              return (
+                <Button
+                  className="h-auto w-full justify-start rounded-lg px-2.5 py-2 text-left text-sm font-normal"
+                  key={preset.prompt}
+                  variant="ghost"
+                  onClick={() => onSelectPrompt(preset.prompt)}
+                >
+                  <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+                  <span className="truncate">{preset.label}</span>
+                </Button>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      </div>
+
+      <div className="mt-auto border-t px-3 py-3">
+        <div className="flex items-center justify-between rounded-xl bg-background px-3 py-2 text-xs shadow-xs">
+          <span className="text-muted-foreground">本地 API</span>
+          <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
+            <span
+              className={cn(
+                "size-1.5 rounded-full bg-emerald-500",
+                isSending && "animate-pulse",
+              )}
+              aria-hidden="true"
+            />
+            {isSending ? "生成中" : "待命"}
+          </span>
+        </div>
+      </div>
+    </aside>
+  );
+}
