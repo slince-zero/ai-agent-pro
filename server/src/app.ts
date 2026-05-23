@@ -1,3 +1,4 @@
+import path from "node:path";
 import cors from "cors";
 import express from "express";
 import { createChatRouter } from "./routes/chat.js";
@@ -15,6 +16,16 @@ export function createApp() {
 
   app.use(express.json());
   app.use("/api/chat", createChatRouter({ openai }));
+
+  if (process.env.NODE_ENV === "production") {
+    const clientDistPath =
+      process.env.CLIENT_DIST_DIR || path.join(process.cwd(), "public");
+
+    app.use(express.static(clientDistPath));
+    app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
+      res.sendFile(path.join(clientDistPath, "index.html"));
+    });
+  }
 
   return app;
 }

@@ -10,7 +10,7 @@ export async function streamChatResponse(
   messages: Message[],
   handlers: StreamChatHandlers,
 ) {
-  const response = await fetch("http://localhost:3003/api/chat", {
+  const response = await fetch("/api/chat", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

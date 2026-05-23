@@ -1,0 +1,15 @@
+.git
+.gitignore
+.DS_Store
+.cursor
+docs
+
+**/node_modules
+**/dist
+**/coverage
+**/.env
+**/.env.*
+!**/.env.example
+
+*.log
+npm-debug.log*
