@@ -4,7 +4,7 @@ import type {
   ChatCompletionMessageToolCall,
 } from "openai/resources/chat/completions";
 import { getSystemPrompt } from "../prompts/system.js";
-import { getOpenAITools, toolDispatch } from "../tools/index.js";
+import { getOpenAITools, runTool } from "../tools/index.js";
 import type { ClientMessage } from "../types/chat.js";
 import { MODEL } from "./openai.js";
 
@@ -162,20 +162,7 @@ export async function runAgent({
       onEvent({ type: "tool_call", name: call.name, args: parsedArgs });
 
       // ====================== 9. 执行具体工具（搜索/计算/查询） ======================
-      const tool = toolDispatch[call.name]; // 从工具注册表中找到对应工具
-      let resultText: string;
-
-      if (!tool) {
-        resultText = `未知工具：${call.name}`;
-      } else {
-        try {
-          // 执行工具并获取结果
-          resultText = await tool.run(parsedArgs as never);
-        } catch (error) {
-          console.error(`工具 ${call.name} 执行失败：`, error);
-          resultText = `工具执行出错：${(error as Error).message}`;
-        }
-      }
+      const resultText = await runTool(call.name, parsedArgs);
 
       // ====================== 10. 把【工具执行结果】加入对话历史 ======================
       conversation.push({

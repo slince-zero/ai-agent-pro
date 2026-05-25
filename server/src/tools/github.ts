@@ -1,10 +1,18 @@
+import { z } from "zod";
 import type { AppTool } from "./types.js";
 
-type GitHubRepoLookupArgs = {
-  owner?: string;
-  repo?: string;
-  url?: string;
-};
+const githubRepoLookupSchema = z
+  .object({
+    owner: z.string().trim().min(1).optional(),
+    repo: z.string().trim().min(1).optional(),
+    url: z.string().trim().min(1).optional(),
+  })
+  .strict()
+  .refine((args) => Boolean(args.url) || Boolean(args.owner && args.repo), {
+    message: "请同时提供 owner 和 repo，或提供完整的 url。",
+  });
+
+type GitHubRepoLookupArgs = z.infer<typeof githubRepoLookupSchema>;
 
 type GitHubRepoApiResponse = {
   default_branch?: unknown;
@@ -101,6 +109,7 @@ export const githubRepoTool: AppTool<GitHubRepoLookupArgs> = {
     },
     additionalProperties: false,
   },
+  schema: githubRepoLookupSchema,
   async run(args) {
     const ref = resolveRef(args);
     if (!ref) {
