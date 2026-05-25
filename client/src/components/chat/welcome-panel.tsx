@@ -15,10 +15,10 @@ export function WelcomePanel({ presets, onSelectPrompt }: WelcomePanelProps) {
         <Bot className="size-7" aria-hidden="true" />
       </div>
       <h2 className="text-3xl font-semibold tracking-tight md:text-5xl">
-        今天想构建什么？
+        今天想推进哪个工程任务？
       </h2>
       <p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground md:text-base">
-        项目分析、界面优化、Bug 定位和重构规划都可以从这里开始。
+        从仓库研究、代码理解、Bug 排查到重构规划，把一次工程任务拆成可执行的下一步。
       </p>
 
       <div className="mt-8 grid w-full gap-2 sm:grid-cols-2">

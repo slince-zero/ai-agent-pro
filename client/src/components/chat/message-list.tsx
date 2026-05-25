@@ -45,7 +45,7 @@ function MessageItem({ message }: { message: Message }) {
         )}
       >
         <p className="mb-2 text-xs font-medium text-muted-foreground">
-          {message.role === "assistant" ? "AI Project Agent" : "你"}
+          {message.role === "assistant" ? "AI Engineering Agent" : "你"}
         </p>
         <div
           className={cn(

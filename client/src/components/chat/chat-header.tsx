@@ -14,9 +14,9 @@ export function ChatHeader({ isSending, onNewChat }: ChatHeaderProps) {
       <div className="flex min-w-0 items-center gap-3">
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">
-            AI Project Agent
+            AI Engineering Agent
           </p>
-          <h1 className="truncate text-base font-semibold">项目助手</h1>
+          <h1 className="truncate text-base font-semibold">工程 Agent 工作台</h1>
         </div>
       </div>
 

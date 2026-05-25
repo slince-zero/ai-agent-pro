@@ -25,8 +25,8 @@ export function Sidebar({
           <Bot className="size-5" aria-hidden="true" />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">AI Project Agent</p>
-          <p className="text-xs text-muted-foreground">前端工作区</p>
+          <p className="truncate text-sm font-semibold">AI Engineering Agent</p>
+          <p className="text-xs text-muted-foreground">工程工作台</p>
         </div>
       </div>
 
