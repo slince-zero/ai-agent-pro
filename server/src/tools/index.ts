@@ -1,13 +1,15 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
 import type { z } from "zod";
 import { githubRepoTool } from "./github.js";
+import { webFetchTool } from "./web-fetch.js";
+import type { AppTool } from "./types.js";
 
-const tools = [githubRepoTool];
-type RegisteredTool = (typeof tools)[number];
+const tools = [githubRepoTool, webFetchTool];
+type RegisteredTool = AppTool<unknown>;
 
 export const toolDispatch = Object.fromEntries(
   tools.map((tool) => [tool.name, tool]),
-) as Record<string, RegisteredTool>;
+) as Record<string, RegisteredTool | undefined>;
 
 export function getOpenAITools(): ChatCompletionTool[] {
   return tools.map((tool) => ({

@@ -142,6 +142,10 @@ function getDoneLabel(event: ToolEvent) {
     return "已获取仓库信息";
   }
 
+  if (event.name === "web_fetch") {
+    return "已读取网页内容";
+  }
+
   return `已完成 ${event.name}`;
 }
 
