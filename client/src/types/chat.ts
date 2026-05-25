@@ -3,6 +3,15 @@ import type { LucideIcon } from "lucide-react";
 export type Message = {
   role: "user" | "assistant";
   content: string;
+  toolEvents?: ToolEvent[];
+};
+
+export type ToolEvent = {
+  id: string;
+  name: string;
+  args?: unknown;
+  status: "running" | "done";
+  preview?: string;
 };
 
 export type ServerEvent =

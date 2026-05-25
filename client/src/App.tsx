@@ -15,6 +15,7 @@ export default function App() {
   const [isSending, setIsSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const toolEventCounterRef = useRef(0);
 
   const hasMessages = messages.length > 0;
   const canSend = input.trim().length > 0 && !isSending;
@@ -66,6 +67,72 @@ export default function App() {
     });
   }, []);
 
+  const appendToolCall = useCallback((name: string, args: unknown) => {
+    toolEventCounterRef.current += 1;
+    const id = `${name}-${toolEventCounterRef.current}`;
+
+    setMessages((prev) => {
+      const copy = [...prev];
+      const last = copy[copy.length - 1];
+
+      if (!last || last.role !== "assistant") return prev;
+
+      copy[copy.length - 1] = {
+        ...last,
+        toolEvents: [
+          ...(last.toolEvents ?? []),
+          {
+            id,
+            name,
+            args,
+            status: "running",
+          },
+        ],
+      };
+
+      return copy;
+    });
+  }, []);
+
+  const completeToolCall = useCallback((name: string, preview: string) => {
+    toolEventCounterRef.current += 1;
+    const fallbackId = `${name}-${toolEventCounterRef.current}`;
+
+    setMessages((prev) => {
+      const copy = [...prev];
+      const last = copy[copy.length - 1];
+
+      if (!last || last.role !== "assistant") return prev;
+
+      const toolEvents = [...(last.toolEvents ?? [])];
+      const matchingIndex = toolEvents.findLastIndex(
+        (event) => event.name === name && event.status === "running",
+      );
+
+      if (matchingIndex >= 0) {
+        toolEvents[matchingIndex] = {
+          ...toolEvents[matchingIndex],
+          status: "done",
+          preview,
+        };
+      } else {
+        toolEvents.push({
+          id: fallbackId,
+          name,
+          status: "done",
+          preview,
+        });
+      }
+
+      copy[copy.length - 1] = {
+        ...last,
+        toolEvents,
+      };
+
+      return copy;
+    });
+  }, []);
+
   const sendMessage = useCallback(async () => {
     const content = input.trim();
     if (!content || isSending) return;
@@ -79,6 +146,8 @@ export default function App() {
     try {
       await streamChatResponse(nextMessages, {
         onText: appendLastAssistant,
+        onToolCall: appendToolCall,
+        onToolResult: completeToolCall,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "请求失败";
@@ -86,7 +155,15 @@ export default function App() {
     } finally {
       setIsSending(false);
     }
-  }, [appendLastAssistant, input, isSending, messages, updateLastAssistant]);
+  }, [
+    appendLastAssistant,
+    appendToolCall,
+    completeToolCall,
+    input,
+    isSending,
+    messages,
+    updateLastAssistant,
+  ]);
 
   const startNewChat = useCallback(() => {
     if (isSending) return;
