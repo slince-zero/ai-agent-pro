@@ -16,6 +16,7 @@ export default function App() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const toolEventCounterRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const hasMessages = messages.length > 0;
   const canSend = input.trim().length > 0 && !isSending;
@@ -61,6 +62,24 @@ export default function App() {
       copy[copy.length - 1] = {
         ...last,
         content: last.content + text,
+      };
+
+      return copy;
+    });
+  }, []);
+
+  const markLastAssistantStopped = useCallback(() => {
+    setMessages((prev) => {
+      const copy = [...prev];
+      const last = copy[copy.length - 1];
+
+      if (!last || last.role !== "assistant" || last.content.trim()) {
+        return prev;
+      }
+
+      copy[copy.length - 1] = {
+        ...last,
+        content: "<p>已停止生成。</p>",
       };
 
       return copy;
@@ -143,16 +162,30 @@ export default function App() {
     setInput("");
     setIsSending(true);
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
-      await streamChatResponse(nextMessages, {
-        onText: appendLastAssistant,
-        onToolCall: appendToolCall,
-        onToolResult: completeToolCall,
-      });
+      await streamChatResponse(
+        nextMessages,
+        {
+          onText: appendLastAssistant,
+          onToolCall: appendToolCall,
+          onToolResult: completeToolCall,
+        },
+        { signal: controller.signal },
+      );
     } catch (error) {
+      if (controller.signal.aborted) {
+        return;
+      }
+
       const message = error instanceof Error ? error.message : "请求失败";
       updateLastAssistant(`请求失败：${message}`);
     } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       setIsSending(false);
     }
   }, [
@@ -161,9 +194,16 @@ export default function App() {
     completeToolCall,
     input,
     isSending,
+    markLastAssistantStopped,
     messages,
     updateLastAssistant,
   ]);
+
+  const stopGeneration = useCallback(() => {
+    abortControllerRef.current?.abort();
+    markLastAssistantStopped();
+    setIsSending(false);
+  }, [markLastAssistantStopped]);
 
   const startNewChat = useCallback(() => {
     if (isSending) return;
@@ -210,6 +250,7 @@ export default function App() {
           isSending={isSending}
           textareaRef={textareaRef}
           onInputChange={setInput}
+          onStop={stopGeneration}
           onSubmit={() => void sendMessage()}
         />
       </section>

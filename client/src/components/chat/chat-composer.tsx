@@ -1,5 +1,5 @@
 import type { KeyboardEvent, RefObject } from "react";
-import { LoaderCircle, SendHorizontal } from "lucide-react";
+import { SendHorizontal, Square } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +10,7 @@ type ChatComposerProps = {
   isSending: boolean;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   onInputChange: (value: string) => void;
+  onStop: () => void;
   onSubmit: () => void;
 };
 
@@ -19,6 +20,7 @@ export function ChatComposer({
   isSending,
   textareaRef,
   onInputChange,
+  onStop,
   onSubmit,
 }: ChatComposerProps) {
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -49,13 +51,14 @@ export function ChatComposer({
         />
         <Button
           className="size-10 rounded-full"
-          type="submit"
+          type={isSending ? "button" : "submit"}
           size="icon"
-          disabled={!canSend}
-          aria-label={isSending ? "发送中" : "发送"}
+          disabled={!isSending && !canSend}
+          aria-label={isSending ? "停止生成" : "发送"}
+          onClick={isSending ? onStop : undefined}
         >
           {isSending ? (
-            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            <Square className="size-3.5 fill-current" aria-hidden="true" />
           ) : (
             <SendHorizontal className="size-4" aria-hidden="true" />
           )}

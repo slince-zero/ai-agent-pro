@@ -6,9 +6,14 @@ type StreamChatHandlers = {
   onToolResult?: (name: string, preview: string) => void;
 };
 
+type StreamChatOptions = {
+  signal?: AbortSignal;
+};
+
 export async function streamChatResponse(
   messages: Message[],
   handlers: StreamChatHandlers,
+  options: StreamChatOptions = {},
 ) {
   const response = await fetch("/api/chat", {
     method: "POST",
@@ -16,6 +21,7 @@ export async function streamChatResponse(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ messages }),
+    signal: options.signal,
   });
 
   if (!response.ok) {
@@ -32,6 +38,8 @@ export async function streamChatResponse(
   let buffer = "";
 
   while (true) {
+    if (options.signal?.aborted) return;
+
     const { value, done } = await reader.read();
     if (done) break;
 
