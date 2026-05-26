@@ -13,7 +13,7 @@ export function MessageList({ messages }: MessageListProps) {
     <div className="mx-auto w-full max-w-3xl py-6 pb-10">
       {messages.map((message, index) => (
         <MessageItem
-          key={`${message.role}-${index}`}
+          key={message.id ?? `${message.role}-${index}`}
           message={message}
         />
       ))}
@@ -51,7 +51,7 @@ function MessageItem({ message }: { message: Message }) {
           className={cn(
             "text-sm leading-7 text-foreground wrap-anywhere md:text-[15px]",
             message.role === "user" &&
-              "whitespace-pre-wrap rounded-3xl bg-muted px-4 py-2.5",
+              "whitespace-pre-wrap rounded-sm bg-muted px-2 py-1.5",
           )}
         >
           {message.role === "assistant" ? (

@@ -2,6 +2,7 @@ import path from "node:path";
 import cors from "cors";
 import express from "express";
 import { createChatRouter } from "./routes/chat.js";
+import { createSessionsRouter } from "./routes/sessions.js";
 import { createOpenAIClient } from "./services/openai.js";
 
 export function createApp() {
@@ -16,6 +17,7 @@ export function createApp() {
 
   app.use(express.json());
   app.use("/api/chat", createChatRouter({ openai }));
+  app.use("/api/sessions", createSessionsRouter({ openai }));
 
   if (process.env.NODE_ENV === "production") {
     const clientDistPath =

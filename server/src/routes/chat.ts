@@ -40,6 +40,16 @@ export function createChatRouter({ openai }: ChatRouterDeps) {
         signal,
         onEvent: (event) => {
           if (signal.aborted || res.writableEnded) return;
+          if (event.type === "tool_result") {
+            writeSse(res, {
+              type: "tool_result",
+              toolCallId: event.toolCallId,
+              name: event.name,
+              preview: event.preview,
+            });
+            return;
+          }
+
           writeSse(res, event);
         },
       });

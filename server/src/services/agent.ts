@@ -12,14 +12,20 @@ const MAX_ITERATIONS = 6;
 
 export type AgentEvent =
   | { type: "text"; text: string }
-  | { type: "tool_call"; name: string; args: unknown }
-  | { type: "tool_result"; name: string; preview: string }
+  | { type: "tool_call"; toolCallId: string; name: string; args: unknown }
+  | {
+      type: "tool_result";
+      toolCallId: string;
+      name: string;
+      preview: string;
+      result: string;
+    }
   | { type: "error"; error: string };
 
 type RunAgentOptions = {
   openai: OpenAI;
   messages: ClientMessage[];
-  onEvent: (event: AgentEvent) => void;
+  onEvent: (event: AgentEvent) => void | Promise<void>;
   signal: { aborted: boolean };
 };
 
@@ -81,7 +87,7 @@ export async function runAgent({
       // 4.1 处理流式文本：实时输出
       if (delta?.content) {
         textBuffer += delta.content;
-        onEvent({ type: "text", text: delta.content });
+        await onEvent({ type: "text", text: delta.content });
       }
 
       // 4.2 处理工具调用：增量拼接工具参数（流式分片）
@@ -150,16 +156,23 @@ export async function runAgent({
           tool_call_id: call.id,
           content: message,
         });
-        onEvent({
+        await onEvent({
           type: "tool_result",
+          toolCallId: call.id,
           name: call.name,
           preview: message.slice(0, 120),
+          result: message,
         });
         continue;
       }
 
       // 通知前端：开始调用工具
-      onEvent({ type: "tool_call", name: call.name, args: parsedArgs });
+      await onEvent({
+        type: "tool_call",
+        toolCallId: call.id,
+        name: call.name,
+        args: parsedArgs,
+      });
 
       // ====================== 9. 执行具体工具（搜索/计算/查询） ======================
       const resultText = await runTool(call.name, parsedArgs);
@@ -172,10 +185,12 @@ export async function runAgent({
       });
 
       // 通知前端：工具执行完成
-      onEvent({
+      await onEvent({
         type: "tool_result",
+        toolCallId: call.id,
         name: call.name,
         preview: resultText.slice(0, 120), // 预览前120个字符
+        result: resultText,
       });
     }
 
@@ -183,7 +198,7 @@ export async function runAgent({
   }
 
   // ====================== 超出最大迭代次数：报错 ======================
-  onEvent({
+  await onEvent({
     type: "error",
     error: `Agent 工具迭代次数超过上限（${MAX_ITERATIONS}）`,
   });

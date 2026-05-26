@@ -1,9 +1,9 @@
-import type { Message, ServerEvent } from "@/types/chat";
+import type { ServerEvent } from "@/types/chat";
 
 type StreamChatHandlers = {
   onText: (text: string) => void;
-  onToolCall?: (name: string, args: unknown) => void;
-  onToolResult?: (name: string, preview: string) => void;
+  onToolCall?: (toolCallId: string, name: string, args: unknown) => void;
+  onToolResult?: (toolCallId: string, name: string, preview: string) => void;
 };
 
 type StreamChatOptions = {
@@ -11,16 +11,17 @@ type StreamChatOptions = {
 };
 
 export async function streamChatResponse(
-  messages: Message[],
+  sessionId: string,
+  content: string,
   handlers: StreamChatHandlers,
   options: StreamChatOptions = {},
 ) {
-  const response = await fetch("/api/chat", {
+  const response = await fetch(`/api/sessions/${sessionId}/messages`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ content }),
     signal: options.signal,
   });
 
@@ -67,10 +68,10 @@ function handleServerEvent(event: string, handlers: StreamChatHandlers) {
         handlers.onText(data.text);
         break;
       case "tool_call":
-        handlers.onToolCall?.(data.name, data.args);
+        handlers.onToolCall?.(data.toolCallId, data.name, data.args);
         break;
       case "tool_result":
-        handlers.onToolResult?.(data.name, data.preview);
+        handlers.onToolResult?.(data.toolCallId, data.name, data.preview);
         break;
       case "error":
         throw new Error(data.error);

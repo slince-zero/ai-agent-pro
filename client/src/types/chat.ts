@@ -1,9 +1,11 @@
 import type { LucideIcon } from "lucide-react";
 
 export type Message = {
+  id?: string;
   role: "user" | "assistant";
   content: string;
   toolEvents?: ToolEvent[];
+  createdAt?: string;
 };
 
 export type ToolEvent = {
@@ -16,8 +18,13 @@ export type ToolEvent = {
 
 export type ServerEvent =
   | { type: "text"; text: string }
-  | { type: "tool_call"; name: string; args: unknown }
-  | { type: "tool_result"; name: string; preview: string }
+  | { type: "tool_call"; toolCallId: string; name: string; args: unknown }
+  | {
+      type: "tool_result";
+      toolCallId: string;
+      name: string;
+      preview: string;
+    }
   | { type: "done" }
   | { type: "error"; error: string };
 
@@ -25,4 +32,12 @@ export type PromptPreset = {
   label: string;
   prompt: string;
   icon: LucideIcon;
+};
+
+export type ChatSession = {
+  id: string;
+  title: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
 };

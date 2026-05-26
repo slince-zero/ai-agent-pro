@@ -4,11 +4,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 type ChatHeaderProps = {
+  activeSessionTitle?: string;
   isSending: boolean;
   onNewChat: () => void;
 };
 
-export function ChatHeader({ isSending, onNewChat }: ChatHeaderProps) {
+export function ChatHeader({
+  activeSessionTitle,
+  isSending,
+  onNewChat,
+}: ChatHeaderProps) {
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b bg-background/90 px-4 backdrop-blur md:px-6">
       <div className="flex min-w-0 items-center gap-3">
@@ -16,7 +21,9 @@ export function ChatHeader({ isSending, onNewChat }: ChatHeaderProps) {
           <p className="text-xs font-medium text-muted-foreground">
             AI Engineering Agent
           </p>
-          <h1 className="truncate text-base font-semibold">工程 Agent 工作台</h1>
+          <h1 className="truncate text-base font-semibold">
+            {activeSessionTitle ?? "工程 Agent 工作台"}
+          </h1>
         </div>
       </div>
 

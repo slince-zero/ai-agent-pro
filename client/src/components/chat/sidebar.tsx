@@ -3,20 +3,26 @@ import { Bot, MessageSquareText, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import type { PromptPreset } from "@/types/chat";
+import type { ChatSession, PromptPreset } from "@/types/chat";
 
 type SidebarProps = {
+  activeSessionId: string | null;
   isSending: boolean;
-  presets: PromptPreset[];
+  isLoadingMessages: boolean;
+  presets?: PromptPreset[];
+  sessions: ChatSession[];
   onNewChat: () => void;
-  onSelectPrompt: (prompt: string) => void;
+  onSelectPrompt?: (prompt: string) => void;
+  onSelectSession: (sessionId: string) => void;
 };
 
 export function Sidebar({
+  activeSessionId,
   isSending,
-  presets,
+  isLoadingMessages,
+  sessions,
   onNewChat,
-  onSelectPrompt,
+  onSelectSession,
 }: SidebarProps) {
   return (
     <aside className="hidden h-svh min-w-0 flex-col border-r bg-muted/30 md:flex">
@@ -35,41 +41,61 @@ export function Sidebar({
           className="h-10 w-full justify-start rounded-xl"
           variant="outline"
           onClick={onNewChat}
-          disabled={isSending}
+          disabled={isSending || isLoadingMessages}
         >
           <Plus className="size-4" aria-hidden="true" />
           新对话
         </Button>
       </div>
 
-      <div className="mt-5 px-3">
+      <div className="mt-4 px-3">
         <div className="mb-2 flex items-center justify-between px-1">
-          <p className="text-xs font-medium text-muted-foreground">快捷提示</p>
+          <p className="text-xs font-medium text-muted-foreground">最近会话</p>
           <MessageSquareText
             className="size-3.5 text-muted-foreground"
             aria-hidden="true"
           />
         </div>
-        <ScrollArea className="h-[calc(100svh-14rem)]">
+        <ScrollArea className="h-[30svh] min-h-32">
           <div className="space-y-1 pr-2">
-            {presets.map((preset) => {
-              const Icon = preset.icon;
+            {sessions.length === 0 ? (
+              <p className="px-2 py-2 text-xs leading-5 text-muted-foreground">
+                暂无历史会话
+              </p>
+            ) : (
+              sessions.map((session) => {
+                const isActive = session.id === activeSessionId;
 
-              return (
-                <Button
-                  className="h-auto w-full justify-start rounded-lg px-2.5 py-2 text-left text-sm font-normal"
-                  key={preset.prompt}
-                  variant="ghost"
-                  onClick={() => onSelectPrompt(preset.prompt)}
-                >
-                  <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
-                  <span className="truncate">{preset.label}</span>
-                </Button>
-              );
-            })}
+                return (
+                  <Button
+                    className={cn(
+                      "h-auto w-full justify-start rounded-lg px-2.5 py-2 text-left text-sm font-normal",
+                      isActive && "bg-accent text-accent-foreground",
+                    )}
+                    key={session.id}
+                    variant="ghost"
+                    aria-current={isActive ? "page" : undefined}
+                    disabled={isSending || isLoadingMessages}
+                    onClick={() => onSelectSession(session.id)}
+                  >
+                    <MessageSquareText
+                      className="size-4 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate">{session.title}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {formatSessionDate(session.updatedAt)}
+                      </span>
+                    </span>
+                  </Button>
+                );
+              })
+            )}
           </div>
         </ScrollArea>
       </div>
+
 
       <div className="mt-auto border-t px-3 py-3">
         <div className="flex items-center justify-between rounded-xl bg-background px-3 py-2 text-xs shadow-xs">
@@ -88,4 +114,13 @@ export function Sidebar({
       </div>
     </aside>
   );
+}
+
+function formatSessionDate(value: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
