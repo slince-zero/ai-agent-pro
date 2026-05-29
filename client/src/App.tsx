@@ -366,7 +366,7 @@ export default function App() {
               onSelectPrompt={fillSuggestedPrompt}
             />
           ) : (
-            <MessageList messages={messages} />
+            <MessageList messages={messages} isSending={isSending} />
           )}
         </div>
 

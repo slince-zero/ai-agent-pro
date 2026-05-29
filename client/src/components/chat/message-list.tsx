@@ -6,22 +6,35 @@ import type { Message, ToolEvent } from "@/types/chat";
 
 type MessageListProps = {
   messages: Message[];
+  isSending: boolean;
 };
 
-export function MessageList({ messages }: MessageListProps) {
+export function MessageList({ messages, isSending }: MessageListProps) {
   return (
     <div className="mx-auto w-full max-w-3xl py-6 pb-10">
-      {messages.map((message, index) => (
-        <MessageItem
-          key={message.id ?? `${message.role}-${index}`}
-          message={message}
-        />
-      ))}
+      {messages.map((message, index) => {
+        const isStreaming =
+          isSending && index === messages.length - 1 && message.role === "assistant";
+
+        return (
+          <MessageItem
+            key={message.id ?? `${message.role}-${index}`}
+            isStreaming={isStreaming}
+            message={message}
+          />
+        );
+      })}
     </div>
   );
 }
 
-function MessageItem({ message }: { message: Message }) {
+function MessageItem({
+  isStreaming,
+  message,
+}: {
+  isStreaming: boolean;
+  message: Message;
+}) {
   const toolEvents =
     message.role === "assistant" ? (message.toolEvents ?? []) : [];
 
@@ -58,7 +71,7 @@ function MessageItem({ message }: { message: Message }) {
             <div className="space-y-3">
               {toolEvents.length > 0 && <ToolEventList events={toolEvents} />}
               {message.content ? (
-                <AssistantHtml html={message.content} />
+                <AssistantHtml html={message.content} isStreaming={isStreaming} />
               ) : (
                 <span className="inline-flex items-center gap-1.5 py-1">
                   <LoaderCircle
