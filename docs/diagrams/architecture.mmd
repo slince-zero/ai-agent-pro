@@ -1,0 +1,16 @@
+flowchart LR
+  user["User / Browser"] --> client["React + Vite client"]
+  client -->|"REST + SSE /api/sessions"| api["Express API"]
+
+  api --> sessions["Session routes"]
+  sessions --> runtime["runAgent runtime"]
+  runtime --> model["OpenAI-compatible model\nDeepSeek by default"]
+  runtime --> tools["Tool registry"]
+
+  tools --> github["GitHub repo lookup"]
+  tools --> fetch["Web fetch"]
+
+  sessions --> prisma["Prisma client"]
+  prisma --> db[("PostgreSQL")]
+
+  api -. "production static files" .-> static["client/dist"]
