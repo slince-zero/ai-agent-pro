@@ -172,3 +172,55 @@ docker run \
 ## 路线图
 
 长期演进计划见 [docs/roadmap.md](docs/roadmap.md)。当前优先级是补齐开源基线、稳定 Agent runtime、增加上下文/记忆/RAG 和可追溯的运行记录。
+
+
+
+# Contributing Guide
+
+感谢你为这个项目贡献代码。这个仓库的目标是保持“工程协作型 AI Agent”的主线清晰，因此所有贡献都应该尽量小、可验证、可回滚。
+
+## 开发环境
+
+- Node.js 22+
+- npm
+- 本地 PostgreSQL，或使用 `docker compose up -d postgres`
+- 可用的 OpenAI-compatible API Key
+
+## 本地开发
+
+前端：
+
+```bash
+cd client
+npm install
+npm run dev
+```
+
+后端：
+
+```bash
+cd server
+npm install
+npm run generate
+npm run migrate:dev
+npm run dev
+```
+
+## 提交规范
+
+- 每个 PR 聚焦一个明确目标。
+- 修改行为时优先补测试或最小化验证步骤。
+- 不要混入无关重构。
+- 如果涉及数据库结构或 API 行为，说明迁移和兼容性影响。
+
+## 分支与 PR
+
+- 分支命名建议使用清晰前缀，例如 `fix/`、`feat/`、`chore/`。
+- PR 描述里写清楚：改了什么、为什么改、怎么验证。
+- 如果影响用户可见行为，请附截图或示例请求/响应。
+
+## Issue 与 Review
+
+- 先确认 Issue 的验收标准，再开始实现。
+- Review 关注点应该是正确性、可维护性和边界条件。
+- 如果发现需求有歧义，先补充说明再实现，不要猜测式提交。
