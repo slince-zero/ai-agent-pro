@@ -180,7 +180,7 @@ docker run \
 感谢你为这个项目贡献代码。这个仓库的目标是保持“工程协作型 AI Agent”的主线清晰，因此所有贡献都应该尽量小、可验证、可回滚。
 
 ## 开发环境
-
+ 
 - Node.js 22+
 - npm
 - 本地 PostgreSQL，或使用 `docker compose up -d postgres`
