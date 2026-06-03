@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-image_name="${IMAGE_NAME:-registry.gitlab.dipeak.com/dipeak/generic-repository/ask-bi-node}"
+image_name="${IMAGE_NAME:-slince00/ai-pro-agent}"
 default_build_tag="$(date +%Y%m%d-%H%M%S)-ai-pro-agent"
 build_tag="${1:-${BUILD_TAG:-$default_build_tag}}"
 docker_platform="${DOCKER_PLATFORM:-linux/amd64}"

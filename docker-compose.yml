@@ -18,7 +18,9 @@ services:
       retries: 5
 
   ai-pro-agent:
-    image: registry.gitlab.dipeak.com/dipeak/generic-repository/ask-bi-node:20260526-220842-ai-pro-agent
+    build:
+      context: .
+    image: ai-pro-agent:local
     container_name: ai-pro-agent
     restart: unless-stopped
     depends_on:
@@ -34,7 +36,7 @@ services:
     ports:
       - "3903:3003"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3003').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3003/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3

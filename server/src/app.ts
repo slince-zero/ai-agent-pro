@@ -16,6 +16,9 @@ export function createApp() {
   );
 
   app.use(express.json());
+  app.get("/api/health", (_req, res) => {
+    res.json({ ok: true });
+  });
   app.use("/api/chat", createChatRouter({ openai }));
   app.use("/api/sessions", createSessionsRouter({ openai }));
 

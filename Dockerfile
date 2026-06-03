@@ -1,7 +1,7 @@
 FROM node:22-alpine AS client-deps
 WORKDIR /app/client
 COPY client/package*.json ./
-RUN npm ci --include=optional
+RUN npm config set registry https://registry.npmmirror.com && npm ci --include=optional
 
 FROM client-deps AS client-build
 COPY client ./
@@ -10,7 +10,7 @@ RUN npm run build
 FROM node:22-alpine AS server-deps
 WORKDIR /app/server
 COPY server/package*.json ./
-RUN npm ci
+RUN npm config set registry https://registry.npmmirror.com && npm ci
 
 FROM server-deps AS server-build
 COPY server ./
