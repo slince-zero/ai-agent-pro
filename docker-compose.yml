@@ -18,9 +18,7 @@ services:
       retries: 5
 
   ai-pro-agent:
-    build:
-      context: .
-    image: ai-pro-agent:local
+    image: slince00/ai-pro-agent:20260603-225603-ai-pro-agent
     container_name: ai-pro-agent
     restart: unless-stopped
     depends_on:
