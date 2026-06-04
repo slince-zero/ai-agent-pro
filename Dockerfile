@@ -34,6 +34,7 @@ COPY --from=server-build /app/server/dist ./dist
 COPY --from=server-build /app/server/prisma ./prisma
 COPY --from=server-build /app/server/prisma.config.ts ./prisma.config.ts
 COPY --from=client-build /app/client/dist ./public
+COPY server/entrypoint.sh ./entrypoint.sh
 
 EXPOSE 3003
-CMD ["node", "dist/index.js"]
+ENTRYPOINT ["sh", "entrypoint.sh"]
