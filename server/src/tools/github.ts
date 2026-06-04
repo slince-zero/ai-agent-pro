@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { env } from "../env.js";
 import type { AppTool } from "./types.js";
 
 const githubRepoLookupSchema = z
@@ -128,8 +129,8 @@ export const githubRepoTool: AppTool<GitHubRepoLookupArgs> = {
       response = await fetch(apiUrl, {
         headers: {
           Accept: "application/vnd.github+json",
-          ...(process.env.GITHUB_TOKEN
-            ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
+          ...(env.GITHUB_TOKEN
+            ? { Authorization: `Bearer ${env.GITHUB_TOKEN}` }
             : {}),
           "User-Agent": "ai-pro-agent",
         },

@@ -5,7 +5,7 @@ import { prepareSse, writeSse } from "../sse/events.js";
 import { isClientMessage } from "../types/chat.js";
 
 type ChatRouterDeps = {
-  openai: OpenAI | null;
+  openai: OpenAI;
 };
 
 export function createChatRouter({ openai }: ChatRouterDeps) {
@@ -19,12 +19,6 @@ export function createChatRouter({ openai }: ChatRouterDeps) {
         return res
           .status(400)
           .json({ error: "messages 必须是 user/assistant 消息数组" });
-      }
-
-      if (!openai) {
-        return res
-          .status(500)
-          .json({ error: "缺少 OPENAI_API_KEY 环境变量" });
       }
 
       prepareSse(res);

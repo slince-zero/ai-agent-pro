@@ -1,12 +1,11 @@
 import OpenAI from "openai";
+import { env } from "../env.js";
 
-export const MODEL = process.env.DEEPSEEK_MODEL || "deepseek-v4-pro";
+export const MODEL = env.DEEPSEEK_MODEL;
 
 export function createOpenAIClient() {
-  return process.env.OPENAI_API_KEY
-    ? new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-        baseURL: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com",
-      })
-    : null;
+  return new OpenAI({
+    apiKey: env.OPENAI_API_KEY,
+    baseURL: env.DEEPSEEK_BASE_URL,
+  });
 }

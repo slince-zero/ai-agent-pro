@@ -16,7 +16,7 @@ import { prepareSse, writeSse } from "../sse/events.js";
 import type { ClientMessage } from "../types/chat.js";
 
 type SessionsRouterDeps = {
-  openai: OpenAI | null;
+  openai: OpenAI;
 };
 
 const createSessionSchema = z
@@ -161,10 +161,6 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
     const parsed = createMessageSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: "消息内容无效" });
-    }
-
-    if (!openai) {
-      return res.status(500).json({ error: "缺少 OPENAI_API_KEY 环境变量" });
     }
 
     const content = parsed.data.content;
