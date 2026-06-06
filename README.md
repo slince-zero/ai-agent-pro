@@ -10,7 +10,7 @@
 - 流式 Agent 回复：后端通过 SSE 推送文本、工具调用和工具结果。
 - 会话持久化：Postgres 保存用户、会话、消息、AgentRun、ToolCall。
 - 内置工具：公开 GitHub 仓库元数据查询、公开网页文本读取。
-- 可容器化部署：根目录 Dockerfile 会构建前端静态资源并打包后端服务。
+- 可容器化部署：Dockerfile 构建前端静态资源并打包后端服务。
 
 ## 技术栈
 
@@ -50,20 +50,20 @@ flowchart LR
 前置条件：
 
 - Node.js 22+
-- npm
+- pnpm
 - Docker Desktop 或本地 PostgreSQL
 - DeepSeek 或其他 OpenAI-compatible API Key
 
-1. 启动数据库：
+### 1. 启动数据库
 
 ```bash
 docker compose up -d postgres
 ```
 
-2. 配置后端环境变量：
+### 2. 配置环境变量
 
 ```bash
-cp server/.env.example server/.env
+cp .env.example .env
 ```
 
 至少填写：
@@ -77,48 +77,33 @@ DATABASE_URL=postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent
 
 `GITHUB_TOKEN` 可选；不配置时 GitHub API 会使用未认证额度。
 
-3. 安装并启动后端：
+### 3. 安装依赖并启动
 
 ```bash
-cd server
-npm install
-npm run generate
-npm run migrate:dev
-npm run dev
+pnpm install
+pnpm --filter server run generate
+pnpm --filter server run migrate:dev
+pnpm dev
 ```
 
-后端默认运行在 `http://localhost:3003`。
-
-4. 安装并启动前端：
-
-```bash
-cd client
-npm install
-npm run dev
-```
-
-前端默认运行在 `http://localhost:5173`，Vite 会把 `/api` 代理到 `http://localhost:3003`。
+后端默认运行在 `http://localhost:3003`，前端默认运行在 `http://localhost:5173`（Vite 会将 `/api` 代理到后端）。
 
 ## 常用脚本
 
-前端：
-
 ```bash
-cd client
-npm run dev
-npm run build
-npm run lint
-```
+# 同时启动前后端开发服务器
+pnpm dev
 
-后端：
+# 构建所有包
+pnpm build
 
-```bash
-cd server
-npm run dev
-npm run generate
-npm run migrate:dev
-npm run build
-npm run start
+# 单独运行某个包的命令
+pnpm --filter client dev
+pnpm --filter client build
+pnpm --filter server dev
+pnpm --filter server build
+pnpm --filter server generate
+pnpm --filter server migrate:dev
 ```
 
 Docker 本地构建：
@@ -126,7 +111,7 @@ Docker 本地构建：
 ```bash
 docker build -t ai-pro-agent:local .
 docker run \
-  --env-file server/.env \
+  --env-file .env \
   -e DATABASE_URL=postgresql://ai_agent:ai_agent@host.docker.internal:5432/ai_pro_agent \
   -p 3003:3003 \
   ai-pro-agent:local
@@ -136,15 +121,17 @@ docker run \
 
 ```txt
 .
-├── client/                 # React + Vite 前端
-├── server/                 # Express + Prisma 后端
-│   ├── prisma/             # Prisma schema 和 migrations
-│   └── src/
-│       ├── routes/         # chat/session API
-│       ├── services/       # OpenAI client、Agent runtime、用户服务
-│       ├── tools/          # Agent 工具定义和执行器
-│       └── sse/            # SSE event helpers
+├── packages/
+│   ├── client/             # React + Vite 前端
+│   └── server/             # Express + Prisma 后端
+│       ├── prisma/         # Prisma schema 和 migrations
+│       └── src/
+│           ├── routes/     # chat/session API
+│           ├── services/   # OpenAI client、Agent runtime、用户服务
+│           ├── tools/      # Agent 工具定义和执行器
+│           └── sse/        # SSE event helpers
 ├── docs/                   # 架构、路线图、截图
+├── pnpm-workspace.yaml
 ├── Dockerfile
 └── docker-compose.yml
 ```
@@ -173,54 +160,9 @@ docker run \
 
 长期演进计划见 [docs/roadmap.md](docs/roadmap.md)。当前优先级是补齐开源基线、稳定 Agent runtime、增加上下文/记忆/RAG 和可追溯的运行记录。
 
-
-
-# Contributing Guide
-
-感谢你为这个项目贡献代码。这个仓库的目标是保持“工程协作型 AI Agent”的主线清晰，因此所有贡献都应该尽量小、可验证、可回滚。
-
-## 开发环境
-
-- Node.js 22+
-- npm
-- 本地 PostgreSQL，或使用 `docker compose up -d postgres`
-- 可用的 OpenAI-compatible API Key
-
-## 本地开发
-
-前端：
-
-```bash
-cd client
-npm install
-npm run dev
-```
-
-后端：
-
-```bash
-cd server
-npm install
-npm run generate
-npm run migrate:dev
-npm run dev
-```
-
-## 提交规范
+## 参与贡献
 
 - 每个 PR 聚焦一个明确目标。
 - 修改行为时优先补测试或最小化验证步骤。
-- 不要混入无关重构。
-- 如果涉及数据库结构或 API 行为，说明迁移和兼容性影响。
-
-## 分支与 PR
-
-- 分支命名建议使用清晰前缀，例如 `fix/`、`feat/`、`chore/`。
-- PR 描述里写清楚：改了什么、为什么改、怎么验证。
-- 如果影响用户可见行为，请附截图或示例请求/响应。
-
-## Issue 与 Review
-
-- 先确认 Issue 的验收标准，再开始实现。
-- Review 关注点应该是正确性、可维护性和边界条件。
-- 如果发现需求有歧义，先补充说明再实现，不要猜测式提交。
+- 分支命名建议使用 `fix/`、`feat/`、`chore/` 等前缀。
+- PR 描述写清楚：改了什么、为什么改、怎么验证。涉及数据库或 API 行为变更时说明迁移和兼容性影响。
