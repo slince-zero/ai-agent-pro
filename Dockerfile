@@ -1,40 +1,51 @@
-FROM node:22-alpine AS client-deps
-WORKDIR /app/client
-COPY client/package*.json ./
-RUN npm config set registry https://registry.npmmirror.com && npm ci --include=optional
+FROM node:22-alpine AS build
+WORKDIR /app
 
-FROM client-deps AS client-build
-COPY client ./
-RUN npm run build
+RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
 
-FROM node:22-alpine AS server-deps
-WORKDIR /app/server
-COPY server/package*.json ./
-RUN npm config set registry https://registry.npmmirror.com && npm ci
+# Copy workspace root config
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
+# Copy sub-package manifests for dependency resolution
+COPY packages/client/package.json packages/client/
+COPY packages/server/package.json packages/server/
 
-FROM server-deps AS server-build
-COPY server ./
-RUN npm run build
-RUN npm prune --omit=dev
+# Install all dependencies for both packages
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY packages/client packages/client
+COPY packages/server packages/server
+
+# Build client and server
+RUN pnpm --filter client run build
+RUN pnpm --filter server run build
+
+# Deploy server: standalone dir with prod deps only (no symlinks)
+RUN pnpm --filter server deploy --legacy /deploy
+
 
 FROM node:22-alpine AS runner
 ARG BUILD_TAG=unknown
 ARG BUILD_TIME=unknown
+
 LABEL org.opencontainers.image.title="ai-pro-agent" \
       org.opencontainers.image.version="${BUILD_TAG}" \
       org.opencontainers.image.created="${BUILD_TIME}"
+
 ENV NODE_ENV=production \
     PORT=3003 \
     CLIENT_DIST_DIR=/app/public
+
 WORKDIR /app
 
-COPY --from=server-build /app/server/package*.json ./
-COPY --from=server-build /app/server/node_modules ./node_modules
-COPY --from=server-build /app/server/dist ./dist
-COPY --from=server-build /app/server/prisma ./prisma
-COPY --from=server-build /app/server/prisma.config.ts ./prisma.config.ts
-COPY --from=client-build /app/client/dist ./public
-COPY server/entrypoint.sh ./entrypoint.sh
+RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
+
+# Copy self-contained server deployment
+COPY --from=build /deploy /app
+# Copy built client static files
+COPY --from=build /app/packages/client/dist /app/public
+# Copy entrypoint
+COPY packages/server/entrypoint.sh /app/entrypoint.sh
 
 EXPOSE 3003
 ENTRYPOINT ["sh", "entrypoint.sh"]

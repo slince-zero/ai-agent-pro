@@ -23,5 +23,8 @@ server/src/generated/prisma
 *.njsproj
 *.sln
 *.sw?
+pnpm-store
+.pnpm-store
+*.tsbuildinfo
 
 .env

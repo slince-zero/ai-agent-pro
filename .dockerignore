@@ -13,3 +13,5 @@ docs
 
 *.log
 npm-debug.log*
+pnpm-store
+.pnpm-store
