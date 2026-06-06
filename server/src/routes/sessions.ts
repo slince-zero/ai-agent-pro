@@ -80,7 +80,7 @@ function toJsonValue(value: unknown) {
 export function createSessionsRouter({ openai }: SessionsRouterDeps) {
   const router = Router();
 
-  router.get("/", async (_req, res) => {
+  router.get("/", async (req, res) => {
     try {
       const user = await getCurrentUser();
       const sessions = await prisma.session.findMany({
@@ -96,7 +96,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
 
       res.json({ sessions: sessions.map(serializeSession) });
     } catch (error) {
-      console.error("获取会话列表失败：", error);
+      req.log.error({ err: error }, "获取会话列表失败");
       res.status(500).json({ error: "获取会话列表失败" });
     }
   });
@@ -118,7 +118,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
 
       res.status(201).json({ session: serializeSession(session) });
     } catch (error) {
-      console.error("创建会话失败：", error);
+      req.log.error({ err: error }, "创建会话失败");
       res.status(500).json({ error: "创建会话失败" });
     }
   });
@@ -152,7 +152,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
 
       res.json({ messages: messages.map(serializeMessage) });
     } catch (error) {
-      console.error("获取消息失败：", error);
+      req.log.error({ err: error }, "获取消息失败");
       res.status(500).json({ error: "获取消息失败" });
     }
   });
@@ -204,6 +204,9 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
       },
     });
 
+    // Create a scoped logger carrying session & run context.
+    const runLogger = req.log.child({ sessionId: session.id, runId: run.id });
+
     prepareSse(res);
 
     const signal = { aborted: false };
@@ -240,6 +243,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
         openai,
         messages,
         signal,
+        logger: runLogger,
         onEvent: async (event) => {
           if (event.type === "text") {
             assistantText += event.text;
@@ -350,7 +354,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
         res.end();
       }
     } catch (error) {
-      console.error("会话消息处理失败：", error);
+      runLogger.error({ err: error }, "会话消息处理失败");
 
       await prisma.agentRun.update({
         where: {

@@ -3,6 +3,7 @@ import type {
   ChatCompletionMessageParam,
   ChatCompletionMessageToolCall,
 } from "openai/resources/chat/completions";
+import type pino from "pino";
 import { getSystemPrompt } from "../prompts/system.js";
 import { getOpenAITools, runTool } from "../tools/index.js";
 import type { ClientMessage } from "../types/chat.js";
@@ -27,6 +28,7 @@ type RunAgentOptions = {
   messages: ClientMessage[];
   onEvent: (event: AgentEvent) => void | Promise<void>;
   signal: { aborted: boolean };
+  logger?: pino.Logger;
 };
 
 type ToolCallAccumulator = {
@@ -41,6 +43,7 @@ export async function runAgent({
   messages, // 用户传入的对话历史
   onEvent, // 事件回调：把文本/工具调用/结果传给前端
   signal, // 中断信号：用户取消请求时停止
+  logger, // 可选：pino 结构化日志记录器
 }: RunAgentOptions) {
   // ====================== 1. 构建对话上下文 ======================
   // 拼接完整对话：系统提示词 + 用户历史消息
@@ -175,7 +178,7 @@ export async function runAgent({
       });
 
       // ====================== 9. 执行具体工具（搜索/计算/查询） ======================
-      const resultText = await runTool(call.name, parsedArgs);
+      const resultText = await runTool(call.name, parsedArgs, logger);
 
       // ====================== 10. 把【工具执行结果】加入对话历史 ======================
       conversation.push({
@@ -198,8 +201,10 @@ export async function runAgent({
   }
 
   // ====================== 超出最大迭代次数：报错 ======================
+  const maxIterMsg = `Agent 工具迭代次数超过上限（${MAX_ITERATIONS}）`;
+  logger?.error({ maxIterations: MAX_ITERATIONS }, maxIterMsg);
   await onEvent({
     type: "error",
-    error: `Agent 工具迭代次数超过上限（${MAX_ITERATIONS}）`,
+    error: maxIterMsg,
   });
 }

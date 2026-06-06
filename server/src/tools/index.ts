@@ -1,4 +1,5 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
+import type pino from "pino";
 import type { z } from "zod";
 import { githubRepoTool } from "./github.js";
 import { webFetchTool } from "./web-fetch.js";
@@ -29,15 +30,21 @@ function formatValidationIssues(error: z.ZodError) {
   }));
 }
 
-export async function runTool(name: string, args: unknown) {
+export async function runTool(
+  name: string,
+  args: unknown,
+  logger?: pino.Logger,
+) {
   const tool = toolDispatch[name];
 
   if (!tool) {
+    logger?.warn({ toolName: name }, "未知工具");
     return `未知工具：${name}`;
   }
 
   const parsed = tool.schema.safeParse(args);
   if (!parsed.success) {
+    logger?.warn({ toolName: name, issues: formatValidationIssues(parsed.error) }, "工具参数校验失败");
     return JSON.stringify(
       {
         error: "工具参数校验失败",
@@ -52,7 +59,7 @@ export async function runTool(name: string, args: unknown) {
   try {
     return await tool.run(parsed.data);
   } catch (error) {
-    console.error(`工具 ${name} 执行失败：`, error);
+    logger?.error({ err: error, toolName: name }, "工具执行失败");
     return `工具执行出错：${(error as Error).message}`;
   }
 }

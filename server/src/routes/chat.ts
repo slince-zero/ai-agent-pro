@@ -53,7 +53,7 @@ export function createChatRouter({ openai }: ChatRouterDeps) {
         res.end();
       }
     } catch (error) {
-      console.error("Chat API 错误：", error);
+      req.log.error({ err: error }, "Chat API error");
 
       if (res.headersSent) {
         if (!res.writableEnded) {
