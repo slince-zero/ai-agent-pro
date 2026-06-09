@@ -27,7 +27,7 @@ type RunAgentOptions = {
   openai: OpenAI;
   messages: ClientMessage[];
   onEvent: (event: AgentEvent) => void | Promise<void>;
-  signal: { aborted: boolean };
+  signal: AbortSignal;
   logger?: pino.Logger;
 };
 
@@ -62,56 +62,66 @@ export async function runAgent({
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     if (signal.aborted) return; // 中途取消，直接退出
 
-    // ====================== 3. 调用 AI 流式接口 ======================
-    // stream: true → 开启流式输出
-    const stream = await openai.chat.completions.create({
-      model: MODEL,
-      stream: true,
-      messages: conversation, // 把完整对话传给 AI
-      tools: getOpenAITools(), // 注册可用工具（搜索、计算器等）
-      tool_choice: "auto", // 自动判断是否需要调用工具
-      // 兼容 DeepSeek 模型：关闭思考过程，让前端更快收到内容
-      ...({ thinking: { type: "disabled" } } as Record<string, unknown>),
-    });
-
     // 变量初始化：缓存本轮 AI 返回的文本、工具调用、结束原因
     let textBuffer = "";
     const toolCalls = new Map<number, ToolCallAccumulator>();
     let finishReason: string | null = null;
 
-    // ====================== 4. 解析流式返回（你上一轮问的核心代码） ======================
-    for await (const chunk of stream) {
-      if (signal.aborted) return;
+    // ====================== 3. 调用 AI 流式接口 ======================
+    // stream: true → 开启流式输出
+    // 用 try/catch 包裹：AbortSignal 触发时 OpenAI SDK 底层 fetch 会抛出错误，需静默退出
+    try {
+      const stream = await openai.chat.completions.create(
+        {
+          model: MODEL,
+          stream: true,
+          messages: conversation, // 把完整对话传给 AI
+          tools: getOpenAITools(), // 注册可用工具（搜索、计算器等）
+          tool_choice: "auto", // 自动判断是否需要调用工具
+          // 兼容 DeepSeek 模型：关闭思考过程，让前端更快收到内容
+          ...({ thinking: { type: "disabled" } } as Record<string, unknown>),
+        },
+        { signal }, // 将 AbortSignal 传入 OpenAI SDK，客户端断开时终止请求
+      );
 
-      const choice = chunk.choices[0];
-      if (!choice) continue;
-      const delta = choice.delta;
+      // ====================== 4. 解析流式返回（你上一轮问的核心代码） ======================
+      for await (const chunk of stream) {
+        if (signal.aborted) return;
 
-      // 4.1 处理流式文本：实时输出
-      if (delta?.content) {
-        textBuffer += delta.content;
-        await onEvent({ type: "text", text: delta.content });
-      }
+        const choice = chunk.choices[0];
+        if (!choice) continue;
+        const delta = choice.delta;
 
-      // 4.2 处理工具调用：增量拼接工具参数（流式分片）
-      if (delta?.tool_calls) {
-        for (const part of delta.tool_calls) {
-          const index = part.index;
-          const existing = toolCalls.get(index) ?? {
-            id: "",
-            name: "",
-            arguments: "",
-          };
-          if (part.id) existing.id = part.id;
-          if (part.function?.name) existing.name = part.function.name;
-          if (part.function?.arguments)
-            existing.arguments += part.function.arguments;
-          toolCalls.set(index, existing);
+        // 4.1 处理流式文本：实时输出
+        if (delta?.content) {
+          textBuffer += delta.content;
+          await onEvent({ type: "text", text: delta.content });
         }
-      }
 
-      // 记录结束原因：stop / tool_calls / length
-      if (choice.finish_reason) finishReason = choice.finish_reason;
+        // 4.2 处理工具调用：增量拼接工具参数（流式分片）
+        if (delta?.tool_calls) {
+          for (const part of delta.tool_calls) {
+            const index = part.index;
+            const existing = toolCalls.get(index) ?? {
+              id: "",
+              name: "",
+              arguments: "",
+            };
+            if (part.id) existing.id = part.id;
+            if (part.function?.name) existing.name = part.function.name;
+            if (part.function?.arguments)
+              existing.arguments += part.function.arguments;
+            toolCalls.set(index, existing);
+          }
+        }
+
+        // 记录结束原因：stop / tool_calls / length
+        if (choice.finish_reason) finishReason = choice.finish_reason;
+      }
+    } catch (error) {
+      // 客户端主动断开连接导致的 AbortError → 静默退出，不向上抛
+      if (signal.aborted) return;
+      throw error;
     }
 
     // ====================== 5. 判断是否结束：不需要工具 → 直接返回 ======================

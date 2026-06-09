@@ -209,13 +209,13 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
 
     prepareSse(res);
 
-    const signal = { aborted: false };
+    const controller = new AbortController();
     const toolCallIds = new Map<string, string>();
     let assistantText = "";
     let runError: string | null = null;
 
     res.on("close", () => {
-      signal.aborted = true;
+      controller.abort();
     });
 
     try {
@@ -242,12 +242,12 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
       await runAgent({
         openai,
         messages,
-        signal,
+        signal: controller.signal,
         logger: runLogger,
         onEvent: async (event) => {
           if (event.type === "text") {
             assistantText += event.text;
-            if (!signal.aborted && !res.writableEnded) {
+            if (!controller.signal.aborted && !res.writableEnded) {
               writeSse(res, event);
             }
             return;
@@ -264,7 +264,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
             });
             toolCallIds.set(event.toolCallId, toolCall.id);
 
-            if (!signal.aborted && !res.writableEnded) {
+            if (!controller.signal.aborted && !res.writableEnded) {
               writeSse(res, event);
             }
             return;
@@ -296,7 +296,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
               });
             }
 
-            if (!signal.aborted && !res.writableEnded) {
+            if (!controller.signal.aborted && !res.writableEnded) {
               writeSse(res, {
                 type: "tool_result",
                 toolCallId: event.toolCallId,
@@ -308,7 +308,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
           }
 
           runError = event.error;
-          if (!signal.aborted && !res.writableEnded) {
+          if (!controller.signal.aborted && !res.writableEnded) {
             writeSse(res, event);
           }
         },
@@ -330,7 +330,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
         },
         data: {
           assistantMessageId: assistantMessage?.id,
-          status: signal.aborted
+          status: controller.signal.aborted
             ? RunStatus.CANCELED
             : runError
               ? RunStatus.FAILED
@@ -349,11 +349,14 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
         },
       });
 
-      if (!signal.aborted && !res.writableEnded) {
+      if (!controller.signal.aborted && !res.writableEnded) {
         writeSse(res, { type: "done" });
         res.end();
       }
     } catch (error) {
+      // 客户端主动断开 → 静默退出，不写错误日志
+      if (controller.signal.aborted) return;
+
       runLogger.error({ err: error }, "会话消息处理失败");
 
       await prisma.agentRun.update({
@@ -361,13 +364,13 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
           id: run.id,
         },
         data: {
-          status: signal.aborted ? RunStatus.CANCELED : RunStatus.FAILED,
+          status: controller.signal.aborted ? RunStatus.CANCELED : RunStatus.FAILED,
           error: (error as Error).message,
           finishedAt: new Date(),
         },
       });
 
-      if (!signal.aborted && !res.writableEnded) {
+      if (!controller.signal.aborted && !res.writableEnded) {
         writeSse(res, {
           type: "error",
           error: "请求处理失败，请查看 server 终端日志。",

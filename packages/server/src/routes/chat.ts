@@ -12,6 +12,8 @@ export function createChatRouter({ openai }: ChatRouterDeps) {
   const router = Router();
 
   router.post("/", async (req, res) => {
+    const controller = new AbortController();
+
     try {
       const { messages } = req.body;
 
@@ -23,17 +25,16 @@ export function createChatRouter({ openai }: ChatRouterDeps) {
 
       prepareSse(res);
 
-      const signal = { aborted: false };
       res.on("close", () => {
-        signal.aborted = true;
+        controller.abort();
       });
 
       await runAgent({
         openai,
         messages,
-        signal,
+        signal: controller.signal,
         onEvent: (event) => {
-          if (signal.aborted || res.writableEnded) return;
+          if (controller.signal.aborted || res.writableEnded) return;
           if (event.type === "tool_result") {
             writeSse(res, {
               type: "tool_result",
@@ -48,11 +49,14 @@ export function createChatRouter({ openai }: ChatRouterDeps) {
         },
       });
 
-      if (!signal.aborted && !res.writableEnded) {
+      if (!controller.signal.aborted && !res.writableEnded) {
         writeSse(res, { type: "done" });
         res.end();
       }
     } catch (error) {
+      // 客户端主动断开 → 静默退出，不写错误日志
+      if (controller.signal.aborted) return;
+
       req.log.error({ err: error }, "Chat API error");
 
       if (res.headersSent) {
