@@ -16,7 +16,6 @@ flowchart TB
   subgraph server["Express server"]
     app["createApp\nserver/src/app.ts"]
     sessionRoutes["/api/sessions\nserver/src/routes/sessions.ts"]
-    legacyChat["/api/chat\nlegacy stateless route"]
     agent["runAgent\nserver/src/services/agent.ts"]
     openai["OpenAI client\nserver/src/services/openai.ts"]
     toolRegistry["Tool registry\nserver/src/tools/index.ts"]

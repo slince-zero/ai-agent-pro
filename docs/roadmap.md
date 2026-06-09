@@ -139,7 +139,7 @@ timeline
   - `AgentRun.provider`（字符串）
   - `Session.systemPromptVersion`
 - 新的 SSE 心跳事件（`: ping` 每 15s）和断流后客户端 `Last-Event-ID` 重连占位（可不实现但要预留协议字段）。
-- 删除 `/api/chat` legacy 路由。
+- ~~删除 `/api/chat` legacy 路由。~~ ✅ 已完成。
 - 单元测试：
   - `model-client` 切换 provider 的契约测试。
   - `tool-runner` 工具失败、参数错误、超时三类用例。

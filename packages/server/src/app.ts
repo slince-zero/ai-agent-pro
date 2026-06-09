@@ -5,7 +5,6 @@ import express from 'express'
 import { env } from './env.js'
 import { logger } from './logger.js'
 import { pinoHttp } from 'pino-http'
-import { createChatRouter } from './routes/chat.js'
 import { createSessionsRouter } from './routes/sessions.js'
 import { createOpenAIClient } from './services/openai.js'
 
@@ -46,7 +45,6 @@ export function createApp() {
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true })
   })
-  app.use('/api/chat', createChatRouter({ openai }))
   app.use('/api/sessions', createSessionsRouter({ openai }))
   app.use(
     (

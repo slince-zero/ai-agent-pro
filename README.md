@@ -152,7 +152,7 @@ docker run \
 ## 当前限制
 
 - 当前没有正式鉴权，多用户部署前需要补认证和会话隔离。
-- `/api/chat` 是旧的无持久化链路，前端主流程使用 `/api/sessions/:sessionId/messages`。
+- 聊天链路为 `/api/sessions/:sessionId/messages`，支持会话持久化。
 - `web_fetch` 工具只做了基础协议和内容大小限制，还需要 SSRF 防护后再暴露到公网。
 - 后端测试和 CI 仍待补齐。
 

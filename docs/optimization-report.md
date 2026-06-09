@@ -59,7 +59,7 @@
 | # | 问题 | 影响 |
 | --- | --- | --- |
 | B1 | `runAgent` 是上帝函数：拼 prompt + 调模型 + 解析 stream + 跑工具 + 推事件 + 写库（写库被 `routes/sessions.ts` 拆出去了一半，但耦合严重） | 后面加 memory、RAG、多模型、规划器都会堆在这里，一定失控 |
-| B2 | **存在两条聊天链路**：旧的 `/api/chat`（无 DB）+ 新的 `/api/sessions/:id/messages`（有 DB） | 维护双倍，前端只走新链路，旧的应当删除 |
+| B2 | ~~**存在两条聊天链路**：旧的 `/api/chat`（无 DB）+ 新的 `/api/sessions/:id/messages`（有 DB）~~ ✅ 已删除旧链路 | 已解决 |
 | B3 | 上下文构建是 `take: 30` 暴力截最近 30 条 | 长会话必爆 token，且没有摘要/相关性/系统注入 |
 | B4 | **没有 token / 成本记录**：schema 里漏掉了 `inputTokens / outputTokens / cost` | 一旦真用起来，无法做用量统计、限流、配额 |
 | B5 | **没有 tool message 回灌**：工具结果只写到 `ToolCall` 表，下一次对话拿历史时只取 user/assistant，工具上下文丢失 | 多轮里 Agent "失忆" |
@@ -126,7 +126,7 @@
 - [ ] **环境变量启动校验**：用 `zod` 在 `app.ts` 里 parse `process.env`，缺失直接退出，附带可读错误。
 - [ ] **结构化日志**：换 `pino` + `pino-http`，每条 SSE 请求带 `requestId`。
 - [ ] **AbortSignal 透传**：`openai.chat.completions.create({ signal })`，让"停止"按钮真的能省钱。
-- [ ] **删除 `/api/chat` 旧链路**：保持单一入口，前端早就不调它了。
+- [x] ~~**删除 `/api/chat` 旧链路**~~ ✅ 已完成。
 - [ ] **`web_fetch` SSRF 修复**：
   - DNS 解析后拒绝 RFC1918 / `127.0.0.0/8` / `169.254.0.0/16` / `::1` / `fc00::/7`。
   - 限制最大重定向跳数。
@@ -266,7 +266,7 @@
 [chore] 启动期 env 校验 (zod parse process.env)
 [feat]  结构化日志 (pino + requestId)
 [fix]   AbortSignal 透传到 OpenAI SDK
-[chore] 删除遗留的 /api/chat 路由
+[chore] ~~删除遗留的 /api/chat 路由~~ ✅ 已完成
 [fix]   web_fetch SSRF 防护
 [feat]  AgentRun 增加 inputTokens / outputTokens / costUsd / iterations
 [chore] GitHub Actions CI: typecheck + lint + build + test

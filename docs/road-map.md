@@ -11,7 +11,7 @@
 
 - 模型调用：在 [server/src/services/agent.ts](/Users/zhangbowen/Downloads/ai-pro-agent/server/src/services/agent.ts:33)
 - 工具注册/执行：在 [server/src/tools/index.ts](/Users/zhangbowen/Downloads/ai-pro-agent/server/src/tools/index.ts:1)
-- SSE 流式事件：在 [server/src/routes/chat.ts](/Users/zhangbowen/Downloads/ai-pro-agent/server/src/routes/chat.ts:30)
+- SSE 流式事件：在 [server/src/routes/sessions.ts](/Users/zhangbowen/Downloads/ai-pro-agent/server/src/routes/sessions.ts:210)
 - 前端聊天状态：在 [client/src/App.tsx](/Users/zhangbowen/Downloads/ai-pro-agent/client/src/App.tsx:12)
 
 缺的核心模块：
@@ -230,7 +230,7 @@ session_summary   当前会话摘要
 - sessions/messages 入库
 - agent_runs/tool_calls 入库
 - 前端支持会话列表、切换会话
-- API 从无状态 `/api/chat` 改成基于 `sessionId`
+- ~~API 从无状态 `/api/chat` 改成基于 `sessionId`~~ ✅ 已完成
 
 第二阶段：Agent Runtime 重构
 
