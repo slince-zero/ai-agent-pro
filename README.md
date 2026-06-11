@@ -156,10 +156,6 @@ docker run \
 - `web_fetch` 工具只做了基础协议和内容大小限制，还需要 SSRF 防护后再暴露到公网。
 - 后端测试和 CI 仍待补齐。
 
-## 路线图
-
-长期演进计划见 [docs/roadmap.md](docs/roadmap.md)。当前优先级是补齐开源基线、稳定 Agent runtime、增加上下文/记忆/RAG 和可追溯的运行记录。
-
 ## 参与贡献
 
 - 每个 PR 聚焦一个明确目标。
