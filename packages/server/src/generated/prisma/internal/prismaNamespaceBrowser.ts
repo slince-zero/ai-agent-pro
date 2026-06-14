@@ -117,6 +117,9 @@ export const AgentRunScalarFieldEnum = {
   status: 'status',
   model: 'model',
   error: 'error',
+  inputTokens: 'inputTokens',
+  outputTokens: 'outputTokens',
+  cost: 'cost',
   startedAt: 'startedAt',
   finishedAt: 'finishedAt'
 } as const

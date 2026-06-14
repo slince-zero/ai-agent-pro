@@ -23,6 +23,11 @@ export type AgentEvent =
     }
   | { type: "error"; error: string };
 
+export type AgentUsage = {
+  inputTokens: number;
+  outputTokens: number;
+};
+
 type RunAgentOptions = {
   openai: OpenAI;
   messages: ClientMessage[];
@@ -44,7 +49,7 @@ export async function runAgent({
   onEvent, // 事件回调：把文本/工具调用/结果传给前端
   signal, // 中断信号：用户取消请求时停止
   logger, // 可选：pino 结构化日志记录器
-}: RunAgentOptions) {
+}: RunAgentOptions): Promise<AgentUsage> {
   // ====================== 1. 构建对话上下文 ======================
   // 拼接完整对话：系统提示词 + 用户历史消息
   const conversation: ChatCompletionMessageParam[] = [
@@ -59,8 +64,11 @@ export async function runAgent({
 
   // ====================== 2. 工具调用循环（最多执行 MAX_ITERATIONS 轮） ======================
   // 限制最大迭代次数，防止无限调用工具
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
-    if (signal.aborted) return; // 中途取消，直接退出
+    if (signal.aborted) return { inputTokens: totalInputTokens, outputTokens: totalOutputTokens };
 
     // 变量初始化：缓存本轮 AI 返回的文本、工具调用、结束原因
     let textBuffer = "";
@@ -75,6 +83,7 @@ export async function runAgent({
         {
           model: MODEL,
           stream: true,
+          stream_options: { include_usage: true },
           messages: conversation, // 把完整对话传给 AI
           tools: getOpenAITools(), // 注册可用工具（搜索、计算器等）
           tool_choice: "auto", // 自动判断是否需要调用工具
@@ -86,7 +95,7 @@ export async function runAgent({
 
       // ====================== 4. 解析流式返回（你上一轮问的核心代码） ======================
       for await (const chunk of stream) {
-        if (signal.aborted) return;
+        if (signal.aborted) return { inputTokens: totalInputTokens, outputTokens: totalOutputTokens };
 
         const choice = chunk.choices[0];
         if (!choice) continue;
@@ -117,16 +126,22 @@ export async function runAgent({
 
         // 记录结束原因：stop / tool_calls / length
         if (choice.finish_reason) finishReason = choice.finish_reason;
+
+        // 收集 token 用量（仅在 stream_options.include_usage 开启时返回）
+        if (chunk.usage) {
+          totalInputTokens += chunk.usage.prompt_tokens ?? 0;
+          totalOutputTokens += chunk.usage.completion_tokens ?? 0;
+        }
       }
     } catch (error) {
       // 客户端主动断开连接导致的 AbortError → 静默退出，不向上抛
-      if (signal.aborted) return;
+      if (signal.aborted) return { inputTokens: totalInputTokens, outputTokens: totalOutputTokens };
       throw error;
     }
 
     // ====================== 5. 判断是否结束：不需要工具 → 直接返回 ======================
     if (finishReason !== "tool_calls" || toolCalls.size === 0) {
-      return; // AI 直接回答了问题，没有调用工具，任务结束
+      return { inputTokens: totalInputTokens, outputTokens: totalOutputTokens };
     }
 
     // ====================== 6. 工具调用排序与格式化 ======================
@@ -155,11 +170,10 @@ export async function runAgent({
 
     // ====================== 8. 依次执行所有工具调用 ======================
     for (const call of orderedCalls) {
-      if (signal.aborted) return;
+      if (signal.aborted) return { inputTokens: totalInputTokens, outputTokens: totalOutputTokens };
 
       let parsedArgs: Record<string, unknown> = {};
       try {
-        // 解析工具参数（AI 返回的是 JSON 字符串）
         parsedArgs = call.arguments ? JSON.parse(call.arguments) : {};
       } catch (error) {
         // 参数解析失败：把错误信息加入对话
@@ -217,4 +231,6 @@ export async function runAgent({
     type: "error",
     error: maxIterMsg,
   });
+
+  return { inputTokens: totalInputTokens, outputTokens: totalOutputTokens };
 }

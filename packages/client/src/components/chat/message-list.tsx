@@ -81,6 +81,9 @@ function MessageItem({
                   <span className="text-muted-foreground">正在生成</span>
                 </span>
               )}
+              {message.usage && (
+                <UsageSummary usage={message.usage} />
+              )}
             </div>
           ) : message.content ? (
             message.content
@@ -172,4 +175,20 @@ function formatPreview(value: unknown) {
   } catch {
     return "参数无法预览";
   }
+}
+
+function UsageSummary({
+  usage,
+}: {
+  usage: NonNullable<Message["usage"]>;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <span>
+        {usage.inputTokens.toLocaleString()} input + {usage.outputTokens.toLocaleString()} output tokens
+      </span>
+      <span aria-hidden="true" className="select-none">·</span>
+      <span>${usage.cost.toFixed(6)}</span>
+    </div>
+  );
 }

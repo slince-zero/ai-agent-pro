@@ -6,6 +6,11 @@ export type Message = {
   content: string;
   toolEvents?: ToolEvent[];
   createdAt?: string;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    cost: number;
+  };
 };
 
 export type ToolEvent = {
@@ -25,6 +30,7 @@ export type ServerEvent =
       name: string;
       preview: string;
     }
+  | { type: "usage"; inputTokens: number; outputTokens: number; cost: number }
   | { type: "done" }
   | { type: "error"; error: string };
 

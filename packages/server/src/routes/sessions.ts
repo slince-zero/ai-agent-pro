@@ -11,6 +11,7 @@ import {
 } from "../generated/prisma/client.js";
 import { runAgent } from "../services/agent.js";
 import { MODEL } from "../services/openai.js";
+import { calculateCost } from "../services/pricing.js";
 import { getCurrentUser } from "../services/users.js";
 import { prepareSse, writeSse } from "../sse/events.js";
 import type { ClientMessage } from "../types/chat.js";
@@ -59,17 +60,33 @@ function serializeSession(session: {
   };
 }
 
-function serializeMessage(message: {
-  id: string;
-  role: MessageRole;
-  content: string;
-  createdAt: Date;
-}) {
+function serializeMessage(
+  message: {
+    id: string;
+    role: MessageRole;
+    content: string;
+    createdAt: Date;
+  },
+  usage?: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+    cost: number | null;
+  },
+) {
+  const hasUsage =
+    usage &&
+    usage.inputTokens != null &&
+    usage.outputTokens != null &&
+    usage.cost != null;
+
   return {
     id: message.id,
     role: message.role.toLowerCase(),
     content: message.content,
     createdAt: message.createdAt.toISOString(),
+    ...(hasUsage
+      ? { usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, cost: usage.cost } }
+      : {}),
   };
 }
 
@@ -148,9 +165,21 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
         orderBy: {
           createdAt: "asc",
         },
+        include: {
+          assistantRuns: {
+            where: { status: RunStatus.COMPLETED },
+            select: { inputTokens: true, outputTokens: true, cost: true },
+            take: 1,
+          },
+        },
       });
 
-      res.json({ messages: messages.map(serializeMessage) });
+      res.json({
+        messages: messages.map((message) => {
+          const usage = message.assistantRuns[0];
+          return serializeMessage(message, usage ?? undefined);
+        }),
+      });
     } catch (error) {
       req.log.error({ err: error }, "获取消息失败");
       res.status(500).json({ error: "获取消息失败" });
@@ -239,7 +268,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
         })
         .filter((message): message is ClientMessage => message !== null);
 
-      await runAgent({
+      const { inputTokens, outputTokens } = await runAgent({
         openai,
         messages,
         signal: controller.signal,
@@ -314,6 +343,8 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
         },
       });
 
+      const runCost = calculateCost(MODEL, inputTokens, outputTokens);
+
       const assistantMessage = assistantText.trim()
         ? await prisma.message.create({
             data: {
@@ -336,6 +367,9 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
               ? RunStatus.FAILED
               : RunStatus.COMPLETED,
           error: runError,
+          inputTokens,
+          outputTokens,
+          cost: runCost,
           finishedAt: new Date(),
         },
       });
@@ -350,6 +384,12 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
       });
 
       if (!controller.signal.aborted && !res.writableEnded) {
+        writeSse(res, {
+          type: "usage",
+          inputTokens,
+          outputTokens,
+          cost: runCost,
+        });
         writeSse(res, { type: "done" });
         res.end();
       }

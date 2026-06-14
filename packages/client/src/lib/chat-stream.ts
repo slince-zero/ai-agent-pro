@@ -4,6 +4,7 @@ type StreamChatHandlers = {
   onText: (text: string) => void;
   onToolCall?: (toolCallId: string, name: string, args: unknown) => void;
   onToolResult?: (toolCallId: string, name: string, preview: string) => void;
+  onUsage?: (inputTokens: number, outputTokens: number, cost: number) => void;
 };
 
 type StreamChatOptions = {
@@ -72,6 +73,9 @@ function handleServerEvent(event: string, handlers: StreamChatHandlers) {
         break;
       case "tool_result":
         handlers.onToolResult?.(data.toolCallId, data.name, data.preview);
+        break;
+      case "usage":
+        handlers.onUsage?.(data.inputTokens, data.outputTokens, data.cost);
         break;
       case "error":
         throw new Error(data.error);

@@ -4,6 +4,7 @@ export type ServerEvent =
   | { type: "text"; text: string }
   | { type: "tool_call"; toolCallId: string; name: string; args: unknown }
   | { type: "tool_result"; toolCallId: string; name: string; preview: string }
+  | { type: "usage"; inputTokens: number; outputTokens: number; cost: number }
   | { type: "done" }
   | { type: "error"; error: string };
 

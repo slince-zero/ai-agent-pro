@@ -860,6 +860,9 @@ export const AgentRunScalarFieldEnum = {
   status: 'status',
   model: 'model',
   error: 'error',
+  inputTokens: 'inputTokens',
+  outputTokens: 'outputTokens',
+  cost: 'cost',
   startedAt: 'startedAt',
   finishedAt: 'finishedAt'
 } as const
@@ -1015,20 +1018,6 @@ export type ListEnumRunStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$Pr
 
 
 /**
- * Reference to a field of type 'ToolCallStatus'
- */
-export type EnumToolCallStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ToolCallStatus'>
-    
-
-
-/**
- * Reference to a field of type 'ToolCallStatus[]'
- */
-export type ListEnumToolCallStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ToolCallStatus[]'>
-    
-
-
-/**
  * Reference to a field of type 'Int'
  */
 export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
@@ -1039,6 +1028,34 @@ export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'In
  * Reference to a field of type 'Int[]'
  */
 export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Float'
+ */
+export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
+    
+
+
+/**
+ * Reference to a field of type 'Float[]'
+ */
+export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
+    
+
+
+/**
+ * Reference to a field of type 'ToolCallStatus'
+ */
+export type EnumToolCallStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ToolCallStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'ToolCallStatus[]'
+ */
+export type ListEnumToolCallStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ToolCallStatus[]'>
     
 
 /**

@@ -228,6 +228,25 @@ export default function App() {
     [],
   );
 
+  const setLastAssistantUsage = useCallback(
+    (inputTokens: number, outputTokens: number, cost: number) => {
+      setMessages((prev) => {
+        const copy = [...prev];
+        const last = copy[copy.length - 1];
+
+        if (!last || last.role !== "assistant") return prev;
+
+        copy[copy.length - 1] = {
+          ...last,
+          usage: { inputTokens, outputTokens, cost },
+        };
+
+        return copy;
+      });
+    },
+    [],
+  );
+
   const selectSession = useCallback(
     async (sessionId: string) => {
       if (isSending || sessionId === activeSessionId) return;
@@ -286,6 +305,7 @@ export default function App() {
           onText: appendLastAssistant,
           onToolCall: appendToolCall,
           onToolResult: completeToolCall,
+          onUsage: setLastAssistantUsage,
         },
         { signal: controller.signal },
       );
@@ -311,6 +331,7 @@ export default function App() {
     input,
     isSending,
     refreshSessions,
+    setLastAssistantUsage,
     updateLastAssistant,
   ]);
 

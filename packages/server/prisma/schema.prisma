@@ -55,6 +55,9 @@ model AgentRun {
   status             RunStatus @default(RUNNING)
   model              String
   error              String?
+  inputTokens        Int?
+  outputTokens       Int?
+  cost               Float?
   startedAt          DateTime  @default(now())
   finishedAt         DateTime?
 
