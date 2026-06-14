@@ -3,5 +3,5 @@ packages:
 
 allowBuilds:
   '@prisma/engines': true
-  esbuild: true
+  esbuild: set this to true or false
   prisma: true
