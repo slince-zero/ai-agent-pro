@@ -148,18 +148,20 @@ export async function runAgent({
     // ====================== 6. 工具调用排序与格式化 ======================
     // 把 Map 转成数组，并按 index 排序（保证工具调用顺序正确）
     const orderedCalls = [...toolCalls.entries()]
-      .toSorted(([a], [b]) => a - b)
-      .map(([, value]) => value)
+      .toSorted(([a]: [number, unknown], [b]: [number, unknown]) => a - b)
+      .map(([, value]: [number, ToolCallAccumulator]) => value)
 
     // 格式化为 OpenAI 标准的 tool_calls 结构
-    const assistantToolCalls: ChatCompletionMessageToolCall[] = orderedCalls.map((call) => ({
-      id: call.id,
-      type: 'function',
-      function: {
-        name: call.name,
-        arguments: call.arguments || '{}',
-      },
-    }))
+    const assistantToolCalls: ChatCompletionMessageToolCall[] = orderedCalls.map(
+      (call: ToolCallAccumulator) => ({
+        id: call.id,
+        type: 'function',
+        function: {
+          name: call.name,
+          arguments: call.arguments || '{}',
+        },
+      }),
+    )
 
     // ====================== 7. 把【AI 的工具调用】加入对话历史 ======================
     conversation.push({

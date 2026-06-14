@@ -8,8 +8,11 @@
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
     "fix": "pnpm fmt && pnpm lint:fix",
-    "lint:ci": "pnpm lint && pnpm fmt:check"
+    "lint:ci": "pnpm lint && pnpm fmt:check",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
   },
   "devDependencies": {
     "oxfmt": "^0.54.0",
