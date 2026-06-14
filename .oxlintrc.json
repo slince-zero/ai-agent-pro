@@ -1,0 +1,42 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "env": {
+    "es2023": true
+  },
+  "rules": {
+    "no-console": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["packages/client/src/**/*.{ts,tsx}"],
+      "plugins": ["typescript", "unicorn", "oxc", "react", "react-perf", "jsx-a11y"],
+      "env": {
+        "browser": true,
+        "es2023": true
+      },
+      "rules": {
+        "react/rules-of-hooks": "error",
+        "react/exhaustive-deps": "warn",
+        "react/jsx-key": "error",
+        "react/jsx-no-duplicate-props": "error",
+        "react/only-export-components": "warn"
+      }
+    },
+    {
+      "files": ["packages/server/src/**/*.ts"],
+      "plugins": ["typescript", "unicorn", "oxc"],
+      "rules": {
+        "no-async-endpoint-handlers": "allow"
+      },
+      "env": {
+        "node": true,
+        "es2022": true
+      }
+    }
+  ]
+}

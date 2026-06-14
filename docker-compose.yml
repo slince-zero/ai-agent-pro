@@ -8,11 +8,12 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ai_agent}
       POSTGRES_DB: ${POSTGRES_DB:-ai_pro_agent}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ai_agent} -d ${POSTGRES_DB:-ai_pro_agent}"]
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-ai_agent} -d ${POSTGRES_DB:-ai_pro_agent}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,9 +33,15 @@ services:
       PORT: 3003
       DATABASE_URL: postgresql://${POSTGRES_USER:-ai_agent}:${POSTGRES_PASSWORD:-ai_agent}@postgres:5432/${POSTGRES_DB:-ai_pro_agent}
     ports:
-      - "3903:3003"
+      - '3903:3003'
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3003/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3003/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3

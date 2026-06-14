@@ -1,16 +1,15 @@
-import "dotenv/config";
-import { defineConfig } from "prisma/config";
+import 'dotenv/config'
+import { defineConfig } from 'prisma/config'
 
 const databaseUrl =
-  process.env.DATABASE_URL ??
-  "postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent";
+  process.env.DATABASE_URL ?? 'postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent'
 
 export default defineConfig({
-  schema: "prisma/schema.prisma",
+  schema: 'prisma/schema.prisma',
   migrations: {
-    path: "prisma/migrations",
+    path: 'prisma/migrations',
   },
   datasource: {
     url: databaseUrl,
   },
-});
+})

@@ -41,9 +41,9 @@ Before making any code changes:
 
 For complex tasks:
 
-* Break into smaller steps
-* Complete one step at a time
-* Verify after each step
+- Break into smaller steps
+- Complete one step at a time
+- Verify after each step
 
 ---
 
@@ -51,11 +51,11 @@ For complex tasks:
 
 Before editing:
 
-* Read the target file
-* Read imported modules
-* Read related types
-* Read related API contracts
-* Read surrounding business logic
+- Read the target file
+- Read imported modules
+- Read related types
+- Read related API contracts
+- Read surrounding business logic
 
 Never assume implementation details.
 
@@ -67,25 +67,25 @@ Always verify.
 
 Preferred stack:
 
-* React
-* TypeScript
-* Ant Design
-* ahooks
+- React
+- TypeScript
+- Ant Design
+- ahooks
 
 Requirements:
 
-* Functional Components only
-* Hooks first
-* Strong typing
-* Avoid any
-* Avoid type assertions when possible
+- Functional Components only
+- Hooks first
+- Strong typing
+- Avoid any
+- Avoid type assertions when possible
 
 Prefer:
 
-* useRequest
-* useMemo
-* useCallback
-* custom hooks
+- useRequest
+- useMemo
+- useCallback
+- custom hooks
 
 Keep components focused.
 
@@ -95,8 +95,8 @@ Avoid large components.
 
 Target:
 
-* Component < 300 lines
-* Hook < 200 lines
+- Component < 300 lines
+- Hook < 200 lines
 
 ---
 
@@ -104,21 +104,21 @@ Target:
 
 Always:
 
-* Enable strict typing
-* Define explicit interfaces
-* Reuse existing types
+- Enable strict typing
+- Define explicit interfaces
+- Reuse existing types
 
 Avoid:
 
-* any
-* unknown casting
-* @ts-ignore
+- any
+- unknown casting
+- @ts-ignore
 
 Prefer:
 
-* discriminated unions
-* generics
-* utility types
+- discriminated unions
+- generics
+- utility types
 
 Type safety is mandatory.
 
@@ -130,10 +130,10 @@ Follow existing project conventions.
 
 Prefer:
 
-* Form
-* Table
-* Modal
-* Drawer
+- Form
+- Table
+- Modal
+- Drawer
 
 Do not introduce new UI libraries unless requested.
 
@@ -145,10 +145,10 @@ Keep UI consistent with existing pages.
 
 Before calling APIs:
 
-* Understand request DTO
-* Understand response DTO
-* Verify field names
-* Verify nullable fields
+- Understand request DTO
+- Understand response DTO
+- Verify field names
+- Verify nullable fields
 
 Never assume backend response shape.
 
@@ -166,15 +166,15 @@ Repository/Data Layer
 
 Rules:
 
-* Controller should stay thin
-* Business logic belongs in Service
-* DTO validation required
-* Avoid duplicated logic
+- Controller should stay thin
+- Business logic belongs in Service
+- DTO validation required
+- Avoid duplicated logic
 
 Prefer:
 
-* class-validator
-* class-transformer
+- class-validator
+- class-transformer
 
 ---
 
@@ -182,9 +182,9 @@ Prefer:
 
 Before writing SQL:
 
-* Understand table relationships
-* Verify indexes
-* Check existing queries
+- Understand table relationships
+- Verify indexes
+- Check existing queries
 
 Prefer readable SQL.
 
@@ -198,19 +198,19 @@ When solving engineering tasks:
 
 First determine:
 
-* What is the real problem?
-* What assumptions exist?
-* What information is missing?
-* What can be verified?
+- What is the real problem?
+- What assumptions exist?
+- What information is missing?
+- What can be verified?
 
 Do not guess.
 
 If uncertain:
 
-* inspect code
-* inspect types
-* inspect APIs
-* inspect documentation
+- inspect code
+- inspect types
+- inspect APIs
+- inspect documentation
 
 then proceed.
 
@@ -222,9 +222,9 @@ Before refactoring:
 
 Explain:
 
-* Why current code is problematic
-* Risks of change
-* Scope of impact
+- Why current code is problematic
+- Risks of change
+- Scope of impact
 
 Prefer incremental refactoring.
 
@@ -238,12 +238,12 @@ After implementation:
 
 Verify:
 
-* TypeScript compile
-* Lint
-* Edge cases
-* Error handling
-* Loading states
-* Empty states
+- TypeScript compile
+- Lint
+- Edge cases
+- Error handling
+- Loading states
+- Empty states
 
 Always think about failure scenarios.
 
@@ -253,9 +253,9 @@ Always think about failure scenarios.
 
 Changes should be:
 
-* Small
-* Focused
-* Reviewable
+- Small
+- Focused
+- Reviewable
 
 Avoid mixing unrelated modifications.
 

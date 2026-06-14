@@ -1,11 +1,19 @@
 {
   "name": "ai-agent-pro",
   "private": true,
-  "packageManager": "pnpm@11.5.2",
   "scripts": {
     "dev": "pnpm -r dev",
     "build": "pnpm -r build",
     "start": "pnpm -r start",
-    "lint": "pnpm -r lint"
-  }
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt",
+    "fix": "pnpm fmt && pnpm lint:fix",
+    "lint:ci": "pnpm lint && pnpm fmt:check"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.54.0",
+    "oxlint": "^1.69.0"
+  },
+  "packageManager": "pnpm@11.5.2"
 }

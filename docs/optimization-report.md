@@ -20,15 +20,15 @@
 
 ### 1.1 技术栈快照
 
-| 层 | 选型 | 说明 |
-| --- | --- | --- |
-| 前端 | React 19 + Vite 8 + Tailwind 4 + shadcn 子集 + DOMPurify | 现代化、轻、依赖干净 |
-| 服务端 | Node 22 + Express 5 + TypeScript 6 (ESM) | 标准 |
-| 模型 SDK | `openai` 客户端指向 DeepSeek | 单点供应商 |
-| 持久层 | Postgres 17 + pgvector + Prisma 7 | pgvector 已装但未使用 |
-| 流式协议 | SSE | 单向，可改进 |
-| 部署 | Dockerfile + docker-compose + 自建脚本推 GitLab Registry | 已可一键起 |
-| 鉴权 | 无（默认本地单用户 hardcoded email） | **开源前必须处理** |
+| 层       | 选型                                                     | 说明                  |
+| -------- | -------------------------------------------------------- | --------------------- |
+| 前端     | React 19 + Vite 8 + Tailwind 4 + shadcn 子集 + DOMPurify | 现代化、轻、依赖干净  |
+| 服务端   | Node 22 + Express 5 + TypeScript 6 (ESM)                 | 标准                  |
+| 模型 SDK | `openai` 客户端指向 DeepSeek                             | 单点供应商            |
+| 持久层   | Postgres 17 + pgvector + Prisma 7                        | pgvector 已装但未使用 |
+| 流式协议 | SSE                                                      | 单向，可改进          |
+| 部署     | Dockerfile + docker-compose + 自建脚本推 GitLab Registry | 已可一键起            |
+| 鉴权     | 无（默认本地单用户 hardcoded email）                     | **开源前必须处理**    |
 
 ### 1.2 已经做对的事
 
@@ -43,51 +43,51 @@
 
 #### Level A — 开源前必须修
 
-| # | 问题 | 位置 | 影响 |
-| --- | --- | --- | --- |
-| A1 | **根目录没有 README / LICENSE** | 仓库根 | 开源最基本的门面，缺失等于不让人看 |
-| A2 | **docker-compose 写死了内网私有 registry** | `docker-compose.yml:21` | 别人 `git clone` 后 `docker compose up` 直接 404 |
-| A3 | **`.env.example` 信息不全** | `server/.env.example` | 没注释，没说明，新人无法启动 |
-| A4 | **`web_fetch` 没有 SSRF 防护** | `server/src/tools/web-fetch.ts` | 部署后可被打：访问 `http://169.254.169.254`、内网 IP、`file://`（虽然 schema 限制了 http/https，但 DNS rebinding / 内网 IP 仍可绕） |
-| A5 | **单用户硬编码** | `server/src/services/users.ts:3` | 任何人访问都共享同一份会话，开源 demo 不可用 |
-| A6 | **AbortSignal 没有传给 OpenAI SDK** | `server/src/services/agent.ts:64` | 用户点"停止"后，后端依然在烧 token |
-| A7 | **没有 `/api/health` 健康检查端点** | `server/src/app.ts` | docker-compose 用 `fetch('/')` 取巧，prod 模式才有效 |
-| A8 | **环境变量缺失只在请求时报错** | `server/src/services/openai.ts:6` | 启动看不出问题，500 才暴露 |
+| #   | 问题                                       | 位置                              | 影响                                                                                                                                |
+| --- | ------------------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| A1  | **根目录没有 README / LICENSE**            | 仓库根                            | 开源最基本的门面，缺失等于不让人看                                                                                                  |
+| A2  | **docker-compose 写死了内网私有 registry** | `docker-compose.yml:21`           | 别人 `git clone` 后 `docker compose up` 直接 404                                                                                    |
+| A3  | **`.env.example` 信息不全**                | `server/.env.example`             | 没注释，没说明，新人无法启动                                                                                                        |
+| A4  | **`web_fetch` 没有 SSRF 防护**             | `server/src/tools/web-fetch.ts`   | 部署后可被打：访问 `http://169.254.169.254`、内网 IP、`file://`（虽然 schema 限制了 http/https，但 DNS rebinding / 内网 IP 仍可绕） |
+| A5  | **单用户硬编码**                           | `server/src/services/users.ts:3`  | 任何人访问都共享同一份会话，开源 demo 不可用                                                                                        |
+| A6  | **AbortSignal 没有传给 OpenAI SDK**        | `server/src/services/agent.ts:64` | 用户点"停止"后，后端依然在烧 token                                                                                                  |
+| A7  | **没有 `/api/health` 健康检查端点**        | `server/src/app.ts`               | docker-compose 用 `fetch('/')` 取巧，prod 模式才有效                                                                                |
+| A8  | **环境变量缺失只在请求时报错**             | `server/src/services/openai.ts:6` | 启动看不出问题，500 才暴露                                                                                                          |
 
 #### Level B — 加新功能前必须先做
 
-| # | 问题 | 影响 |
-| --- | --- | --- |
-| B1 | `runAgent` 是上帝函数：拼 prompt + 调模型 + 解析 stream + 跑工具 + 推事件 + 写库（写库被 `routes/sessions.ts` 拆出去了一半，但耦合严重） | 后面加 memory、RAG、多模型、规划器都会堆在这里，一定失控 |
-| B2 | ~~**存在两条聊天链路**：旧的 `/api/chat`（无 DB）+ 新的 `/api/sessions/:id/messages`（有 DB）~~ ✅ 已删除旧链路 | 已解决 |
-| B3 | 上下文构建是 `take: 30` 暴力截最近 30 条 | 长会话必爆 token，且没有摘要/相关性/系统注入 |
-| B4 | **没有 token / 成本记录**：schema 里漏掉了 `inputTokens / outputTokens / cost` | 一旦真用起来，无法做用量统计、限流、配额 |
-| B5 | **没有 tool message 回灌**：工具结果只写到 `ToolCall` 表，下一次对话拿历史时只取 user/assistant，工具上下文丢失 | 多轮里 Agent "失忆" |
-| B6 | `MAX_ITERATIONS = 6` 写死 | 应配置化 + per-tool 限制 |
-| B7 | DeepSeek 私有参数 `thinking: { type: "disabled" }` 直接塞进 OpenAI 请求 | 切到真正的 OpenAI / Anthropic / Gemini 立刻报错 |
-| B8 | 工具调用没有 `runId` 关联到事件流，前端只能凭 `toolCallId` 匹配 | 多 run 并发场景 / 重连场景不可恢复 |
-| B9 | 没有结构化日志（只有 `console.error`）| 上线之后无法定位线上问题 |
-| B10 | 没有任何测试 | `npm test` 直接 `exit 1` |
-| B11 | 没有 CI（GitHub Actions） | typecheck / lint / build 都靠人肉 |
+| #   | 问题                                                                                                                                     | 影响                                                     |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| B1  | `runAgent` 是上帝函数：拼 prompt + 调模型 + 解析 stream + 跑工具 + 推事件 + 写库（写库被 `routes/sessions.ts` 拆出去了一半，但耦合严重） | 后面加 memory、RAG、多模型、规划器都会堆在这里，一定失控 |
+| B2  | ~~**存在两条聊天链路**：旧的 `/api/chat`（无 DB）+ 新的 `/api/sessions/:id/messages`（有 DB）~~ ✅ 已删除旧链路                          | 已解决                                                   |
+| B3  | 上下文构建是 `take: 30` 暴力截最近 30 条                                                                                                 | 长会话必爆 token，且没有摘要/相关性/系统注入             |
+| B4  | **没有 token / 成本记录**：schema 里漏掉了 `inputTokens / outputTokens / cost`                                                           | 一旦真用起来，无法做用量统计、限流、配额                 |
+| B5  | **没有 tool message 回灌**：工具结果只写到 `ToolCall` 表，下一次对话拿历史时只取 user/assistant，工具上下文丢失                          | 多轮里 Agent "失忆"                                      |
+| B6  | `MAX_ITERATIONS = 6` 写死                                                                                                                | 应配置化 + per-tool 限制                                 |
+| B7  | DeepSeek 私有参数 `thinking: { type: "disabled" }` 直接塞进 OpenAI 请求                                                                  | 切到真正的 OpenAI / Anthropic / Gemini 立刻报错          |
+| B8  | 工具调用没有 `runId` 关联到事件流，前端只能凭 `toolCallId` 匹配                                                                          | 多 run 并发场景 / 重连场景不可恢复                       |
+| B9  | 没有结构化日志（只有 `console.error`）                                                                                                   | 上线之后无法定位线上问题                                 |
+| B10 | 没有任何测试                                                                                                                             | `npm test` 直接 `exit 1`                                 |
+| B11 | 没有 CI（GitHub Actions）                                                                                                                | typecheck / lint / build 都靠人肉                        |
 
 #### Level C — 体验/质量改进，可以陆续做
 
-| # | 问题 |
-| --- | --- |
-| C1 | 前端聊天状态全堆在 `App.tsx`（接近 400 行），应当抽 `useChatSession` hook 或换 zustand |
-| C2 | `AssistantHtml` 在流式期间用 `useLayoutEffect` 直接操作 DOM 包 streamed 片段，是脆弱的——切换 sanitizer 实现或 React 18→19 行为变化时容易出 bug |
-| C3 | 输出格式被 prompt 强行限定为安全 HTML 片段，灵活度低；可以考虑改成 **Markdown + 自定义渲染器**，并支持代码块语法高亮（Shiki） |
-| C4 | 全中文 UI，没有 i18n 框架；开源后想吸引海外贡献者必须做 |
-| C5 | 没有暗色主题（CSS 变量已留好坑位但没实现） |
-| C6 | 没有"删除会话 / 重命名会话 / 重新生成"等基础对话产品能力 |
-| C7 | 没有附件 / 图片 / 文件上传 |
-| C8 | 会话列表 `take: 50` 写死，没有分页/搜索 |
-| C9 | SSE 断流无法恢复（刷新 = 整个流丢失） |
-| C10 | 工具卡片 UI 只显示 preview，没有"展开看完整工具结果"入口 |
-| C11 | `agentRuns` / `toolCalls` 数据已经入库但没有任何 trace UI 可看 |
-| C12 | Prisma 生成代码进了 `server/src/generated/`，需要在 README 里写明 `npm run generate` 的时机 |
-| C13 | 没有 `dependabot.yml` / `renovate.json`，依赖会越落越远 |
-| C14 | 没有 `CHANGELOG.md`，开源版本演进难追踪 |
+| #   | 问题                                                                                                                                           |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1  | 前端聊天状态全堆在 `App.tsx`（接近 400 行），应当抽 `useChatSession` hook 或换 zustand                                                         |
+| C2  | `AssistantHtml` 在流式期间用 `useLayoutEffect` 直接操作 DOM 包 streamed 片段，是脆弱的——切换 sanitizer 实现或 React 18→19 行为变化时容易出 bug |
+| C3  | 输出格式被 prompt 强行限定为安全 HTML 片段，灵活度低；可以考虑改成 **Markdown + 自定义渲染器**，并支持代码块语法高亮（Shiki）                  |
+| C4  | 全中文 UI，没有 i18n 框架；开源后想吸引海外贡献者必须做                                                                                        |
+| C5  | 没有暗色主题（CSS 变量已留好坑位但没实现）                                                                                                     |
+| C6  | 没有"删除会话 / 重命名会话 / 重新生成"等基础对话产品能力                                                                                       |
+| C7  | 没有附件 / 图片 / 文件上传                                                                                                                     |
+| C8  | 会话列表 `take: 50` 写死，没有分页/搜索                                                                                                        |
+| C9  | SSE 断流无法恢复（刷新 = 整个流丢失）                                                                                                          |
+| C10 | 工具卡片 UI 只显示 preview，没有"展开看完整工具结果"入口                                                                                       |
+| C11 | `agentRuns` / `toolCalls` 数据已经入库但没有任何 trace UI 可看                                                                                 |
+| C12 | Prisma 生成代码进了 `server/src/generated/`，需要在 README 里写明 `npm run generate` 的时机                                                    |
+| C13 | 没有 `dependabot.yml` / `renovate.json`，依赖会越落越远                                                                                        |
+| C14 | 没有 `CHANGELOG.md`，开源版本演进难追踪                                                                                                        |
 
 #### Level D — 长期/方向性缺失（不是 bug，是空白）
 
@@ -177,6 +177,7 @@
 ### 3.3 `server/prisma/schema.prisma`
 
 短期补字段：
+
 - `AgentRun.inputTokens Int?`
 - `AgentRun.outputTokens Int?`
 - `AgentRun.costUsd Decimal?`
@@ -184,6 +185,7 @@
 - `Message.metadata` 已有，但要明确写入约定（toolEvents 摘要、引用、来源）
 
 长期新表：
+
 - `Memory`（user/session/project 三类）
 - `Document` + `DocumentChunk`（带 `embedding vector(1536)`）
 - `Citation`（Message ↔ Chunk）
@@ -228,17 +230,17 @@
 
 把这些放进一个 `docs/metrics.md`，每 2 周或每月更新一次。开源后这些就是你 README 顶部 badge 的素材。
 
-| 指标 | 现在 | 3 个月目标 | 12 个月目标 |
-| --- | --- | --- | --- |
-| 测试覆盖率（server） | 0% | 50% | 75% |
-| 工具数量 | 2 | 8 | 20+ |
-| 支持模型供应商 | 1 (DeepSeek) | 3 | 5+ |
-| Memory 类型 | 0 | 3 (user/project/session) | + 自动摘要、自动事实抽取 |
-| RAG 文档来源 | 0 | GitHub repo + PDF + URL | + Notion / Confluence / 本地文件 |
-| 评估用例 | 0 | 30 | 200+ |
-| 启动到首响时间（冷） | 未测 | < 800ms | < 500ms |
-| GitHub Stars | - | 你自己定 | 你自己定 |
-| 月活贡献者 | 0 | 1-2 | 5+ |
+| 指标                 | 现在         | 3 个月目标               | 12 个月目标                      |
+| -------------------- | ------------ | ------------------------ | -------------------------------- |
+| 测试覆盖率（server） | 0%           | 50%                      | 75%                              |
+| 工具数量             | 2            | 8                        | 20+                              |
+| 支持模型供应商       | 1 (DeepSeek) | 3                        | 5+                               |
+| Memory 类型          | 0            | 3 (user/project/session) | + 自动摘要、自动事实抽取         |
+| RAG 文档来源         | 0            | GitHub repo + PDF + URL  | + Notion / Confluence / 本地文件 |
+| 评估用例             | 0            | 30                       | 200+                             |
+| 启动到首响时间（冷） | 未测         | < 800ms                  | < 500ms                          |
+| GitHub Stars         | -            | 你自己定                 | 你自己定                         |
+| 月活贡献者           | 0            | 1-2                      | 5+                               |
 
 ---
 

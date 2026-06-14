@@ -14,13 +14,13 @@
 
 ## 技术栈
 
-| 层 | 技术 |
-| --- | --- |
-| 前端 | React 19, Vite 8, TypeScript, Tailwind CSS 4, Radix UI, lucide-react |
-| 后端 | Node.js 22, Express 5, TypeScript, OpenAI SDK |
-| Agent | Chat Completions streaming, function calling, SSE events |
-| 数据 | PostgreSQL, Prisma 7, pgvector Docker image |
-| 部署 | Docker multi-stage build, docker-compose |
+| 层    | 技术                                                                 |
+| ----- | -------------------------------------------------------------------- |
+| 前端  | React 19, Vite 8, TypeScript, Tailwind CSS 4, Radix UI, lucide-react |
+| 后端  | Node.js 22, Express 5, TypeScript, OpenAI SDK                        |
+| Agent | Chat Completions streaming, function calling, SSE events             |
+| 数据  | PostgreSQL, Prisma 7, pgvector Docker image                          |
+| 部署  | Docker multi-stage build, docker-compose                             |
 
 ## 架构图
 
@@ -138,16 +138,16 @@ docker run \
 
 ## 环境变量
 
-| 变量 | 必填 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `OPENAI_API_KEY` | 是 | 空 | OpenAI-compatible API Key。 |
-| `DEEPSEEK_BASE_URL` | 否 | `https://api.deepseek.com` | 模型服务 base URL。 |
-| `DEEPSEEK_MODEL` | 否 | `deepseek-v4-pro` | 后端请求的模型名。 |
-| `DATABASE_URL` | 否 | `postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent` | Prisma/Postgres 连接串。 |
-| `GITHUB_TOKEN` | 否 | 空 | GitHub 仓库查询工具的可选 token。 |
-| `DEFAULT_USER_EMAIL` | 否 | `local@ai-pro-agent.dev` | 当前无鉴权版本使用的本地用户标识。 |
-| `PORT` | 否 | `3003` | 后端监听端口。 |
-| `CLIENT_DIST_DIR` | 否 | `public` | 生产模式下 Express 托管前端静态资源的位置。 |
+| 变量                 | 必填 | 默认值                                                       | 说明                                        |
+| -------------------- | ---- | ------------------------------------------------------------ | ------------------------------------------- |
+| `OPENAI_API_KEY`     | 是   | 空                                                           | OpenAI-compatible API Key。                 |
+| `DEEPSEEK_BASE_URL`  | 否   | `https://api.deepseek.com`                                   | 模型服务 base URL。                         |
+| `DEEPSEEK_MODEL`     | 否   | `deepseek-v4-pro`                                            | 后端请求的模型名。                          |
+| `DATABASE_URL`       | 否   | `postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent` | Prisma/Postgres 连接串。                    |
+| `GITHUB_TOKEN`       | 否   | 空                                                           | GitHub 仓库查询工具的可选 token。           |
+| `DEFAULT_USER_EMAIL` | 否   | `local@ai-pro-agent.dev`                                     | 当前无鉴权版本使用的本地用户标识。          |
+| `PORT`               | 否   | `3003`                                                       | 后端监听端口。                              |
+| `CLIENT_DIST_DIR`    | 否   | `public`                                                     | 生产模式下 Express 托管前端静态资源的位置。 |
 
 ## 当前限制
 

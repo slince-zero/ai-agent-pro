@@ -1,28 +1,22 @@
-import { SquarePen } from "lucide-react";
+import { SquarePen } from 'lucide-react'
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 
 type ChatHeaderProps = {
-  activeSessionTitle?: string;
-  isSending: boolean;
-  onNewChat: () => void;
-};
+  activeSessionTitle?: string
+  isSending: boolean
+  onNewChat: () => void
+}
 
-export function ChatHeader({
-  activeSessionTitle,
-  isSending,
-  onNewChat,
-}: ChatHeaderProps) {
+export function ChatHeader({ activeSessionTitle, isSending, onNewChat }: ChatHeaderProps) {
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b bg-background/90 px-4 backdrop-blur md:px-6">
+    <header className="bg-background/90 flex h-16 shrink-0 items-center justify-between border-b px-4 backdrop-blur md:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-muted-foreground">
-            AI Engineering Agent
-          </p>
+          <p className="text-muted-foreground text-xs font-medium">AI Engineering Agent</p>
           <h1 className="truncate text-base font-semibold">
-            {activeSessionTitle ?? "工程 Agent 工作台"}
+            {activeSessionTitle ?? '工程 Agent 工作台'}
           </h1>
         </div>
       </div>
@@ -43,5 +37,5 @@ export function ChatHeader({
         </Button>
       </div>
     </header>
-  );
+  )
 }

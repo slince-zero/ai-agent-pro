@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "semi": false,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "ignorePatterns": ["dist", "node_modules", ".git"],
+  "sortImports": {
+    "enabled": true
+  },
+  "sortTailwindcss": {
+    "enabled": true
+  },
+  "overrides": [
+    {
+      "files": ["packages/server/src/**/*.ts"],
+      "options": {
+        "sortTailwindcss": {
+          "enabled": false
+        }
+      }
+    }
+  ]
+}

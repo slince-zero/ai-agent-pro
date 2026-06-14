@@ -13,6 +13,7 @@
 > **"在工程协作场景下，能在不少于 80% 的真实工程问题上，给出比通用 ChatGPT 更精准、更带证据、更可追溯的回答。"**
 
 这意味着每一阶段都要回到三个判据上：
+
 1. **更精准** —— 上下文 / 记忆 / RAG，让 Agent 真正"理解了这个项目"。
 2. **更带证据** —— 工具 / 引用 / 来源 / 代码片段，回答必须能溯源。
 3. **更可追溯** —— eval / trace / 日志，能复现、能改进、能给别人证明它真的在变好。
@@ -130,8 +131,8 @@ timeline
 - 新的 `Provider` 抽象：
   ```ts
   interface ModelProvider {
-    name: string;
-    stream(req: ChatRequest, signal: AbortSignal): AsyncIterable<NormalizedEvent>;
+    name: string
+    stream(req: ChatRequest, signal: AbortSignal): AsyncIterable<NormalizedEvent>
   }
   ```
 - Prisma schema 增加：
@@ -540,12 +541,12 @@ timeline
 
 ### 1.1 每周节奏
 
-| 周内时间 | 做什么 |
-| --- | --- |
-| 周一 1h | 看上周 trace / eval 报告，决定本周最重要的 1 件事 |
-| 周二–周五 各 1.5h | 实现 + 测试 |
-| 周六 2h | 写一段 "本周变更" 到 `CHANGELOG.md`，必要时发推/博客片段 |
-| 周日 0.5h | 整理 issue / 回复 PR（开源后）|
+| 周内时间          | 做什么                                                   |
+| ----------------- | -------------------------------------------------------- |
+| 周一 1h           | 看上周 trace / eval 报告，决定本周最重要的 1 件事        |
+| 周二–周五 各 1.5h | 实现 + 测试                                              |
+| 周六 2h           | 写一段 "本周变更" 到 `CHANGELOG.md`，必要时发推/博客片段 |
+| 周日 0.5h         | 整理 issue / 回复 PR（开源后）                           |
 
 ### 1.2 每月节奏
 
@@ -574,17 +575,17 @@ timeline
 
 把这份路线图当作 **2 年的简历素材生成器**：
 
-| 阶段 | 简历可以怎么写 |
-| --- | --- |
-| Stage 0 | "Open-sourced & maintained an AI engineering agent on GitHub" |
-| Stage 1 | "Built a multi-provider model abstraction supporting OpenAI / Anthropic / DeepSeek with token & cost accounting" |
-| Stage 2 | "Designed a 3-layer memory system (user / project / session) with token-budget-aware context builder" |
+| 阶段    | 简历可以怎么写                                                                                                                             |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Stage 0 | "Open-sourced & maintained an AI engineering agent on GitHub"                                                                              |
+| Stage 1 | "Built a multi-provider model abstraction supporting OpenAI / Anthropic / DeepSeek with token & cost accounting"                           |
+| Stage 2 | "Designed a 3-layer memory system (user / project / session) with token-budget-aware context builder"                                      |
 | Stage 3 | "Implemented hybrid retrieval (BM25 + pgvector) over codebases with AST-aware chunking, achieving X% answer accuracy on internal eval set" |
-| Stage 4 | "Built an LLM eval & trace platform with regression tests in CI; LLM-as-Judge rubric ..." |
-| Stage 5 | "Implemented a Plan-Execute multi-agent workflow with Critic verification" |
-| Stage 6 | "Designed a sandboxed code execution layer (Docker + seccomp) for safe Agent-generated code" |
-| Stage 7 | "Authored a tool SDK + MCP client; X community-contributed tools shipped" |
-| Stage 8 | "Productized to multi-tenant SaaS with auth, quotas, monitoring; X active workspaces" |
+| Stage 4 | "Built an LLM eval & trace platform with regression tests in CI; LLM-as-Judge rubric ..."                                                  |
+| Stage 5 | "Implemented a Plan-Execute multi-agent workflow with Critic verification"                                                                 |
+| Stage 6 | "Designed a sandboxed code execution layer (Docker + seccomp) for safe Agent-generated code"                                               |
+| Stage 7 | "Authored a tool SDK + MCP client; X community-contributed tools shipped"                                                                  |
+| Stage 8 | "Productized to multi-tenant SaaS with auth, quotas, monitoring; X active workspaces"                                                      |
 
 任一阶段单独拎出来，都是面 AI infra / agent / dev tools 岗位的硬通货。
 

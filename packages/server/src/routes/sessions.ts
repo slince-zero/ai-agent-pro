@@ -1,55 +1,56 @@
-import { Router } from "express";
-import type OpenAI from "openai";
-import { z } from "zod";
-import { prisma } from "../db/client.js";
+import { Router } from 'express'
+import type OpenAI from 'openai'
+import { z } from 'zod'
+
+import { prisma } from '../db/client.js'
 import {
   MessageRole,
   Prisma,
   RunStatus,
   SessionStatus,
   ToolCallStatus,
-} from "../generated/prisma/client.js";
-import { runAgent } from "../services/agent.js";
-import { MODEL } from "../services/openai.js";
-import { calculateCost } from "../services/pricing.js";
-import { getCurrentUser } from "../services/users.js";
-import { prepareSse, writeSse } from "../sse/events.js";
-import type { ClientMessage } from "../types/chat.js";
+} from '../generated/prisma/client.js'
+import { runAgent } from '../services/agent.js'
+import { MODEL } from '../services/openai.js'
+import { calculateCost } from '../services/pricing.js'
+import { getCurrentUser } from '../services/users.js'
+import { prepareSse, writeSse } from '../sse/events.js'
+import type { ClientMessage } from '../types/chat.js'
 
 type SessionsRouterDeps = {
-  openai: OpenAI;
-};
+  openai: OpenAI
+}
 
 const createSessionSchema = z
   .object({
     title: z.string().trim().min(1).max(120).optional(),
   })
-  .strict();
+  .strict()
 
 const createMessageSchema = z
   .object({
     content: z.string().trim().min(1).max(30_000),
   })
-  .strict();
+  .strict()
 
 function toTitle(content: string) {
-  const normalized = content.replace(/\s+/g, " ").trim();
-  if (!normalized) return "新对话";
-  return normalized.length > 40 ? `${normalized.slice(0, 40)}...` : normalized;
+  const normalized = content.replace(/\s+/g, ' ').trim()
+  if (!normalized) return '新对话'
+  return normalized.length > 40 ? `${normalized.slice(0, 40)}...` : normalized
 }
 
-function toClientRole(role: MessageRole): ClientMessage["role"] | null {
-  if (role === MessageRole.USER) return "user";
-  if (role === MessageRole.ASSISTANT) return "assistant";
-  return null;
+function toClientRole(role: MessageRole): ClientMessage['role'] | null {
+  if (role === MessageRole.USER) return 'user'
+  if (role === MessageRole.ASSISTANT) return 'assistant'
+  return null
 }
 
 function serializeSession(session: {
-  id: string;
-  title: string;
-  status: SessionStatus;
-  createdAt: Date;
-  updatedAt: Date;
+  id: string
+  title: string
+  status: SessionStatus
+  createdAt: Date
+  updatedAt: Date
 }) {
   return {
     id: session.id,
@@ -57,27 +58,24 @@ function serializeSession(session: {
     status: session.status.toLowerCase(),
     createdAt: session.createdAt.toISOString(),
     updatedAt: session.updatedAt.toISOString(),
-  };
+  }
 }
 
 function serializeMessage(
   message: {
-    id: string;
-    role: MessageRole;
-    content: string;
-    createdAt: Date;
+    id: string
+    role: MessageRole
+    content: string
+    createdAt: Date
   },
   usage?: {
-    inputTokens: number | null;
-    outputTokens: number | null;
-    cost: number | null;
+    inputTokens: number | null
+    outputTokens: number | null
+    cost: number | null
   },
 ) {
   const hasUsage =
-    usage &&
-    usage.inputTokens != null &&
-    usage.outputTokens != null &&
-    usage.cost != null;
+    usage && usage.inputTokens != null && usage.outputTokens != null && usage.cost != null
 
   return {
     id: message.id,
@@ -85,74 +83,80 @@ function serializeMessage(
     content: message.content,
     createdAt: message.createdAt.toISOString(),
     ...(hasUsage
-      ? { usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, cost: usage.cost } }
+      ? {
+          usage: {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            cost: usage.cost,
+          },
+        }
       : {}),
-  };
+  }
 }
 
 function toJsonValue(value: unknown) {
-  return value === undefined ? Prisma.JsonNull : (value as Prisma.InputJsonValue);
+  return value === undefined ? Prisma.JsonNull : (value as Prisma.InputJsonValue)
 }
 
 export function createSessionsRouter({ openai }: SessionsRouterDeps) {
-  const router = Router();
+  const router = Router()
 
-  router.get("/", async (req, res) => {
+  router.get('/', async (req, res) => {
     try {
-      const user = await getCurrentUser();
+      const user = await getCurrentUser()
       const sessions = await prisma.session.findMany({
         where: {
           userId: user.id,
           status: SessionStatus.ACTIVE,
         },
         orderBy: {
-          updatedAt: "desc",
+          updatedAt: 'desc',
         },
         take: 50,
-      });
+      })
 
-      res.json({ sessions: sessions.map(serializeSession) });
+      res.json({ sessions: sessions.map(serializeSession) })
     } catch (error) {
-      req.log.error({ err: error }, "获取会话列表失败");
-      res.status(500).json({ error: "获取会话列表失败" });
+      req.log.error({ err: error }, '获取会话列表失败')
+      res.status(500).json({ error: '获取会话列表失败' })
     }
-  });
+  })
 
-  router.post("/", async (req, res) => {
-    const parsed = createSessionSchema.safeParse(req.body);
+  router.post('/', async (req, res) => {
+    const parsed = createSessionSchema.safeParse(req.body)
     if (!parsed.success) {
-      return res.status(400).json({ error: "会话参数无效" });
+      return res.status(400).json({ error: '会话参数无效' })
     }
 
     try {
-      const user = await getCurrentUser();
+      const user = await getCurrentUser()
       const session = await prisma.session.create({
         data: {
           userId: user.id,
-          title: parsed.data.title ?? "新对话",
+          title: parsed.data.title ?? '新对话',
         },
-      });
+      })
 
-      res.status(201).json({ session: serializeSession(session) });
+      res.status(201).json({ session: serializeSession(session) })
     } catch (error) {
-      req.log.error({ err: error }, "创建会话失败");
-      res.status(500).json({ error: "创建会话失败" });
+      req.log.error({ err: error }, '创建会话失败')
+      res.status(500).json({ error: '创建会话失败' })
     }
-  });
+  })
 
-  router.get("/:sessionId/messages", async (req, res) => {
+  router.get('/:sessionId/messages', async (req, res) => {
     try {
-      const user = await getCurrentUser();
+      const user = await getCurrentUser()
       const session = await prisma.session.findFirst({
         where: {
           id: req.params.sessionId,
           userId: user.id,
           status: SessionStatus.ACTIVE,
         },
-      });
+      })
 
       if (!session) {
-        return res.status(404).json({ error: "会话不存在" });
+        return res.status(404).json({ error: '会话不存在' })
       }
 
       const messages = await prisma.message.findMany({
@@ -163,7 +167,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
           },
         },
         orderBy: {
-          createdAt: "asc",
+          createdAt: 'asc',
         },
         include: {
           assistantRuns: {
@@ -172,38 +176,38 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
             take: 1,
           },
         },
-      });
+      })
 
       res.json({
         messages: messages.map((message) => {
-          const usage = message.assistantRuns[0];
-          return serializeMessage(message, usage ?? undefined);
+          const usage = message.assistantRuns[0]
+          return serializeMessage(message, usage ?? undefined)
         }),
-      });
+      })
     } catch (error) {
-      req.log.error({ err: error }, "获取消息失败");
-      res.status(500).json({ error: "获取消息失败" });
+      req.log.error({ err: error }, '获取消息失败')
+      res.status(500).json({ error: '获取消息失败' })
     }
-  });
+  })
 
-  router.post("/:sessionId/messages", async (req, res) => {
-    const parsed = createMessageSchema.safeParse(req.body);
+  router.post('/:sessionId/messages', async (req, res) => {
+    const parsed = createMessageSchema.safeParse(req.body)
     if (!parsed.success) {
-      return res.status(400).json({ error: "消息内容无效" });
+      return res.status(400).json({ error: '消息内容无效' })
     }
 
-    const content = parsed.data.content;
-    const user = await getCurrentUser();
+    const content = parsed.data.content
+    const user = await getCurrentUser()
     const session = await prisma.session.findFirst({
       where: {
         id: req.params.sessionId,
         userId: user.id,
         status: SessionStatus.ACTIVE,
       },
-    });
+    })
 
     if (!session) {
-      return res.status(404).json({ error: "会话不存在" });
+      return res.status(404).json({ error: '会话不存在' })
     }
 
     const userMessage = await prisma.message.create({
@@ -212,9 +216,9 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
         role: MessageRole.USER,
         content,
       },
-    });
+    })
 
-    if (session.title === "新对话") {
+    if (session.title === '新对话') {
       await prisma.session.update({
         where: {
           id: session.id,
@@ -222,7 +226,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
         data: {
           title: toTitle(content),
         },
-      });
+      })
     }
 
     const run = await prisma.agentRun.create({
@@ -231,21 +235,21 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
         userMessageId: userMessage.id,
         model: MODEL,
       },
-    });
+    })
 
     // Create a scoped logger carrying session & run context.
-    const runLogger = req.log.child({ sessionId: session.id, runId: run.id });
+    const runLogger = req.log.child({ sessionId: session.id, runId: run.id })
 
-    prepareSse(res);
+    prepareSse(res)
 
-    const controller = new AbortController();
-    const toolCallIds = new Map<string, string>();
-    let assistantText = "";
-    let runError: string | null = null;
+    const controller = new AbortController()
+    const toolCallIds = new Map<string, string>()
+    let assistantText = ''
+    let runError: string | null = null
 
-    res.on("close", () => {
-      controller.abort();
-    });
+    res.on('close', () => {
+      controller.abort()
+    })
 
     try {
       const dbMessages = await prisma.message.findMany({
@@ -256,17 +260,17 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
           },
         },
         orderBy: {
-          createdAt: "asc",
+          createdAt: 'asc',
         },
         take: 30,
-      });
+      })
 
       const messages = dbMessages
         .map((message) => {
-          const role = toClientRole(message.role);
-          return role ? { role, content: message.content } : null;
+          const role = toClientRole(message.role)
+          return role ? { role, content: message.content } : null
         })
-        .filter((message): message is ClientMessage => message !== null);
+        .filter((message): message is ClientMessage => message !== null)
 
       const { inputTokens, outputTokens } = await runAgent({
         openai,
@@ -274,15 +278,15 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
         signal: controller.signal,
         logger: runLogger,
         onEvent: async (event) => {
-          if (event.type === "text") {
-            assistantText += event.text;
+          if (event.type === 'text') {
+            assistantText += event.text
             if (!controller.signal.aborted && !res.writableEnded) {
-              writeSse(res, event);
+              writeSse(res, event)
             }
-            return;
+            return
           }
 
-          if (event.type === "tool_call") {
+          if (event.type === 'tool_call') {
             const toolCall = await prisma.toolCall.create({
               data: {
                 runId: run.id,
@@ -290,17 +294,17 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
                 name: event.name,
                 arguments: toJsonValue(event.args),
               },
-            });
-            toolCallIds.set(event.toolCallId, toolCall.id);
+            })
+            toolCallIds.set(event.toolCallId, toolCall.id)
 
             if (!controller.signal.aborted && !res.writableEnded) {
-              writeSse(res, event);
+              writeSse(res, event)
             }
-            return;
+            return
           }
 
-          if (event.type === "tool_result") {
-            const id = toolCallIds.get(event.toolCallId);
+          if (event.type === 'tool_result') {
+            const id = toolCallIds.get(event.toolCallId)
             if (id) {
               await prisma.toolCall.update({
                 where: {
@@ -311,7 +315,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
                   status: ToolCallStatus.COMPLETED,
                   finishedAt: new Date(),
                 },
-              });
+              })
             } else {
               await prisma.toolCall.create({
                 data: {
@@ -322,28 +326,28 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
                   status: ToolCallStatus.COMPLETED,
                   finishedAt: new Date(),
                 },
-              });
+              })
             }
 
             if (!controller.signal.aborted && !res.writableEnded) {
               writeSse(res, {
-                type: "tool_result",
+                type: 'tool_result',
                 toolCallId: event.toolCallId,
                 name: event.name,
                 preview: event.preview,
-              });
+              })
             }
-            return;
+            return
           }
 
-          runError = event.error;
+          runError = event.error
           if (!controller.signal.aborted && !res.writableEnded) {
-            writeSse(res, event);
+            writeSse(res, event)
           }
         },
-      });
+      })
 
-      const runCost = calculateCost(MODEL, inputTokens, outputTokens);
+      const runCost = calculateCost(MODEL, inputTokens, outputTokens)
 
       const assistantMessage = assistantText.trim()
         ? await prisma.message.create({
@@ -353,7 +357,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
               content: assistantText,
             },
           })
-        : null;
+        : null
 
       await prisma.agentRun.update({
         where: {
@@ -372,7 +376,7 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
           cost: runCost,
           finishedAt: new Date(),
         },
-      });
+      })
 
       await prisma.session.update({
         where: {
@@ -381,23 +385,23 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
         data: {
           updatedAt: new Date(),
         },
-      });
+      })
 
       if (!controller.signal.aborted && !res.writableEnded) {
         writeSse(res, {
-          type: "usage",
+          type: 'usage',
           inputTokens,
           outputTokens,
           cost: runCost,
-        });
-        writeSse(res, { type: "done" });
-        res.end();
+        })
+        writeSse(res, { type: 'done' })
+        res.end()
       }
     } catch (error) {
       // 客户端主动断开 → 静默退出，不写错误日志
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted) return
 
-      runLogger.error({ err: error }, "会话消息处理失败");
+      runLogger.error({ err: error }, '会话消息处理失败')
 
       await prisma.agentRun.update({
         where: {
@@ -408,17 +412,17 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
           error: (error as Error).message,
           finishedAt: new Date(),
         },
-      });
+      })
 
       if (!controller.signal.aborted && !res.writableEnded) {
         writeSse(res, {
-          type: "error",
-          error: "请求处理失败，请查看 server 终端日志。",
-        });
-        res.end();
+          type: 'error',
+          error: '请求处理失败，请查看 server 终端日志。',
+        })
+        res.end()
       }
     }
-  });
+  })
 
-  return router;
+  return router
 }

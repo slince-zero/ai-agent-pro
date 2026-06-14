@@ -1,18 +1,18 @@
-import type { KeyboardEvent, RefObject } from "react";
-import { SendHorizontal, Square } from "lucide-react";
+import { SendHorizontal, Square } from 'lucide-react'
+import type { KeyboardEvent, RefObject } from 'react'
 
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 
 type ChatComposerProps = {
-  canSend: boolean;
-  input: string;
-  isSending: boolean;
-  textareaRef: RefObject<HTMLTextAreaElement | null>;
-  onInputChange: (value: string) => void;
-  onStop: () => void;
-  onSubmit: () => void;
-};
+  canSend: boolean
+  input: string
+  isSending: boolean
+  textareaRef: RefObject<HTMLTextAreaElement | null>
+  onInputChange: (value: string) => void
+  onStop: () => void
+  onSubmit: () => void
+}
 
 export function ChatComposer({
   canSend,
@@ -24,21 +24,21 @@ export function ChatComposer({
   onSubmit,
 }: ChatComposerProps) {
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key !== "Enter" || event.shiftKey) return;
+    if (event.key !== 'Enter' || event.shiftKey) return
 
-    event.preventDefault();
-    onSubmit();
+    event.preventDefault()
+    onSubmit()
   }
 
   return (
     <form
-      className="shrink-0 bg-linear-to-t from-background via-background to-background/70 px-3 pb-4 pt-3 md:px-6 md:pb-6"
+      className="from-background via-background to-background/70 shrink-0 bg-linear-to-t px-3 pt-3 pb-4 md:px-6 md:pb-6"
       onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit();
+        event.preventDefault()
+        onSubmit()
       }}
     >
-      <div className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-3xl border bg-card p-2 shadow-lg shadow-black/5">
+      <div className="bg-card mx-auto flex w-full max-w-3xl items-end gap-2 rounded-3xl border p-2 shadow-lg shadow-black/5">
         <Textarea
           aria-label="Message"
           ref={textareaRef}
@@ -51,10 +51,10 @@ export function ChatComposer({
         />
         <Button
           className="size-10 rounded-full"
-          type={isSending ? "button" : "submit"}
+          type={isSending ? 'button' : 'submit'}
           size="icon"
           disabled={!isSending && !canSend}
-          aria-label={isSending ? "停止生成" : "发送"}
+          aria-label={isSending ? '停止生成' : '发送'}
           onClick={isSending ? onStop : undefined}
         >
           {isSending ? (
@@ -65,5 +65,5 @@ export function ChatComposer({
         </Button>
       </div>
     </form>
-  );
+  )
 }
