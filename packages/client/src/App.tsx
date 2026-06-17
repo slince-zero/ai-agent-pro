@@ -5,12 +5,14 @@ import { ChatHeader } from '@/components/chat/chat-header'
 import { MessageList } from '@/components/chat/message-list'
 import { Sidebar } from '@/components/chat/sidebar'
 import { WelcomePanel } from '@/components/chat/welcome-panel'
+import { RunsView } from '@/components/runs/runs-view'
 import { streamChatResponse } from '@/lib/chat-stream'
 import { promptPresets } from '@/lib/prompt-presets'
 import { createSession, fetchSessionMessages, fetchSessions } from '@/lib/sessions'
 import type { ChatSession, Message } from '@/types/chat'
 
 export default function App() {
+  const [activeView, setActiveView] = useState<'chat' | 'runs'>('chat')
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -237,6 +239,7 @@ export default function App() {
     async (sessionId: string) => {
       if (isSending || sessionId === activeSessionId) return
 
+      setActiveView('chat')
       setActiveSessionId(sessionId)
       setMessages([])
       await loadSessionMessages(sessionId)
@@ -327,6 +330,7 @@ export default function App() {
   const startNewChat = useCallback(() => {
     if (isSending) return
 
+    setActiveView('chat')
     setActiveSessionId(null)
     setMessages([])
     setInput('')
@@ -334,33 +338,46 @@ export default function App() {
   }, [isSending])
 
   const fillSuggestedPrompt = useCallback((prompt: string) => {
+    setActiveView('chat')
     setInput(prompt)
     textareaRef.current?.focus()
   }, [])
+
+  const selectRuns = useCallback(() => {
+    if (isSending) return
+    setActiveView('runs')
+  }, [isSending])
 
   return (
     <main className="bg-background text-foreground grid h-svh overflow-hidden md:grid-cols-[260px_minmax(0,1fr)]">
       <Sidebar
         activeSessionId={activeSessionId}
+        activeView={activeView}
         isSending={isSending}
         isLoadingMessages={isLoadingMessages}
         sessions={sessions}
         onNewChat={startNewChat}
+        onSelectRuns={selectRuns}
         onSelectSession={(sessionId) => void selectSession(sessionId)}
       />
 
       <section className="grid h-svh min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]">
         <ChatHeader
           activeSessionTitle={activeSession?.title}
+          activeView={activeView}
           isSending={isSending}
           onNewChat={startNewChat}
+          onSelectChat={() => setActiveView('chat')}
+          onSelectRuns={selectRuns}
         />
 
         <div
           className="min-h-0 scrollbar-gutter-stable overflow-y-auto overscroll-contain px-4 md:px-6"
           ref={scrollRef}
         >
-          {isLoadingMessages ? (
+          {activeView === 'runs' ? (
+            <RunsView />
+          ) : isLoadingMessages ? (
             <div className="text-muted-foreground mx-auto flex min-h-full w-full max-w-3xl items-center justify-center py-16 text-sm">
               正在加载会话
             </div>
@@ -371,15 +388,17 @@ export default function App() {
           )}
         </div>
 
-        <ChatComposer
-          canSend={canSend}
-          input={input}
-          isSending={isSending}
-          textareaRef={textareaRef}
-          onInputChange={setInput}
-          onStop={stopGeneration}
-          onSubmit={() => void sendMessage()}
-        />
+        {activeView === 'chat' && (
+          <ChatComposer
+            canSend={canSend}
+            input={input}
+            isSending={isSending}
+            textareaRef={textareaRef}
+            onInputChange={setInput}
+            onStop={stopGeneration}
+            onSubmit={() => void sendMessage()}
+          />
+        )}
       </section>
     </main>
   )

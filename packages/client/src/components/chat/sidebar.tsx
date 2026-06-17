@@ -1,4 +1,4 @@
-import { Bot, MessageSquareText, Plus } from 'lucide-react'
+import { Activity, Bot, MessageSquareText, Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -7,21 +7,25 @@ import type { ChatSession, PromptPreset } from '@/types/chat'
 
 type SidebarProps = {
   activeSessionId: string | null
+  activeView: 'chat' | 'runs'
   isSending: boolean
   isLoadingMessages: boolean
   presets?: PromptPreset[]
   sessions: ChatSession[]
   onNewChat: () => void
+  onSelectRuns: () => void
   onSelectPrompt?: (prompt: string) => void
   onSelectSession: (sessionId: string) => void
 }
 
 export function Sidebar({
   activeSessionId,
+  activeView,
   isSending,
   isLoadingMessages,
   sessions,
   onNewChat,
+  onSelectRuns,
   onSelectSession,
 }: SidebarProps) {
   return (
@@ -36,7 +40,7 @@ export function Sidebar({
         </div>
       </div>
 
-      <div className="px-3">
+      <div className="space-y-2 px-3">
         <Button
           className="h-10 w-full justify-start rounded-xl"
           variant="outline"
@@ -45,6 +49,18 @@ export function Sidebar({
         >
           <Plus className="size-4" aria-hidden="true" />
           新对话
+        </Button>
+        <Button
+          className={cn(
+            'h-10 w-full justify-start rounded-xl',
+            activeView === 'runs' && 'bg-accent text-accent-foreground',
+          )}
+          variant="ghost"
+          onClick={onSelectRuns}
+          disabled={isSending}
+        >
+          <Activity className="size-4" aria-hidden="true" />
+          Runs
         </Button>
       </div>
 
