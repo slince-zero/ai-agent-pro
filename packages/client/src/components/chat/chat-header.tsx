@@ -1,22 +1,32 @@
-import { SquarePen } from 'lucide-react'
+import { Activity, MessageSquareText, SquarePen } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
 type ChatHeaderProps = {
   activeSessionTitle?: string
+  activeView: 'chat' | 'runs'
   isSending: boolean
   onNewChat: () => void
+  onSelectChat: () => void
+  onSelectRuns: () => void
 }
 
-export function ChatHeader({ activeSessionTitle, isSending, onNewChat }: ChatHeaderProps) {
+export function ChatHeader({
+  activeSessionTitle,
+  activeView,
+  isSending,
+  onNewChat,
+  onSelectChat,
+  onSelectRuns,
+}: ChatHeaderProps) {
   return (
     <header className="bg-background/90 flex h-16 shrink-0 items-center justify-between border-b px-4 backdrop-blur md:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <div className="min-w-0">
           <p className="text-muted-foreground text-xs font-medium">AI Engineering Agent</p>
           <h1 className="truncate text-base font-semibold">
-            {activeSessionTitle ?? '工程 Agent 工作台'}
+            {activeView === 'runs' ? 'Runs Trace' : (activeSessionTitle ?? '工程 Agent 工作台')}
           </h1>
         </div>
       </div>
@@ -25,6 +35,20 @@ export function ChatHeader({ activeSessionTitle, isSending, onNewChat }: ChatHea
         <Badge className="hidden rounded-full px-3 py-1 md:inline-flex" variant="secondary">
           DeepSeek
         </Badge>
+        <Button
+          className="rounded-full"
+          size="sm"
+          variant={activeView === 'runs' ? 'default' : 'outline'}
+          onClick={activeView === 'runs' ? onSelectChat : onSelectRuns}
+          disabled={isSending && activeView !== 'runs'}
+        >
+          {activeView === 'runs' ? (
+            <MessageSquareText className="size-4" aria-hidden="true" />
+          ) : (
+            <Activity className="size-4" aria-hidden="true" />
+          )}
+          {activeView === 'runs' ? '对话' : 'Runs'}
+        </Button>
         <Button
           className="rounded-full"
           size="sm"
