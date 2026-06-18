@@ -7,6 +7,7 @@ import { pinoHttp } from 'pino-http'
 
 import { env } from './env.js'
 import { logger } from './logger.js'
+import { createRunsRouter } from './routes/runs.js'
 import { createSessionsRouter } from './routes/sessions.js'
 import { createOpenAIClient } from './services/openai.js'
 
@@ -48,6 +49,7 @@ export function createApp() {
   })
 
   app.use('/api/sessions', createSessionsRouter({ openai }))
+  app.use('/api/runs', createRunsRouter())
   app.use(
     (err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
       req.log.error(
