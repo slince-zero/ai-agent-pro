@@ -57,6 +57,10 @@ type SendMessageResult = {
   cost: number
 }
 
+function toToolCallStatus(status: 'completed' | 'failed' | undefined) {
+  return status === 'failed' ? ToolCallStatus.FAILED : ToolCallStatus.COMPLETED
+}
+
 function toJsonValue(value: unknown) {
   return value === undefined ? Prisma.JsonNull : (value as Prisma.InputJsonValue)
 }
@@ -134,7 +138,9 @@ export function createChatService({
                   },
                   data: {
                     result: event.result,
-                    status: ToolCallStatus.COMPLETED,
+                    status: toToolCallStatus(event.status),
+                    error: event.error ?? null,
+                    durationMs: event.durationMs,
                     finishedAt: new Date(),
                   },
                 })
@@ -145,7 +151,9 @@ export function createChatService({
                     toolCallId: event.toolCallId,
                     name: event.name,
                     result: event.result,
-                    status: ToolCallStatus.COMPLETED,
+                    status: toToolCallStatus(event.status),
+                    error: event.error ?? null,
+                    durationMs: event.durationMs,
                     finishedAt: new Date(),
                   },
                 })
@@ -156,6 +164,9 @@ export function createChatService({
                 toolCallId: event.toolCallId,
                 name: event.name,
                 preview: event.preview,
+                status: event.status,
+                durationMs: event.durationMs,
+                error: event.error,
               })
               return
             }

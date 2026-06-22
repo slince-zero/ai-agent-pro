@@ -35,6 +35,9 @@ export type ServerEvent = ServerEventMeta &
         toolCallId: string
         name: string
         preview: string
+        status?: 'completed' | 'failed'
+        durationMs?: number
+        error?: string
       }
     | { type: 'usage'; inputTokens: number; outputTokens: number; cost: number }
     | { type: 'done' }

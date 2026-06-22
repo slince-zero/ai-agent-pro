@@ -33,6 +33,7 @@ type ToolCallTrace = Pick<
   | 'result'
   | 'status'
   | 'error'
+  | 'durationMs'
   | 'startedAt'
   | 'finishedAt'
 >
@@ -114,6 +115,7 @@ function serializeToolCall(toolCall: ToolCallTrace) {
     resultPreview: truncateText(toolCall.result, TOOL_RESULT_PREVIEW_CHARS),
     status: toLowerStatus(toolCall.status),
     error: toolCall.error,
+    durationMs: toolCall.durationMs,
     startedAt: toolCall.startedAt.toISOString(),
     finishedAt: toIsoString(toolCall.finishedAt),
   }
@@ -166,6 +168,7 @@ function serializeRunSummary(run: RunWithRelations) {
       name: toolCall.name,
       status: toolCall.status,
       error: toolCall.error,
+      durationMs: toolCall.durationMs,
       startedAt: toolCall.startedAt,
       finishedAt: toolCall.finishedAt,
     })),
