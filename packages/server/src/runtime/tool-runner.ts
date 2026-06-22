@@ -1,18 +1,13 @@
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 import type pino from 'pino'
 
 import { runTool } from '../tools/index.js'
-import type {
-  AgentEvent,
-  AssistantToolCall,
-  OrderedToolCall,
-  ToolCallAccumulator,
-} from './types.js'
+import type { ModelAssistantToolCall, ModelMessage } from './model-client/types.js'
+import type { AgentEvent, OrderedToolCall, ToolCallAccumulator } from './types.js'
 
 type ExecuteTool = typeof runTool
 
 type RunToolCallsOptions = {
-  conversation: ChatCompletionMessageParam[]
+  conversation: ModelMessage[]
   assistantText: string
   toolCalls: Map<number, ToolCallAccumulator>
   signal: AbortSignal
@@ -27,14 +22,11 @@ export function orderToolCalls(toolCalls: Map<number, ToolCallAccumulator>): Ord
     .map(([, value]: [number, ToolCallAccumulator]) => value)
 }
 
-export function toAssistantToolCalls(calls: OrderedToolCall[]): AssistantToolCall[] {
+export function toAssistantToolCalls(calls: OrderedToolCall[]): ModelAssistantToolCall[] {
   return calls.map((call) => ({
     id: call.id,
-    type: 'function',
-    function: {
-      name: call.name,
-      arguments: call.arguments || '{}',
-    },
+    name: call.name,
+    arguments: call.arguments || '{}',
   }))
 }
 
@@ -52,7 +44,7 @@ export async function runToolCalls({
   conversation.push({
     role: 'assistant',
     content: assistantText || null,
-    tool_calls: toAssistantToolCalls(orderedCalls),
+    toolCalls: toAssistantToolCalls(orderedCalls),
   })
 
   for (const call of orderedCalls) {
@@ -65,7 +57,7 @@ export async function runToolCalls({
       const message = `工具参数解析失败：${(error as Error).message}`
       conversation.push({
         role: 'tool',
-        tool_call_id: call.id,
+        toolCallId: call.id,
         content: message,
       })
       await onEvent({
@@ -88,7 +80,7 @@ export async function runToolCalls({
     const resultText = await executeTool(call.name, parsedArgs, logger)
     conversation.push({
       role: 'tool',
-      tool_call_id: call.id,
+      toolCallId: call.id,
       content: resultText,
     })
 
