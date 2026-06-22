@@ -20,7 +20,11 @@ const session = {
   updatedAt: new Date('2026-06-17T07:01:00.000Z'),
 }
 
-function createFakeSessionService() {
+type FakeSessionServiceCalls = {
+  recentMessageRequests?: { sessionId: string; take: number }[]
+}
+
+function createFakeSessionService(calls: FakeSessionServiceCalls = {}) {
   return {
     createUserMessage: async () => ({
       id: 'msg_user',
@@ -29,7 +33,10 @@ function createFakeSessionService() {
       createdAt: session.createdAt,
     }),
     updateTitleFromMessageIfNeeded: async () => session,
-    getRecentClientMessages: async () => [{ role: 'user' as const, content: 'Hello' }],
+    getRecentClientMessages: async (sessionId: string, take: number) => {
+      calls.recentMessageRequests?.push({ sessionId, take })
+      return [{ role: 'user' as const, content: 'Hello' }]
+    },
     createAssistantMessage: async () => ({
       id: 'msg_assistant',
       role: 'ASSISTANT',
@@ -67,6 +74,9 @@ const runAgentWithFailedTool: typeof runAgent = async ({ onEvent }) => {
 
 test('emits run_id before streamed agent events', async () => {
   const agentRunUpdates: unknown[] = []
+  const sessionCalls = {
+    recentMessageRequests: [] as { sessionId: string; take: number }[],
+  }
   const fakeDb = {
     agentRun: {
       create: async () => ({ id: 'run_1' }),
@@ -85,7 +95,7 @@ test('emits run_id before streamed agent events', async () => {
     model: 'test-model',
     calculateRunCost: () => 0.001,
     runAgentFn,
-    sessionService: createFakeSessionService(),
+    sessionService: createFakeSessionService(sessionCalls),
   })
   const events: ServerEvent[] = []
 
@@ -112,6 +122,7 @@ test('emits run_id before streamed agent events', async () => {
     (agentRunUpdates[0] as { data?: { status?: string } }).data?.status,
     RunStatus.COMPLETED,
   )
+  assert.deepEqual(sessionCalls.recentMessageRequests, [{ sessionId: 'session_1', take: 30 }])
 })
 
 test('persists failed tool results with duration and error details', async () => {
