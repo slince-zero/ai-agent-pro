@@ -55,7 +55,11 @@ test('runs parsed tools in model order and appends tool messages', async () => {
     signal: new AbortController().signal,
     executeTool: async (name, args) => {
       executed.push({ name, args })
-      return `result for ${name}`
+      return {
+        content: `result for ${name}`,
+        status: 'completed',
+        durationMs: 12,
+      }
     },
     onEvent: (event) => {
       events.push(event)
@@ -71,6 +75,7 @@ test('runs parsed tools in model order and appends tool messages', async () => {
     events.map((event) => (event as { type: string }).type),
     ['tool_call', 'tool_result', 'tool_call', 'tool_result'],
   )
+  assert.equal((events[1] as { durationMs?: number }).durationMs, 12)
   assert.equal(conversation[1]?.role, 'assistant')
   assert.equal(conversation[2]?.role, 'tool')
   assert.equal(conversation[3]?.role, 'tool')
@@ -95,6 +100,7 @@ test('emits a tool_result without executing tools when arguments are malformed',
 
   assert.equal(events.length, 1)
   assert.equal((events[0] as { type: string }).type, 'tool_result')
+  assert.equal((events[0] as { status?: string }).status, 'failed')
   assert.match((events[0] as { result: string }).result, /工具参数解析失败/)
   assert.equal(conversation[1]?.role, 'assistant')
   assert.equal(conversation[2]?.role, 'tool')

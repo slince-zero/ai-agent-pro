@@ -79,6 +79,12 @@ test('converts generic model requests into OpenAI-compatible chat requests', asy
       {
         name: 'web_fetch',
         description: 'Fetch a URL',
+        governance: {
+          category: 'web',
+          sideEffect: false,
+          requiresAuth: false,
+          timeoutMs: 10_000,
+        },
         parameters: {
           type: 'object',
           properties: { url: { type: 'string' } },

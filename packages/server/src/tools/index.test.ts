@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { afterEach, mock, test } from 'node:test'
 
+import { z } from 'zod'
+
 process.env.OPENAI_API_KEY = 'test-api-key'
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test'
 
@@ -20,6 +22,27 @@ test('returns OpenAI-compatible tool definitions', async () => {
     tools.every((tool) => tool.type === 'function'),
     true,
   )
+})
+
+test('returns model tool definitions with governance metadata', async () => {
+  const { getModelTools } = await import('./index.js')
+
+  const tools = getModelTools()
+  const webFetch = tools.find((tool) => tool.name === 'web_fetch')
+  const githubLookup = tools.find((tool) => tool.name === 'github_repository_lookup')
+
+  assert.deepEqual(webFetch?.governance, {
+    category: 'web',
+    sideEffect: false,
+    requiresAuth: false,
+    timeoutMs: 10_000,
+  })
+  assert.deepEqual(githubLookup?.governance, {
+    category: 'repository',
+    sideEffect: false,
+    requiresAuth: false,
+    timeoutMs: 8_000,
+  })
 })
 
 test('returns a friendly message for unknown tools', async () => {
@@ -42,6 +65,17 @@ test('returns validation details for invalid tool arguments', async () => {
   assert.equal(result.error, '工具参数校验失败')
   assert.equal(result.tool, 'web_fetch')
   assert.equal(result.issues[0]?.path, 'url')
+})
+
+test('returns structured validation failures from detailed tool execution', async () => {
+  const { runToolDetailed } = await import('./index.js')
+
+  const result = await runToolDetailed('web_fetch', {})
+
+  assert.equal(result.status, 'failed')
+  assert.equal(result.error, '工具参数校验失败')
+  assert.equal(result.durationMs >= 0, true)
+  assert.match(result.content, /工具参数校验失败/)
 })
 
 test('runs registered tools with parsed arguments', async () => {
@@ -100,4 +134,35 @@ test('surfaces tool-level network errors as tool results', async () => {
   }
 
   assert.match(result.error, /network unavailable/)
+})
+
+test('fails detailed tool execution after the configured timeout', async () => {
+  const { runToolDetailed } = await import('./index.js')
+
+  const result = await runToolDetailed('slow_tool', {}, undefined, {
+    slow_tool: {
+      name: 'slow_tool',
+      description: 'Slow test tool',
+      governance: {
+        category: 'system',
+        sideEffect: false,
+        requiresAuth: false,
+        timeoutMs: 5,
+      },
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
+      schema: z.object({}).strict(),
+      run: async () =>
+        new Promise<string>((resolve) => {
+          setTimeout(() => resolve('too late'), 50)
+        }),
+    },
+  })
+
+  assert.equal(result.status, 'failed')
+  assert.match(result.error ?? '', /超时/)
+  assert.match(result.content, /工具执行出错/)
 })

@@ -89,6 +89,12 @@ export const githubRepoTool: AppTool<GitHubRepoLookupArgs> = {
   name: 'github_repository_lookup',
   description:
     '查询单个公开 GitHub 仓库的元数据：描述、stars、forks、open issues、主要语言、默认分支、最近更新、最近推送、许可证、homepage、topics。当用户提到 GitHub 仓库链接、想要某个仓库的概况或对比多个仓库时调用。每次只查询一个仓库，需要查询多个时分别多次调用。',
+  governance: {
+    category: 'repository',
+    sideEffect: false,
+    requiresAuth: false,
+    timeoutMs: 8_000,
+  },
   parameters: {
     type: 'object',
     properties: {

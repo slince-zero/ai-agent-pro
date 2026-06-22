@@ -1,5 +1,6 @@
 import type pino from 'pino'
 
+import type { ToolRunStatus } from '../tools/types.js'
 import type { ClientMessage } from '../types/chat.js'
 import type { ModelClient } from './model-client/types.js'
 
@@ -12,6 +13,9 @@ export type AgentEvent =
       name: string
       preview: string
       result: string
+      status?: ToolRunStatus
+      durationMs?: number
+      error?: string
     }
   | { type: 'error'; error: string }
 

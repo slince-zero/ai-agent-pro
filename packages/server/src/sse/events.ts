@@ -9,7 +9,15 @@ export type ServerEvent = ServerEventMeta &
     | { type: 'run_id'; runId: string }
     | { type: 'text'; text: string }
     | { type: 'tool_call'; toolCallId: string; name: string; args: unknown }
-    | { type: 'tool_result'; toolCallId: string; name: string; preview: string }
+    | {
+        type: 'tool_result'
+        toolCallId: string
+        name: string
+        preview: string
+        status?: 'completed' | 'failed'
+        durationMs?: number
+        error?: string
+      }
     | { type: 'usage'; inputTokens: number; outputTokens: number; cost: number }
     | { type: 'done' }
     | { type: 'error'; error: string }

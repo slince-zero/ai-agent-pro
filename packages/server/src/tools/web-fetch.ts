@@ -304,6 +304,12 @@ export const webFetchTool: AppTool<WebFetchArgs> = {
   name: 'web_fetch',
   description:
     '读取一个公开 http/https URL 的文本内容，用于分析技术文档、博客文章、网页说明或接口返回的文本。返回标题、状态码、content-type 和清洗后的正文预览；不要用于 GitHub 仓库元数据查询，GitHub 仓库概况优先使用 github_repository_lookup。',
+  governance: {
+    category: 'web',
+    sideEffect: false,
+    requiresAuth: false,
+    timeoutMs: FETCH_TIMEOUT_MS,
+  },
   parameters: {
     type: 'object',
     properties: {

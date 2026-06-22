@@ -9,7 +9,7 @@ import type { createSessionService } from './session-service.js'
 process.env.OPENAI_API_KEY = 'test-api-key'
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test'
 
-const { RunStatus, SessionStatus } = await import('../generated/prisma/client.js')
+const { RunStatus, SessionStatus, ToolCallStatus } = await import('../generated/prisma/client.js')
 const { createChatService } = await import('./chat-service.js')
 
 const session = {
@@ -43,6 +43,26 @@ function createFakeSessionService() {
 const runAgentFn: typeof runAgent = async ({ onEvent }) => {
   await onEvent({ type: 'text', text: 'Hi' })
   return { inputTokens: 3, outputTokens: 4 }
+}
+
+const runAgentWithFailedTool: typeof runAgent = async ({ onEvent }) => {
+  await onEvent({
+    type: 'tool_call',
+    toolCallId: 'call_1',
+    name: 'web_fetch',
+    args: { url: 'https://example.com' },
+  })
+  await onEvent({
+    type: 'tool_result',
+    toolCallId: 'call_1',
+    name: 'web_fetch',
+    preview: '工具执行出错',
+    result: '工具执行出错：network unavailable',
+    status: 'failed',
+    durationMs: 123,
+    error: 'network unavailable',
+  })
+  return { inputTokens: 1, outputTokens: 2 }
 }
 
 test('emits run_id before streamed agent events', async () => {
@@ -92,4 +112,61 @@ test('emits run_id before streamed agent events', async () => {
     (agentRunUpdates[0] as { data?: { status?: string } }).data?.status,
     RunStatus.COMPLETED,
   )
+})
+
+test('persists failed tool results with duration and error details', async () => {
+  const toolCreates: unknown[] = []
+  const toolUpdates: unknown[] = []
+  const fakeDb = {
+    agentRun: {
+      create: async () => ({ id: 'run_1' }),
+      update: async () => ({ id: 'run_1' }),
+    },
+    toolCall: {
+      create: async (args: unknown) => {
+        toolCreates.push(args)
+        return { id: 'tool_1' }
+      },
+      update: async (args: unknown) => {
+        toolUpdates.push(args)
+        return { id: 'tool_1' }
+      },
+    },
+  }
+  const service = createChatService({
+    db: fakeDb,
+    model: 'test-model',
+    calculateRunCost: () => 0.001,
+    runAgentFn: runAgentWithFailedTool,
+    sessionService: createFakeSessionService(),
+  })
+  const events: ServerEvent[] = []
+
+  await service.sendMessage({
+    content: 'Hello',
+    modelClient: {} as ModelClient,
+    session,
+    signal: new AbortController().signal,
+    onEvent: (event) => {
+      events.push(event)
+    },
+  })
+
+  assert.equal(toolCreates.length, 1)
+  assert.deepEqual((toolUpdates[0] as { data?: unknown }).data, {
+    result: '工具执行出错：network unavailable',
+    status: ToolCallStatus.FAILED,
+    error: 'network unavailable',
+    durationMs: 123,
+    finishedAt: (toolUpdates[0] as { data: { finishedAt: Date } }).data.finishedAt,
+  })
+  assert.deepEqual(events[2], {
+    type: 'tool_result',
+    toolCallId: 'call_1',
+    name: 'web_fetch',
+    preview: '工具执行出错',
+    status: 'failed',
+    durationMs: 123,
+    error: 'network unavailable',
+  })
 })
