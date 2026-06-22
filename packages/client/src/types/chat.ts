@@ -21,18 +21,25 @@ export type ToolEvent = {
   preview?: string
 }
 
-export type ServerEvent =
-  | { type: 'text'; text: string }
-  | { type: 'tool_call'; toolCallId: string; name: string; args: unknown }
-  | {
-      type: 'tool_result'
-      toolCallId: string
-      name: string
-      preview: string
-    }
-  | { type: 'usage'; inputTokens: number; outputTokens: number; cost: number }
-  | { type: 'done' }
-  | { type: 'error'; error: string }
+type ServerEventMeta = {
+  eventId?: string
+}
+
+export type ServerEvent = ServerEventMeta &
+  (
+    | { type: 'run_id'; runId: string }
+    | { type: 'text'; text: string }
+    | { type: 'tool_call'; toolCallId: string; name: string; args: unknown }
+    | {
+        type: 'tool_result'
+        toolCallId: string
+        name: string
+        preview: string
+      }
+    | { type: 'usage'; inputTokens: number; outputTokens: number; cost: number }
+    | { type: 'done' }
+    | { type: 'error'; error: string }
+  )
 
 export type PromptPreset = {
   label: string
