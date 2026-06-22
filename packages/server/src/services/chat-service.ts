@@ -1,8 +1,8 @@
-import type OpenAI from 'openai'
 import type pino from 'pino'
 
 import { prisma } from '../db/client.js'
 import { Prisma, RunStatus, ToolCallStatus } from '../generated/prisma/client.js'
+import type { ModelClient } from '../runtime/model-client/types.js'
 import type { ServerEvent } from '../sse/events.js'
 import { runAgent } from './agent.js'
 import { MODEL } from './openai.js'
@@ -44,7 +44,7 @@ type ChatServiceDeps = {
 
 type SendMessageInput = {
   content: string
-  openai: OpenAI
+  modelClient: ModelClient
   session: ActiveSession
   signal: AbortSignal
   logger?: pino.Logger
@@ -71,7 +71,7 @@ export function createChatService({
   return {
     async sendMessage({
       content,
-      openai,
+      modelClient,
       session,
       signal,
       logger,
@@ -98,7 +98,7 @@ export function createChatService({
       try {
         const messages = await sessionService.getRecentClientMessages(session.id)
         const usage = await runAgentFn({
-          openai,
+          modelClient,
           messages,
           signal,
           logger: runLogger,

@@ -1,33 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import type { ModelStream } from './types.js'
+import type { ModelStream, ModelStreamChunk } from './model-client/types.js'
 
 process.env.OPENAI_API_KEY = 'test-api-key'
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test'
 
-type StreamChunk = {
-  choices: {
-    delta?: {
-      content?: string
-      tool_calls?: {
-        index: number
-        id?: string
-        function?: {
-          name?: string
-          arguments?: string
-        }
-      }[]
-    }
-    finish_reason?: string | null
-  }[]
-  usage?: {
-    prompt_tokens?: number
-    completion_tokens?: number
-  }
-}
-
-function streamFrom(chunks: StreamChunk[]): ModelStream {
+function streamFrom(chunks: ModelStreamChunk[]): ModelStream {
   return {
     async *[Symbol.asyncIterator]() {
       for (const chunk of chunks) {
@@ -48,16 +27,18 @@ test('parses streamed text, tool call argument deltas and usage', async () => {
         choices: [
           {
             delta: {
-              tool_calls: [
+              toolCalls: [
                 {
                   index: 1,
                   id: 'call_b',
-                  function: { name: 'web_fetch', arguments: '{"url":"https://' },
+                  name: 'web_fetch',
+                  argumentsDelta: '{"url":"https://',
                 },
                 {
                   index: 0,
                   id: 'call_a',
-                  function: { name: 'github_repository_lookup', arguments: '{"repo":"' },
+                  name: 'github_repository_lookup',
+                  argumentsDelta: '{"repo":"',
                 },
               ],
             },
@@ -68,15 +49,15 @@ test('parses streamed text, tool call argument deltas and usage', async () => {
         choices: [
           {
             delta: {
-              tool_calls: [
-                { index: 1, function: { arguments: 'example.com"}' } },
-                { index: 0, function: { arguments: 'slince-zero/ai-agent-pro"}' } },
+              toolCalls: [
+                { index: 1, argumentsDelta: 'example.com"}' },
+                { index: 0, argumentsDelta: 'slince-zero/ai-agent-pro"}' },
               ],
             },
-            finish_reason: 'tool_calls',
+            finishReason: 'tool_calls',
           },
         ],
-        usage: { prompt_tokens: 20, completion_tokens: 8 },
+        usage: { inputTokens: 20, outputTokens: 8 },
       },
     ]),
     signal: new AbortController().signal,

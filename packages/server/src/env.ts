@@ -9,6 +9,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().trim().min(1, 'DATABASE_URL 不能为空，请在 .env 中设置数据库连接字符串'),
 
   // ---- 可选（有默认值） ----
+  MODEL_PROVIDER: z.enum(['openai-compatible', 'anthropic']).default('openai-compatible'),
   DEEPSEEK_BASE_URL: z.string().trim().min(1).default('https://api.deepseek.com'),
   DEEPSEEK_MODEL: z.string().trim().min(1).default('deepseek-v4-pro'),
   PORT: z.coerce.number().int().positive().default(3003),
@@ -16,6 +17,8 @@ const envSchema = z.object({
   DEFAULT_USER_EMAIL: z.string().trim().min(1).default('local@ai-pro-agent.dev'),
 
   // ---- 可选（无默认值） ----
+  MODEL_BASE_URL: z.string().trim().min(1).optional(),
+  MODEL_NAME: z.string().trim().min(1).optional(),
   GITHUB_TOKEN: z.string().trim().optional(),
   CLIENT_DIST_DIR: z.string().trim().optional(),
 })

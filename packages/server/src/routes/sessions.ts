@@ -1,14 +1,14 @@
 import { Router } from 'express'
-import type OpenAI from 'openai'
 import { z } from 'zod'
 
+import type { ModelClient } from '../runtime/model-client/types.js'
 import { createChatService } from '../services/chat-service.js'
 import { createSessionService } from '../services/session-service.js'
 import { getCurrentUser } from '../services/users.js'
 import { prepareSse, writeSse } from '../sse/events.js'
 
 type SessionsRouterDeps = {
-  openai: OpenAI
+  modelClient: ModelClient
   chatService?: ReturnType<typeof createChatService>
   sessionService?: ReturnType<typeof createSessionService>
 }
@@ -26,7 +26,7 @@ const createMessageSchema = z
   .strict()
 
 export function createSessionsRouter({
-  openai,
+  modelClient,
   sessionService = createSessionService(),
   chatService = createChatService({ sessionService }),
 }: SessionsRouterDeps) {
@@ -100,7 +100,7 @@ export function createSessionsRouter({
     try {
       const { cost, inputTokens, outputTokens } = await chatService.sendMessage({
         content: parsed.data.content,
-        openai,
+        modelClient,
         session,
         signal: controller.signal,
         logger: req.log,
