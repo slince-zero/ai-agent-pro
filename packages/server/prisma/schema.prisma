@@ -79,6 +79,7 @@ model ToolCall {
   result     String?
   status     ToolCallStatus @default(RUNNING)
   error      String?
+  durationMs Int?
   startedAt  DateTime       @default(now())
   finishedAt DateTime?
 

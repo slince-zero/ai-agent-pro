@@ -1,10 +1,10 @@
 import type pino from 'pino'
 
-import { runTool } from '../tools/index.js'
+import { runToolDetailed } from '../tools/index.js'
 import type { ModelAssistantToolCall, ModelMessage } from './model-client/types.js'
 import type { AgentEvent, OrderedToolCall, ToolCallAccumulator } from './types.js'
 
-type ExecuteTool = typeof runTool
+type ExecuteTool = typeof runToolDetailed
 
 type RunToolCallsOptions = {
   conversation: ModelMessage[]
@@ -36,7 +36,7 @@ export async function runToolCalls({
   toolCalls,
   signal,
   logger,
-  executeTool = runTool,
+  executeTool = runToolDetailed,
   onEvent,
 }: RunToolCallsOptions) {
   const orderedCalls = orderToolCalls(toolCalls)
@@ -54,6 +54,7 @@ export async function runToolCalls({
     try {
       parsedArgs = call.arguments ? JSON.parse(call.arguments) : {}
     } catch (error) {
+      const durationMs = 0
       const message = `工具参数解析失败：${(error as Error).message}`
       conversation.push({
         role: 'tool',
@@ -66,6 +67,9 @@ export async function runToolCalls({
         name: call.name,
         preview: message.slice(0, 120),
         result: message,
+        status: 'failed',
+        durationMs,
+        error: message,
       })
       continue
     }
@@ -77,19 +81,22 @@ export async function runToolCalls({
       args: parsedArgs,
     })
 
-    const resultText = await executeTool(call.name, parsedArgs, logger)
+    const result = await executeTool(call.name, parsedArgs, logger)
     conversation.push({
       role: 'tool',
       toolCallId: call.id,
-      content: resultText,
+      content: result.content,
     })
 
     await onEvent({
       type: 'tool_result',
       toolCallId: call.id,
       name: call.name,
-      preview: resultText.slice(0, 120),
-      result: resultText,
+      preview: result.content.slice(0, 120),
+      result: result.content,
+      status: result.status,
+      durationMs: result.durationMs,
+      error: result.error,
     })
   }
 

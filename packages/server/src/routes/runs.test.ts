@@ -56,6 +56,7 @@ const traceRun = {
       result: 'result '.repeat(500),
       status: ToolCallStatus.COMPLETED,
       error: null,
+      durationMs: 1234,
       startedAt: new Date('2026-06-17T06:00:01.000Z'),
       finishedAt: new Date('2026-06-17T06:00:02.000Z'),
     },
@@ -127,6 +128,7 @@ test('lists recent runs with summaries and preview-only tool calls', async () =>
   assert.equal(run.assistantMessage.content, 'Here is a trace summary.')
   assert.equal(run.toolCalls.length, 1)
   assert.equal('resultPreview' in run.toolCalls[0]!, false)
+  assert.equal((run.toolCalls[0] as { durationMs?: number }).durationMs, 1234)
 })
 
 test('returns run detail with messages, usage and truncated tool result', async () => {
@@ -139,6 +141,7 @@ test('returns run detail with messages, usage and truncated tool result', async 
     toolCalls: {
       arguments: { long: string }
       resultPreview: string
+      durationMs: number
     }[]
   }
 
@@ -147,6 +150,7 @@ test('returns run detail with messages, usage and truncated tool result', async 
   assert.equal(run.outputTokens, 50)
   assert.equal(run.cost, 0.000123)
   assert.equal(run.toolCalls[0]?.arguments.long.length, 503)
+  assert.equal(run.toolCalls[0]?.durationMs, 1234)
   assert.equal(run.toolCalls[0]?.resultPreview.endsWith('...'), true)
 })
 

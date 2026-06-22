@@ -27,4 +27,9 @@ pnpm-store
 .pnpm-store
 *.tsbuildinfo
 
+# Generated server files
+/packages/server/src/generated/
+
+
 .env
+
