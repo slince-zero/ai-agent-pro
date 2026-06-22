@@ -69,7 +69,7 @@ export function Sidebar({
           <p className="text-muted-foreground text-xs font-medium">最近会话</p>
           <MessageSquareText className="text-muted-foreground size-3.5" aria-hidden="true" />
         </div>
-        <ScrollArea className="h-[30svh] min-h-32">
+        <ScrollArea className="h-full">
           <div className="space-y-1 pr-2">
             {sessions.length === 0 ? (
               <p className="text-muted-foreground px-2 py-2 text-xs leading-5">暂无历史会话</p>
@@ -80,7 +80,7 @@ export function Sidebar({
                 return (
                   <Button
                     className={cn(
-                      'h-auto w-full justify-start rounded-lg px-2.5 py-2 text-left text-sm font-normal',
+                      'h-auto w-full min-w-0 justify-start rounded-lg px-2.5 py-2 text-left text-sm font-normal',
                       isActive && 'bg-accent text-accent-foreground',
                     )}
                     key={session.id}
