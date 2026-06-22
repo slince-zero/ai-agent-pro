@@ -2,23 +2,15 @@ import { Router } from 'express'
 import type OpenAI from 'openai'
 import { z } from 'zod'
 
-import { prisma } from '../db/client.js'
-import {
-  MessageRole,
-  Prisma,
-  RunStatus,
-  SessionStatus,
-  ToolCallStatus,
-} from '../generated/prisma/client.js'
-import { runAgent } from '../services/agent.js'
-import { MODEL } from '../services/openai.js'
-import { calculateCost } from '../services/pricing.js'
+import { createChatService } from '../services/chat-service.js'
+import { createSessionService } from '../services/session-service.js'
 import { getCurrentUser } from '../services/users.js'
 import { prepareSse, writeSse } from '../sse/events.js'
-import type { ClientMessage } from '../types/chat.js'
 
 type SessionsRouterDeps = {
   openai: OpenAI
+  chatService?: ReturnType<typeof createChatService>
+  sessionService?: ReturnType<typeof createSessionService>
 }
 
 const createSessionSchema = z
@@ -33,89 +25,19 @@ const createMessageSchema = z
   })
   .strict()
 
-function toTitle(content: string) {
-  const normalized = content.replace(/\s+/g, ' ').trim()
-  if (!normalized) return '新对话'
-  return normalized.length > 40 ? `${normalized.slice(0, 40)}...` : normalized
-}
-
-function toClientRole(role: MessageRole): ClientMessage['role'] | null {
-  if (role === MessageRole.USER) return 'user'
-  if (role === MessageRole.ASSISTANT) return 'assistant'
-  return null
-}
-
-function serializeSession(session: {
-  id: string
-  title: string
-  status: SessionStatus
-  createdAt: Date
-  updatedAt: Date
-}) {
-  return {
-    id: session.id,
-    title: session.title,
-    status: session.status.toLowerCase(),
-    createdAt: session.createdAt.toISOString(),
-    updatedAt: session.updatedAt.toISOString(),
-  }
-}
-
-function serializeMessage(
-  message: {
-    id: string
-    role: MessageRole
-    content: string
-    createdAt: Date
-  },
-  usage?: {
-    inputTokens: number | null
-    outputTokens: number | null
-    cost: number | null
-  },
-) {
-  const hasUsage =
-    usage && usage.inputTokens != null && usage.outputTokens != null && usage.cost != null
-
-  return {
-    id: message.id,
-    role: message.role.toLowerCase(),
-    content: message.content,
-    createdAt: message.createdAt.toISOString(),
-    ...(hasUsage
-      ? {
-          usage: {
-            inputTokens: usage.inputTokens,
-            outputTokens: usage.outputTokens,
-            cost: usage.cost,
-          },
-        }
-      : {}),
-  }
-}
-
-function toJsonValue(value: unknown) {
-  return value === undefined ? Prisma.JsonNull : (value as Prisma.InputJsonValue)
-}
-
-export function createSessionsRouter({ openai }: SessionsRouterDeps) {
+export function createSessionsRouter({
+  openai,
+  sessionService = createSessionService(),
+  chatService = createChatService({ sessionService }),
+}: SessionsRouterDeps) {
   const router = Router()
 
   router.get('/', async (req, res) => {
     try {
       const user = await getCurrentUser()
-      const sessions = await prisma.session.findMany({
-        where: {
-          userId: user.id,
-          status: SessionStatus.ACTIVE,
-        },
-        orderBy: {
-          updatedAt: 'desc',
-        },
-        take: 50,
-      })
+      const sessions = await sessionService.listActiveSessions(user.id)
 
-      res.json({ sessions: sessions.map(serializeSession) })
+      res.json({ sessions })
     } catch (error) {
       req.log.error({ err: error }, '获取会话列表失败')
       res.status(500).json({ error: '获取会话列表失败' })
@@ -130,14 +52,9 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
 
     try {
       const user = await getCurrentUser()
-      const session = await prisma.session.create({
-        data: {
-          userId: user.id,
-          title: parsed.data.title ?? '新对话',
-        },
-      })
+      const session = await sessionService.createSession(user.id, parsed.data.title)
 
-      res.status(201).json({ session: serializeSession(session) })
+      res.status(201).json({ session })
     } catch (error) {
       req.log.error({ err: error }, '创建会话失败')
       res.status(500).json({ error: '创建会话失败' })
@@ -147,43 +64,13 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
   router.get('/:sessionId/messages', async (req, res) => {
     try {
       const user = await getCurrentUser()
-      const session = await prisma.session.findFirst({
-        where: {
-          id: req.params.sessionId,
-          userId: user.id,
-          status: SessionStatus.ACTIVE,
-        },
-      })
+      const messages = await sessionService.listSessionMessages(user.id, req.params.sessionId)
 
-      if (!session) {
+      if (!messages) {
         return res.status(404).json({ error: '会话不存在' })
       }
 
-      const messages = await prisma.message.findMany({
-        where: {
-          sessionId: session.id,
-          role: {
-            in: [MessageRole.USER, MessageRole.ASSISTANT],
-          },
-        },
-        orderBy: {
-          createdAt: 'asc',
-        },
-        include: {
-          assistantRuns: {
-            where: { status: RunStatus.COMPLETED },
-            select: { inputTokens: true, outputTokens: true, cost: true },
-            take: 1,
-          },
-        },
-      })
-
-      res.json({
-        messages: messages.map((message) => {
-          const usage = message.assistantRuns[0]
-          return serializeMessage(message, usage ?? undefined)
-        }),
-      })
+      res.json({ messages })
     } catch (error) {
       req.log.error({ err: error }, '获取消息失败')
       res.status(500).json({ error: '获取消息失败' })
@@ -196,194 +83,31 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
       return res.status(400).json({ error: '消息内容无效' })
     }
 
-    const content = parsed.data.content
     const user = await getCurrentUser()
-    const session = await prisma.session.findFirst({
-      where: {
-        id: req.params.sessionId,
-        userId: user.id,
-        status: SessionStatus.ACTIVE,
-      },
-    })
+    const session = await sessionService.getActiveSession(user.id, req.params.sessionId)
 
     if (!session) {
       return res.status(404).json({ error: '会话不存在' })
     }
 
-    const userMessage = await prisma.message.create({
-      data: {
-        sessionId: session.id,
-        role: MessageRole.USER,
-        content,
-      },
-    })
-
-    if (session.title === '新对话') {
-      await prisma.session.update({
-        where: {
-          id: session.id,
-        },
-        data: {
-          title: toTitle(content),
-        },
-      })
-    }
-
-    const run = await prisma.agentRun.create({
-      data: {
-        sessionId: session.id,
-        userMessageId: userMessage.id,
-        model: MODEL,
-      },
-    })
-
-    // Create a scoped logger carrying session & run context.
-    const runLogger = req.log.child({ sessionId: session.id, runId: run.id })
-
     prepareSse(res)
 
     const controller = new AbortController()
-    const toolCallIds = new Map<string, string>()
-    let assistantText = ''
-    let runError: string | null = null
-
     res.on('close', () => {
       controller.abort()
     })
 
     try {
-      const dbMessages = await prisma.message.findMany({
-        where: {
-          sessionId: session.id,
-          role: {
-            in: [MessageRole.USER, MessageRole.ASSISTANT],
-          },
-        },
-        orderBy: {
-          createdAt: 'asc',
-        },
-        take: 30,
-      })
-
-      const messages = dbMessages
-        .map((message) => {
-          const role = toClientRole(message.role)
-          return role ? { role, content: message.content } : null
-        })
-        .filter((message): message is ClientMessage => message !== null)
-
-      const { inputTokens, outputTokens } = await runAgent({
+      const { cost, inputTokens, outputTokens } = await chatService.sendMessage({
+        content: parsed.data.content,
         openai,
-        messages,
+        session,
         signal: controller.signal,
-        logger: runLogger,
+        logger: req.log,
         onEvent: async (event) => {
-          if (event.type === 'text') {
-            assistantText += event.text
-            if (!controller.signal.aborted && !res.writableEnded) {
-              writeSse(res, event)
-            }
-            return
-          }
-
-          if (event.type === 'tool_call') {
-            const toolCall = await prisma.toolCall.create({
-              data: {
-                runId: run.id,
-                toolCallId: event.toolCallId,
-                name: event.name,
-                arguments: toJsonValue(event.args),
-              },
-            })
-            toolCallIds.set(event.toolCallId, toolCall.id)
-
-            if (!controller.signal.aborted && !res.writableEnded) {
-              writeSse(res, event)
-            }
-            return
-          }
-
-          if (event.type === 'tool_result') {
-            const id = toolCallIds.get(event.toolCallId)
-            if (id) {
-              await prisma.toolCall.update({
-                where: {
-                  id,
-                },
-                data: {
-                  result: event.result,
-                  status: ToolCallStatus.COMPLETED,
-                  finishedAt: new Date(),
-                },
-              })
-            } else {
-              await prisma.toolCall.create({
-                data: {
-                  runId: run.id,
-                  toolCallId: event.toolCallId,
-                  name: event.name,
-                  result: event.result,
-                  status: ToolCallStatus.COMPLETED,
-                  finishedAt: new Date(),
-                },
-              })
-            }
-
-            if (!controller.signal.aborted && !res.writableEnded) {
-              writeSse(res, {
-                type: 'tool_result',
-                toolCallId: event.toolCallId,
-                name: event.name,
-                preview: event.preview,
-              })
-            }
-            return
-          }
-
-          runError = event.error
           if (!controller.signal.aborted && !res.writableEnded) {
             writeSse(res, event)
           }
-        },
-      })
-
-      const runCost = calculateCost(MODEL, inputTokens, outputTokens)
-
-      const assistantMessage = assistantText.trim()
-        ? await prisma.message.create({
-            data: {
-              sessionId: session.id,
-              role: MessageRole.ASSISTANT,
-              content: assistantText,
-            },
-          })
-        : null
-
-      await prisma.agentRun.update({
-        where: {
-          id: run.id,
-        },
-        data: {
-          assistantMessageId: assistantMessage?.id,
-          status: controller.signal.aborted
-            ? RunStatus.CANCELED
-            : runError
-              ? RunStatus.FAILED
-              : RunStatus.COMPLETED,
-          error: runError,
-          inputTokens,
-          outputTokens,
-          cost: runCost,
-          finishedAt: new Date(),
-        },
-      })
-
-      await prisma.session.update({
-        where: {
-          id: session.id,
-        },
-        data: {
-          updatedAt: new Date(),
         },
       })
 
@@ -392,29 +116,17 @@ export function createSessionsRouter({ openai }: SessionsRouterDeps) {
           type: 'usage',
           inputTokens,
           outputTokens,
-          cost: runCost,
+          cost,
         })
         writeSse(res, { type: 'done' })
         res.end()
       }
     } catch (error) {
-      // 客户端主动断开 → 静默退出，不写错误日志
       if (controller.signal.aborted) return
 
-      runLogger.error({ err: error }, '会话消息处理失败')
+      req.log.error({ err: error, sessionId: session.id }, '会话消息处理失败')
 
-      await prisma.agentRun.update({
-        where: {
-          id: run.id,
-        },
-        data: {
-          status: controller.signal.aborted ? RunStatus.CANCELED : RunStatus.FAILED,
-          error: (error as Error).message,
-          finishedAt: new Date(),
-        },
-      })
-
-      if (!controller.signal.aborted && !res.writableEnded) {
+      if (!res.writableEnded) {
         writeSse(res, {
           type: 'error',
           error: '请求处理失败，请查看 server 终端日志。',
