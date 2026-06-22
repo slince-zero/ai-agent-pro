@@ -7,10 +7,13 @@ export type JsonSchema = {
   additionalProperties?: boolean
 }
 
-export type AppTool<Args> = {
+export type ToolDefinition = {
   name: string
   description: string
   parameters: JsonSchema
+}
+
+export type AppTool<Args> = ToolDefinition & {
   schema: z.ZodType<Args>
   run: (args: Args) => Promise<string>
 }

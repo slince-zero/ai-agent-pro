@@ -1,13 +1,7 @@
-import type OpenAI from 'openai'
-import type {
-  ChatCompletionChunk,
-  ChatCompletionMessageParam,
-  ChatCompletionMessageToolCall,
-  ChatCompletionTool,
-} from 'openai/resources/chat/completions'
 import type pino from 'pino'
 
 import type { ClientMessage } from '../types/chat.js'
+import type { ModelClient } from './model-client/types.js'
 
 export type AgentEvent =
   | { type: 'text'; text: string }
@@ -27,26 +21,11 @@ export type AgentUsage = {
 }
 
 export type RunAgentOptions = {
-  openai: OpenAI
+  modelClient: ModelClient
   messages: ClientMessage[]
   onEvent: (event: AgentEvent) => void | Promise<void>
   signal: AbortSignal
   logger?: pino.Logger
-}
-
-export type ModelStream = AsyncIterable<ChatCompletionChunk>
-
-export type ModelClient = {
-  streamChat: (input: {
-    messages: ChatCompletionMessageParam[]
-    signal: AbortSignal
-  }) => Promise<ModelStream>
-}
-
-export type ModelClientOptions = {
-  openai: OpenAI
-  model?: string
-  tools?: ChatCompletionTool[]
 }
 
 export type ToolCallAccumulator = {
@@ -56,5 +35,3 @@ export type ToolCallAccumulator = {
 }
 
 export type OrderedToolCall = ToolCallAccumulator
-
-export type AssistantToolCall = ChatCompletionMessageToolCall

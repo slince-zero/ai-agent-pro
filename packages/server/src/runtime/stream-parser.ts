@@ -1,4 +1,5 @@
-import type { AgentEvent, AgentUsage, ModelStream, ToolCallAccumulator } from './types.js'
+import type { ModelStream } from './model-client/types.js'
+import type { AgentEvent, AgentUsage, ToolCallAccumulator } from './types.js'
 
 export type StreamParseResult = {
   text: string
@@ -41,8 +42,8 @@ export async function parseModelStream({
       await onEvent({ type: 'text', text: delta.content })
     }
 
-    if (delta?.tool_calls) {
-      for (const part of delta.tool_calls) {
+    if (delta?.toolCalls) {
+      for (const part of delta.toolCalls) {
         const index = part.index
         const existing = toolCalls.get(index) ?? {
           id: '',
@@ -50,17 +51,17 @@ export async function parseModelStream({
           arguments: '',
         }
         if (part.id) existing.id = part.id
-        if (part.function?.name) existing.name = part.function.name
-        if (part.function?.arguments) existing.arguments += part.function.arguments
+        if (part.name) existing.name = part.name
+        if (part.argumentsDelta) existing.arguments += part.argumentsDelta
         toolCalls.set(index, existing)
       }
     }
 
-    if (choice.finish_reason) finishReason = choice.finish_reason
+    if (choice.finishReason) finishReason = choice.finishReason
 
     if (chunk.usage) {
-      usage.inputTokens += chunk.usage.prompt_tokens ?? 0
-      usage.outputTokens += chunk.usage.completion_tokens ?? 0
+      usage.inputTokens += chunk.usage.inputTokens ?? 0
+      usage.outputTokens += chunk.usage.outputTokens ?? 0
     }
   }
 

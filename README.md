@@ -79,10 +79,15 @@ cp packages/server/.env.example packages/server/.env
 
 ```env
 OPENAI_API_KEY=your_api_key
+MODEL_PROVIDER=openai-compatible
+MODEL_BASE_URL=https://api.deepseek.com
+MODEL_NAME=deepseek-v4-pro
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-pro
 DATABASE_URL=postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent
 ```
+
+`MODEL_BASE_URL` / `MODEL_NAME` 优先级高于旧的 `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL`，可直接切到 OpenRouter 等 OpenAI-compatible 服务。
 
 `GITHUB_TOKEN` 可选；不配置时 GitHub API 会使用未认证额度。
 
@@ -221,8 +226,11 @@ docker run \
 | 变量                 | 必填 | 默认值                                                       | 说明                                        |
 | -------------------- | ---- | ------------------------------------------------------------ | ------------------------------------------- |
 | `OPENAI_API_KEY`     | 是   | 空                                                           | OpenAI-compatible API Key。                 |
-| `DEEPSEEK_BASE_URL`  | 否   | `https://api.deepseek.com`                                   | 模型服务 base URL。                         |
-| `DEEPSEEK_MODEL`     | 否   | `deepseek-v4-pro`                                            | 后端请求的模型名。                          |
+| `MODEL_PROVIDER`     | 否   | `openai-compatible`                                          | 模型供应商；`anthropic` 目前为预留入口。    |
+| `MODEL_BASE_URL`     | 否   | 空                                                           | OpenAI-compatible base URL，优先于旧变量。  |
+| `MODEL_NAME`         | 否   | 空                                                           | 后端请求的模型名，优先于旧变量。            |
+| `DEEPSEEK_BASE_URL`  | 否   | `https://api.deepseek.com`                                   | 兼容旧配置的模型服务 base URL。             |
+| `DEEPSEEK_MODEL`     | 否   | `deepseek-v4-pro`                                            | 兼容旧配置的模型名。                        |
 | `DATABASE_URL`       | 是   | `postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent` | Prisma/Postgres 连接串。                    |
 | `GITHUB_TOKEN`       | 否   | 空                                                           | GitHub 仓库查询工具的可选 token。           |
 | `DEFAULT_USER_EMAIL` | 否   | `local@ai-pro-agent.dev`                                     | 当前无鉴权版本使用的本地用户标识。          |

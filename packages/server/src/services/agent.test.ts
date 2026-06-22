@@ -1,34 +1,13 @@
 import assert from 'node:assert/strict'
 import { afterEach, mock, test } from 'node:test'
 
-import type OpenAI from 'openai'
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
+import type { ModelClient, ModelMessage, ModelStreamChunk } from '../runtime/model-client/types.js'
+import type { ToolDefinition } from '../tools/types.js'
 
 process.env.OPENAI_API_KEY = 'test-api-key'
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test'
 
-type StreamChunk = {
-  choices: {
-    delta?: {
-      content?: string
-      tool_calls?: {
-        index: number
-        id?: string
-        function?: {
-          name?: string
-          arguments?: string
-        }
-      }[]
-    }
-    finish_reason?: string | null
-  }[]
-  usage?: {
-    prompt_tokens?: number
-    completion_tokens?: number
-  }
-}
-
-function streamFrom(chunks: StreamChunk[]) {
+function streamFrom(chunks: ModelStreamChunk[]) {
   return {
     async *[Symbol.asyncIterator]() {
       for (const chunk of chunks) {
@@ -38,27 +17,23 @@ function streamFrom(chunks: StreamChunk[]) {
   }
 }
 
-function createFakeOpenAI(streams: ReturnType<typeof streamFrom>[]) {
+function createFakeModelClient(streams: ReturnType<typeof streamFrom>[]) {
   const requests: {
-    messages?: ChatCompletionMessageParam[]
-    tools?: unknown
-    stream_options?: unknown
+    messages: ModelMessage[]
+    tools: ToolDefinition[]
+    signal: AbortSignal
   }[] = []
 
-  const openai = {
-    chat: {
-      completions: {
-        create: async (request: (typeof requests)[number]) => {
-          requests.push(request)
-          const stream = streams.shift()
-          if (!stream) throw new Error('No fake stream configured')
-          return stream
-        },
-      },
+  const modelClient: ModelClient = {
+    streamChat: async (request) => {
+      requests.push(request)
+      const stream = streams.shift()
+      if (!stream) throw new Error('No fake stream configured')
+      return stream
     },
-  } as unknown as OpenAI
+  }
 
-  return { openai, requests }
+  return { modelClient, requests }
 }
 
 afterEach(() => {
@@ -67,19 +42,19 @@ afterEach(() => {
 
 test('streams text deltas and returns accumulated usage', async () => {
   const { runAgent } = await import('./agent.js')
-  const { openai, requests } = createFakeOpenAI([
+  const { modelClient, requests } = createFakeModelClient([
     streamFrom([
       { choices: [{ delta: { content: '<p>Hello' } }] },
       {
-        choices: [{ delta: { content: ' world</p>' }, finish_reason: 'stop' }],
-        usage: { prompt_tokens: 11, completion_tokens: 5 },
+        choices: [{ delta: { content: ' world</p>' }, finishReason: 'stop' }],
+        usage: { inputTokens: 11, outputTokens: 5 },
       },
     ]),
   ])
   const events: unknown[] = []
 
   const usage = await runAgent({
-    openai,
+    modelClient,
     messages: [{ role: 'user', content: 'Say hello' }],
     signal: new AbortController().signal,
     onEvent: (event) => {
@@ -93,8 +68,7 @@ test('streams text deltas and returns accumulated usage', async () => {
     { type: 'text', text: ' world</p>' },
   ])
   assert.equal(requests.length, 1)
-  assert.deepEqual(requests[0]?.stream_options, { include_usage: true })
-  assert.ok(requests[0]?.tools)
+  assert.ok(requests[0]?.tools.length)
 })
 
 test('assembles streamed tool call arguments, runs the tool, and continues the model loop', async () => {
@@ -111,21 +85,19 @@ test('assembles streamed tool call arguments, runs the tool, and continues the m
   )
 
   const { runAgent } = await import('./agent.js')
-  const { openai, requests } = createFakeOpenAI([
+  const { modelClient, requests } = createFakeModelClient([
     streamFrom([
       { choices: [{ delta: { content: '<p>Checking.</p>' } }] },
       {
         choices: [
           {
             delta: {
-              tool_calls: [
+              toolCalls: [
                 {
                   index: 0,
                   id: 'call_1',
-                  function: {
-                    name: 'web_fetch',
-                    arguments: '{"url":"http://93.184.216.34',
-                  },
+                  name: 'web_fetch',
+                  argumentsDelta: '{"url":"http://93.184.216.34',
                 },
               ],
             },
@@ -136,32 +108,30 @@ test('assembles streamed tool call arguments, runs the tool, and continues the m
         choices: [
           {
             delta: {
-              tool_calls: [
+              toolCalls: [
                 {
                   index: 0,
-                  function: {
-                    arguments: '/docs"}',
-                  },
+                  argumentsDelta: '/docs"}',
                 },
               ],
             },
-            finish_reason: 'tool_calls',
+            finishReason: 'tool_calls',
           },
         ],
-        usage: { prompt_tokens: 20, completion_tokens: 8 },
+        usage: { inputTokens: 20, outputTokens: 8 },
       },
     ]),
     streamFrom([
       {
-        choices: [{ delta: { content: '<p>Done.</p>' }, finish_reason: 'stop' }],
-        usage: { prompt_tokens: 13, completion_tokens: 4 },
+        choices: [{ delta: { content: '<p>Done.</p>' }, finishReason: 'stop' }],
+        usage: { inputTokens: 13, outputTokens: 4 },
       },
     ]),
   ])
   const events: unknown[] = []
 
   const usage = await runAgent({
-    openai,
+    modelClient,
     messages: [{ role: 'user', content: 'Fetch the docs' }],
     signal: new AbortController().signal,
     onEvent: (event) => {
@@ -192,7 +162,7 @@ test('assembles streamed tool call arguments, runs the tool, and continues the m
     secondMessages.some(
       (message) =>
         message.role === 'assistant' &&
-        Array.isArray((message as { tool_calls?: unknown[] }).tool_calls),
+        Array.isArray((message as { toolCalls?: unknown[] }).toolCalls),
     ),
     true,
   )
@@ -200,34 +170,32 @@ test('assembles streamed tool call arguments, runs the tool, and continues the m
 
 test('returns a tool_result event for malformed streamed tool arguments', async () => {
   const { runAgent } = await import('./agent.js')
-  const { openai } = createFakeOpenAI([
+  const { modelClient } = createFakeModelClient([
     streamFrom([
       {
         choices: [
           {
             delta: {
-              tool_calls: [
+              toolCalls: [
                 {
                   index: 0,
                   id: 'call_bad_args',
-                  function: {
-                    name: 'web_fetch',
-                    arguments: '{"url":',
-                  },
+                  name: 'web_fetch',
+                  argumentsDelta: '{"url":',
                 },
               ],
             },
-            finish_reason: 'tool_calls',
+            finishReason: 'tool_calls',
           },
         ],
       },
     ]),
-    streamFrom([{ choices: [{ delta: { content: '<p>Recovered.</p>' }, finish_reason: 'stop' }] }]),
+    streamFrom([{ choices: [{ delta: { content: '<p>Recovered.</p>' }, finishReason: 'stop' }] }]),
   ])
   const events: unknown[] = []
 
   await runAgent({
-    openai,
+    modelClient,
     messages: [{ role: 'user', content: 'Fetch malformed args' }],
     signal: new AbortController().signal,
     onEvent: (event) => {

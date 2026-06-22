@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
+import type { ModelMessage } from './model-client/types.js'
 
 process.env.OPENAI_API_KEY = 'test-api-key'
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test'
@@ -24,24 +24,24 @@ test('orders tool calls and formats assistant tool call messages', () => {
   assert.deepEqual(toAssistantToolCalls(ordered), [
     {
       id: 'call_a',
-      type: 'function',
-      function: { name: 'tool_a', arguments: '{"a":true}' },
+      name: 'tool_a',
+      arguments: '{"a":true}',
     },
     {
       id: 'call_b',
-      type: 'function',
-      function: { name: 'tool_b', arguments: '{}' },
+      name: 'tool_b',
+      arguments: '{}',
     },
     {
       id: 'call_c',
-      type: 'function',
-      function: { name: 'tool_c', arguments: '{"c":true}' },
+      name: 'tool_c',
+      arguments: '{"c":true}',
     },
   ])
 })
 
 test('runs parsed tools in model order and appends tool messages', async () => {
-  const conversation: ChatCompletionMessageParam[] = [{ role: 'system', content: 'System' }]
+  const conversation: ModelMessage[] = [{ role: 'system', content: 'System' }]
   const events: unknown[] = []
   const executed: unknown[] = []
 
@@ -77,7 +77,7 @@ test('runs parsed tools in model order and appends tool messages', async () => {
 })
 
 test('emits a tool_result without executing tools when arguments are malformed', async () => {
-  const conversation: ChatCompletionMessageParam[] = [{ role: 'system', content: 'System' }]
+  const conversation: ModelMessage[] = [{ role: 'system', content: 'System' }]
   const events: unknown[] = []
 
   await runToolCalls({

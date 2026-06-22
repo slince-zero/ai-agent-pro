@@ -1,22 +1,22 @@
 import { buildAgentConversation } from '../runtime/context-builder.js'
-import { createOpenAIModelClient } from '../runtime/model-client.js'
 import { parseModelStream } from '../runtime/stream-parser.js'
 import { runToolCalls } from '../runtime/tool-runner.js'
 import type { AgentUsage, RunAgentOptions } from '../runtime/types.js'
+import { getModelTools } from '../tools/index.js'
 
 const MAX_ITERATIONS = 6
 
 export type { AgentEvent, AgentUsage } from '../runtime/types.js'
 
 export async function runAgent({
-  openai,
+  modelClient,
   messages,
   onEvent,
   signal,
   logger,
 }: RunAgentOptions): Promise<AgentUsage> {
   const conversation = buildAgentConversation(messages)
-  const modelClient = createOpenAIModelClient({ openai })
+  const tools = getModelTools()
   let totalInputTokens = 0
   let totalOutputTokens = 0
 
@@ -29,6 +29,7 @@ export async function runAgent({
     try {
       const stream = await modelClient.streamChat({
         messages: conversation,
+        tools,
         signal,
       })
       streamResult = await parseModelStream({
