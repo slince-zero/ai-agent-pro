@@ -1,6 +1,7 @@
 import type { ServerEvent } from '@/types/chat'
 
 type StreamChatHandlers = {
+  onRunId?: (runId: string) => void
   onText: (text: string) => void
   onToolCall?: (toolCallId: string, name: string, args: unknown) => void
   onToolResult?: (toolCallId: string, name: string, preview: string) => void
@@ -65,6 +66,9 @@ function handleServerEvent(event: string, handlers: StreamChatHandlers) {
     const data = JSON.parse(rawData) as ServerEvent
 
     switch (data.type) {
+      case 'run_id':
+        handlers.onRunId?.(data.runId)
+        break
       case 'text':
         handlers.onText(data.text)
         break

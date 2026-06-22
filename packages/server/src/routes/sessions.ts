@@ -5,7 +5,7 @@ import type { ModelClient } from '../runtime/model-client/types.js'
 import { createChatService } from '../services/chat-service.js'
 import { createSessionService } from '../services/session-service.js'
 import { getCurrentUser } from '../services/users.js'
-import { prepareSse, writeSse } from '../sse/events.js'
+import { createSseWriter, prepareSse, startSseHeartbeat } from '../sse/events.js'
 
 type SessionsRouterDeps = {
   modelClient: ModelClient
@@ -91,9 +91,12 @@ export function createSessionsRouter({
     }
 
     prepareSse(res)
+    const sse = createSseWriter(res)
+    const stopHeartbeat = startSseHeartbeat(res)
 
     const controller = new AbortController()
     res.on('close', () => {
+      stopHeartbeat()
       controller.abort()
     })
 
@@ -106,19 +109,20 @@ export function createSessionsRouter({
         logger: req.log,
         onEvent: async (event) => {
           if (!controller.signal.aborted && !res.writableEnded) {
-            writeSse(res, event)
+            sse.write(event)
           }
         },
       })
 
       if (!controller.signal.aborted && !res.writableEnded) {
-        writeSse(res, {
+        sse.write({
           type: 'usage',
           inputTokens,
           outputTokens,
           cost,
         })
-        writeSse(res, { type: 'done' })
+        sse.write({ type: 'done' })
+        stopHeartbeat()
         res.end()
       }
     } catch (error) {
@@ -127,10 +131,11 @@ export function createSessionsRouter({
       req.log.error({ err: error, sessionId: session.id }, '会话消息处理失败')
 
       if (!res.writableEnded) {
-        writeSse(res, {
+        sse.write({
           type: 'error',
           error: '请求处理失败，请查看 server 终端日志。',
         })
+        stopHeartbeat()
         res.end()
       }
     }

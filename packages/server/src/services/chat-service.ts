@@ -88,6 +88,8 @@ export function createChatService({
         },
       })
 
+      await onEvent({ type: 'run_id', runId: run.id })
+
       const runLogger = logger?.child({ sessionId: session.id, runId: run.id })
       const toolCallIds = new Map<string, string>()
       let assistantText = ''
