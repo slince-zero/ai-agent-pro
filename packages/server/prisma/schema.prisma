@@ -15,6 +15,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   sessions Session[]
+  memories Memory[]
 }
 
 model Session {
@@ -28,6 +29,7 @@ model Session {
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages  Message[]
   agentRuns AgentRun[]
+  memories  Memory[]
 
   @@index([userId, updatedAt])
 }
@@ -90,6 +92,27 @@ model ToolCall {
   @@index([status])
 }
 
+model Memory {
+  id            String       @id @default(cuid())
+  userId        String
+  sessionId     String?
+  projectId     String?
+  scope         MemoryScope
+  content       String
+  metadata      Json?
+  status        MemoryStatus @default(ACTIVE)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  invalidatedAt DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, scope, status, updatedAt])
+  @@index([sessionId, status, updatedAt])
+  @@index([projectId, status, updatedAt])
+}
+
 enum SessionStatus {
   ACTIVE   @map("active")
   ARCHIVED @map("archived")
@@ -113,4 +136,15 @@ enum ToolCallStatus {
   RUNNING   @map("running")
   COMPLETED @map("completed")
   FAILED    @map("failed")
+}
+
+enum MemoryScope {
+  USER    @map("user")
+  SESSION @map("session")
+  PROJECT @map("project")
+}
+
+enum MemoryStatus {
+  ACTIVE      @map("active")
+  INVALIDATED @map("invalidated")
 }
