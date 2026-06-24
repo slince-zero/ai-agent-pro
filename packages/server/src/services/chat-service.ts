@@ -2,6 +2,7 @@ import type pino from 'pino'
 
 import { prisma } from '../db/client.js'
 import { Prisma, RunStatus, ToolCallStatus } from '../generated/prisma/client.js'
+import { type ContextBuilder, createContextBuilder } from '../runtime/context-builder.js'
 import type { ModelClient } from '../runtime/model-client/types.js'
 import type { ServerEvent } from '../sse/events.js'
 import { runAgent } from './agent.js'
@@ -40,6 +41,7 @@ type ChatServiceDeps = {
   calculateRunCost?: typeof calculateCost
   runAgentFn?: RunAgentFn
   sessionService?: SessionService
+  contextBuilder?: ContextBuilder
 }
 
 type SendMessageInput = {
@@ -71,7 +73,17 @@ export function createChatService({
   calculateRunCost = calculateCost,
   runAgentFn = runAgent,
   sessionService = createSessionService(),
+  contextBuilder,
 }: ChatServiceDeps = {}) {
+  const resolvedContextBuilder =
+    contextBuilder ??
+    createContextBuilder({
+      source: {
+        loadRecentMessages: (sessionId, take) =>
+          sessionService.getRecentClientMessages(sessionId, take),
+      },
+    })
+
   return {
     async sendMessage({
       content,
@@ -102,7 +114,7 @@ export function createChatService({
       let outputTokens = 0
 
       try {
-        const messages = await sessionService.getRecentClientMessages(session.id)
+        const messages = await resolvedContextBuilder.buildClientMessages(session.id)
         const usage = await runAgentFn({
           modelClient,
           messages,

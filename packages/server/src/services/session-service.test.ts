@@ -79,7 +79,7 @@ function createFakeDb() {
         calls.messageQueries.push(args)
         return (args as { include?: unknown }).include
           ? [userMessage, assistantMessage]
-          : [userMessage, assistantMessage, { ...userMessage, role: MessageRole.SYSTEM }]
+          : [assistantMessage, userMessage, { ...userMessage, role: MessageRole.SYSTEM }]
       },
     },
   }
@@ -128,11 +128,23 @@ test('builds recent client messages and updates new session titles', async () =>
   const { calls, db } = createFakeDb()
   const service = createSessionService({ db })
 
-  const messages = await service.getRecentClientMessages('session_1')
+  const messages = await service.getRecentClientMessages('session_1', 2)
   assert.deepEqual(messages, [
     { role: 'user', content: 'Explain this run' },
     { role: 'assistant', content: 'Here is the explanation.' },
   ])
+  assert.deepEqual(calls.messageQueries[0], {
+    where: {
+      sessionId: 'session_1',
+      role: {
+        in: [MessageRole.USER, MessageRole.ASSISTANT],
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    take: 2,
+  })
 
   await service.updateTitleFromMessageIfNeeded(
     { ...activeSession, title: '新对话' },

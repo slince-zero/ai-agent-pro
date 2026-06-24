@@ -210,7 +210,7 @@ export function createSessionService({
       })
     },
 
-    async getRecentClientMessages(sessionId: string, take = 30) {
+    async getRecentClientMessages(sessionId: string, take: number) {
       const dbMessages = await db.message.findMany({
         where: {
           sessionId,
@@ -219,12 +219,13 @@ export function createSessionService({
           },
         },
         orderBy: {
-          createdAt: 'asc',
+          createdAt: 'desc',
         },
         take,
       })
 
       return dbMessages
+        .toReversed()
         .map((message) => {
           const role = toClientRole(message.role)
           return role ? { role, content: message.content } : null
