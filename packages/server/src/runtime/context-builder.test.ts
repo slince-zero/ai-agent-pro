@@ -8,6 +8,7 @@ const {
   buildAgentConversation,
   buildContextMessages,
   createContextBuilder,
+  formatSummaryForContext,
   selectContextMessages,
 } = await import('./context-builder.js')
 
@@ -92,6 +93,13 @@ test('supports reserved context injection slots before recent history', () => {
   ])
 })
 
+test('formats session summaries as assistant context messages', () => {
+  assert.deepEqual(formatSummaryForContext('Earlier work and decisions.'), {
+    role: 'assistant',
+    content: 'Session summary:\nEarlier work and decisions.',
+  })
+})
+
 test('loads recent history through the context builder source', async () => {
   const calls: { sessionId: string; take: number }[] = []
   const builder = createContextBuilder({
@@ -127,5 +135,25 @@ test('loads recent history through the context builder source', async () => {
     { role: 'system', content: 'System prompt' },
     { role: 'assistant', content: 'kept' },
     { role: 'user', content: 'newest' },
+  ])
+})
+
+test('injects a loaded session summary before recent history', async () => {
+  const builder = createContextBuilder({
+    source: {
+      loadSessionSummary: async () => 'Earlier goals and constraints.',
+      loadRecentMessages: async () => [{ role: 'user', content: 'Continue' }],
+    },
+    options: {
+      maxMessages: 5,
+      maxChars: 100,
+    },
+  })
+
+  const messages = await builder.buildClientMessages('session_1')
+
+  assert.deepEqual(messages, [
+    { role: 'assistant', content: 'Session summary:\nEarlier goals and constraints.' },
+    { role: 'user', content: 'Continue' },
   ])
 })

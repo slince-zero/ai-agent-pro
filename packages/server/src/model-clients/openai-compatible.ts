@@ -106,14 +106,21 @@ export function createOpenAICompatibleModelClient({
 }: OpenAICompatibleModelClientOptions): ModelClient {
   return {
     async streamChat({ messages, tools, signal }) {
+      const toolOptions =
+        tools.length > 0
+          ? {
+              tools: tools.map(toOpenAITool),
+              tool_choice: 'auto' as const,
+            }
+          : {}
+
       const stream = await openai.chat.completions.create(
         {
           model,
           stream: true,
           stream_options: { include_usage: true },
           messages: messages.map(toOpenAIMessage),
-          tools: tools.map(toOpenAITool),
-          tool_choice: 'auto',
+          ...toolOptions,
           ...({ thinking: { type: 'disabled' } } as Record<string, unknown>),
         },
         { signal },
