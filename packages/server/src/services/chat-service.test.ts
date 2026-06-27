@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import type { ModelClient } from '../runtime/model-client/types.js'
 import type { ServerEvent } from '../sse/events.js'
 import type { runAgent } from './agent.js'
+import type { createMemoryService } from './memory-service.js'
 import type { createSessionService } from './session-service.js'
 import type { createSessionSummaryService } from './session-summary-service.js'
 
@@ -15,6 +16,7 @@ const { createChatService } = await import('./chat-service.js')
 
 const session = {
   id: 'session_1',
+  userId: 'user_1',
   title: 'Trace session',
   status: SessionStatus.ACTIVE,
   createdAt: new Date('2026-06-17T07:00:00.000Z'),
@@ -28,6 +30,10 @@ type FakeSessionServiceCalls = {
 type FakeSummaryServiceCalls = {
   getLatestSummaryRequests?: string[]
   refreshRequests?: string[]
+}
+
+type FakeMemoryServiceCalls = {
+  contextMemoryRequests?: unknown[]
 }
 
 function createFakeSessionService(calls: FakeSessionServiceCalls = {}) {
@@ -67,6 +73,25 @@ function createFakeSummaryService(calls: FakeSummaryServiceCalls = {}) {
   } as unknown as ReturnType<typeof createSessionSummaryService>
 }
 
+function createFakeMemoryService(calls: FakeMemoryServiceCalls = {}) {
+  return {
+    createMemory: async () => {
+      throw new Error('createMemory should not be called by chat service')
+    },
+    updateMemory: async () => {
+      throw new Error('updateMemory should not be called by chat service')
+    },
+    listMemories: async () => [],
+    listContextMemories: async (input: unknown) => {
+      calls.contextMemoryRequests?.push(input)
+      return [{ content: 'Use pnpm for package scripts.' }]
+    },
+    invalidateMemory: async () => {
+      throw new Error('invalidateMemory should not be called by chat service')
+    },
+  } as unknown as ReturnType<typeof createMemoryService>
+}
+
 const runAgentFn: typeof runAgent = async ({ onEvent }) => {
   await onEvent({ type: 'text', text: 'Hi' })
   return { inputTokens: 3, outputTokens: 4 }
@@ -101,6 +126,9 @@ test('emits run_id before streamed agent events', async () => {
     getLatestSummaryRequests: [] as string[],
     refreshRequests: [] as string[],
   }
+  const memoryCalls = {
+    contextMemoryRequests: [] as unknown[],
+  }
   const fakeDb = {
     agentRun: {
       create: async () => ({ id: 'run_1' }),
@@ -120,6 +148,7 @@ test('emits run_id before streamed agent events', async () => {
     calculateRunCost: () => 0.001,
     runAgentFn,
     sessionService: createFakeSessionService(sessionCalls),
+    memoryService: createFakeMemoryService(memoryCalls),
     summaryService: createFakeSummaryService(summaryCalls),
   })
   const events: ServerEvent[] = []
@@ -148,6 +177,9 @@ test('emits run_id before streamed agent events', async () => {
     RunStatus.COMPLETED,
   )
   assert.deepEqual(sessionCalls.recentMessageRequests, [{ sessionId: 'session_1', take: 30 }])
+  assert.deepEqual(memoryCalls.contextMemoryRequests, [
+    { userId: 'user_1', sessionId: 'session_1', projectId: undefined },
+  ])
   assert.deepEqual(summaryCalls.getLatestSummaryRequests, ['session_1'])
   assert.deepEqual(summaryCalls.refreshRequests, ['session_1'])
 })
@@ -177,6 +209,7 @@ test('persists failed tool results with duration and error details', async () =>
     calculateRunCost: () => 0.001,
     runAgentFn: runAgentWithFailedTool,
     sessionService: createFakeSessionService(),
+    memoryService: createFakeMemoryService(),
     summaryService: createFakeSummaryService(),
   })
   const events: ServerEvent[] = []

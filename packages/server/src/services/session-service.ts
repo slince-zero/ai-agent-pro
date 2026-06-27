@@ -4,6 +4,7 @@ import type { ClientMessage } from '../types/chat.js'
 
 type SessionRecord = {
   id: string
+  userId: string
   title: string
   status: SessionStatus
   createdAt: Date

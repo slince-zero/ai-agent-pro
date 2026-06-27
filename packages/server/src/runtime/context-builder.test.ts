@@ -8,6 +8,7 @@ const {
   buildAgentConversation,
   buildContextMessages,
   createContextBuilder,
+  formatMemoriesForContext,
   formatSummaryForContext,
   selectContextMessages,
 } = await import('./context-builder.js')
@@ -100,6 +101,14 @@ test('formats session summaries as assistant context messages', () => {
   })
 })
 
+test('formats relevant memories as one assistant context message', () => {
+  assert.deepEqual(formatMemoriesForContext([' Use pnpm. ', 'Run node:test.']), {
+    role: 'assistant',
+    content: 'Relevant memory:\n- Use pnpm.\n- Run node:test.',
+  })
+  assert.equal(formatMemoriesForContext(['   ']), null)
+})
+
 test('loads recent history through the context builder source', async () => {
   const calls: { sessionId: string; take: number }[] = []
   const builder = createContextBuilder({
@@ -156,4 +165,95 @@ test('injects a loaded session summary before recent history', async () => {
     { role: 'assistant', content: 'Session summary:\nEarlier goals and constraints.' },
     { role: 'user', content: 'Continue' },
   ])
+})
+
+test('injects summary and memory before recent history in stable order', async () => {
+  const calls: unknown[] = []
+  const builder = createContextBuilder({
+    source: {
+      loadSessionSummary: async (input) => {
+        calls.push({ type: 'summary', input })
+        return 'Earlier goals.'
+      },
+      loadRelevantMemories: async (input) => {
+        calls.push({ type: 'memory', input })
+        return ['Use pnpm.', 'Prefer focused PRs.']
+      },
+      loadRecentMessages: async () => [
+        { role: 'assistant', content: 'Previous response' },
+        { role: 'user', content: 'Continue' },
+      ],
+    },
+    options: {
+      maxMessages: 5,
+      maxChars: 200,
+    },
+  })
+
+  const messages = await builder.buildClientMessages({
+    sessionId: 'session_1',
+    userId: 'user_1',
+    projectId: 'repo_1',
+  })
+
+  assert.deepEqual(messages, [
+    { role: 'assistant', content: 'Session summary:\nEarlier goals.' },
+    { role: 'assistant', content: 'Relevant memory:\n- Use pnpm.\n- Prefer focused PRs.' },
+    { role: 'assistant', content: 'Previous response' },
+    { role: 'user', content: 'Continue' },
+  ])
+  assert.deepEqual(calls, [
+    {
+      type: 'summary',
+      input: { sessionId: 'session_1', userId: 'user_1', projectId: 'repo_1' },
+    },
+    {
+      type: 'memory',
+      input: { sessionId: 'session_1', userId: 'user_1', projectId: 'repo_1' },
+    },
+  ])
+})
+
+test('preserves injected context before trimming recent history by message budget', () => {
+  const messages = buildContextMessages(
+    [
+      { role: 'user', content: 'old recent' },
+      { role: 'assistant', content: 'kept recent' },
+    ],
+    {
+      maxMessages: 3,
+      maxChars: 100,
+      injections: [
+        {
+          source: 'summary',
+          messages: [{ role: 'assistant', content: 'summary' }],
+        },
+        {
+          source: 'memory',
+          messages: [{ role: 'assistant', content: 'memory' }],
+        },
+      ],
+    },
+  )
+
+  assert.deepEqual(messages, [
+    { role: 'assistant', content: 'summary' },
+    { role: 'assistant', content: 'memory' },
+    { role: 'assistant', content: 'kept recent' },
+  ])
+})
+
+test('truncates injected context before using remaining character budget', () => {
+  const messages = buildContextMessages([{ role: 'user', content: 'recent' }], {
+    maxMessages: 3,
+    maxChars: 8,
+    injections: [
+      {
+        source: 'summary',
+        messages: [{ role: 'assistant', content: 'abcdefghij' }],
+      },
+    ],
+  })
+
+  assert.deepEqual(messages, [{ role: 'assistant', content: '...fghij' }])
 })

@@ -6,6 +6,7 @@ import { type ContextBuilder, createContextBuilder } from '../runtime/context-bu
 import type { ModelClient } from '../runtime/model-client/types.js'
 import type { ServerEvent } from '../sse/events.js'
 import { runAgent } from './agent.js'
+import { type MemoryService, createMemoryService } from './memory-service.js'
 import { MODEL } from './openai.js'
 import { calculateCost } from './pricing.js'
 import { type ActiveSession, createSessionService } from './session-service.js'
@@ -46,6 +47,7 @@ type ChatServiceDeps = {
   runAgentFn?: RunAgentFn
   sessionService?: SessionService
   contextBuilder?: ContextBuilder
+  memoryService?: MemoryService
   summaryService?: SessionSummaryService
 }
 
@@ -78,6 +80,7 @@ export function createChatService({
   calculateRunCost = calculateCost,
   runAgentFn = runAgent,
   sessionService = createSessionService(),
+  memoryService = createMemoryService(),
   summaryService = createSessionSummaryService(),
   contextBuilder,
 }: ChatServiceDeps = {}) {
@@ -87,7 +90,18 @@ export function createChatService({
       source: {
         loadRecentMessages: (sessionId, take) =>
           sessionService.getRecentClientMessages(sessionId, take),
-        loadSessionSummary: (sessionId) => summaryService.getLatestSummaryContent(sessionId),
+        loadSessionSummary: ({ sessionId }) => summaryService.getLatestSummaryContent(sessionId),
+        loadRelevantMemories: async ({ sessionId, userId, projectId }) => {
+          if (!userId) return []
+
+          const memories = await memoryService.listContextMemories({
+            userId,
+            sessionId,
+            projectId,
+          })
+
+          return memories.map((memory) => memory.content)
+        },
       },
     })
 
@@ -121,7 +135,10 @@ export function createChatService({
       let outputTokens = 0
 
       try {
-        const messages = await resolvedContextBuilder.buildClientMessages(session.id)
+        const messages = await resolvedContextBuilder.buildClientMessages({
+          sessionId: session.id,
+          userId: session.userId,
+        })
         const usage = await runAgentFn({
           modelClient,
           messages,
