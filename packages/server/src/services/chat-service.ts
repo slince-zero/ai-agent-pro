@@ -9,6 +9,10 @@ import { runAgent } from './agent.js'
 import { MODEL } from './openai.js'
 import { calculateCost } from './pricing.js'
 import { type ActiveSession, createSessionService } from './session-service.js'
+import {
+  type SessionSummaryService,
+  createSessionSummaryService,
+} from './session-summary-service.js'
 
 type AgentRunRecord = {
   id: string
@@ -42,6 +46,7 @@ type ChatServiceDeps = {
   runAgentFn?: RunAgentFn
   sessionService?: SessionService
   contextBuilder?: ContextBuilder
+  summaryService?: SessionSummaryService
 }
 
 type SendMessageInput = {
@@ -73,6 +78,7 @@ export function createChatService({
   calculateRunCost = calculateCost,
   runAgentFn = runAgent,
   sessionService = createSessionService(),
+  summaryService = createSessionSummaryService(),
   contextBuilder,
 }: ChatServiceDeps = {}) {
   const resolvedContextBuilder =
@@ -81,6 +87,7 @@ export function createChatService({
       source: {
         loadRecentMessages: (sessionId, take) =>
           sessionService.getRecentClientMessages(sessionId, take),
+        loadSessionSummary: (sessionId) => summaryService.getLatestSummaryContent(sessionId),
       },
     })
 
@@ -236,6 +243,19 @@ export function createChatService({
           finishedAt: new Date(),
         },
       })
+
+      if (!signal.aborted && !runError) {
+        try {
+          await summaryService.maybeRefreshSessionSummary({
+            sessionId: session.id,
+            modelClient,
+            signal,
+            logger: runLogger,
+          })
+        } catch (error) {
+          runLogger?.warn({ err: error }, '会话摘要刷新失败')
+        }
+      }
 
       await sessionService.touchSession(session.id)
 

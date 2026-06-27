@@ -147,3 +147,51 @@ test('converts generic model requests into OpenAI-compatible chat requests', asy
     },
   ])
 })
+
+test('omits tool parameters when no tools are available', async () => {
+  const requests: {
+    body: Record<string, unknown>
+  }[] = []
+  const openai = {
+    chat: {
+      completions: {
+        create: async (body: Record<string, unknown>) => {
+          requests.push({ body })
+          return streamFrom([
+            {
+              choices: [
+                {
+                  index: 0,
+                  delta: { content: 'Summary' },
+                  finish_reason: 'stop',
+                },
+              ],
+              created: 0,
+              id: 'chunk_1',
+              model: 'openrouter/test-model',
+              object: 'chat.completion.chunk',
+            },
+          ] as ChatCompletionChunk[])
+        },
+      },
+    },
+  } as unknown as OpenAI
+  const client = createOpenAICompatibleModelClient({
+    openai,
+    model: 'openrouter/test-model',
+  })
+
+  const stream = await client.streamChat({
+    signal: new AbortController().signal,
+    tools: [],
+    messages: [{ role: 'user', content: 'Summarize' }],
+  })
+
+  for await (const chunk of stream) {
+    assert.ok(chunk)
+    // drain stream
+  }
+
+  assert.equal('tools' in requests[0]!.body, false)
+  assert.equal('tool_choice' in requests[0]!.body, false)
+})

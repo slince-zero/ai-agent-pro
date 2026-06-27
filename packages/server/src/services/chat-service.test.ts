@@ -5,6 +5,7 @@ import type { ModelClient } from '../runtime/model-client/types.js'
 import type { ServerEvent } from '../sse/events.js'
 import type { runAgent } from './agent.js'
 import type { createSessionService } from './session-service.js'
+import type { createSessionSummaryService } from './session-summary-service.js'
 
 process.env.OPENAI_API_KEY = 'test-api-key'
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test'
@@ -22,6 +23,11 @@ const session = {
 
 type FakeSessionServiceCalls = {
   recentMessageRequests?: { sessionId: string; take: number }[]
+}
+
+type FakeSummaryServiceCalls = {
+  getLatestSummaryRequests?: string[]
+  refreshRequests?: string[]
 }
 
 function createFakeSessionService(calls: FakeSessionServiceCalls = {}) {
@@ -45,6 +51,20 @@ function createFakeSessionService(calls: FakeSessionServiceCalls = {}) {
     }),
     touchSession: async () => session,
   } as unknown as ReturnType<typeof createSessionService>
+}
+
+function createFakeSummaryService(calls: FakeSummaryServiceCalls = {}) {
+  return {
+    getLatestSummary: async () => null,
+    getLatestSummaryContent: async (sessionId: string) => {
+      calls.getLatestSummaryRequests?.push(sessionId)
+      return null
+    },
+    maybeRefreshSessionSummary: async ({ sessionId }: { sessionId: string }) => {
+      calls.refreshRequests?.push(sessionId)
+      return { created: false, reason: 'below_threshold' as const }
+    },
+  } as unknown as ReturnType<typeof createSessionSummaryService>
 }
 
 const runAgentFn: typeof runAgent = async ({ onEvent }) => {
@@ -77,6 +97,10 @@ test('emits run_id before streamed agent events', async () => {
   const sessionCalls = {
     recentMessageRequests: [] as { sessionId: string; take: number }[],
   }
+  const summaryCalls = {
+    getLatestSummaryRequests: [] as string[],
+    refreshRequests: [] as string[],
+  }
   const fakeDb = {
     agentRun: {
       create: async () => ({ id: 'run_1' }),
@@ -96,6 +120,7 @@ test('emits run_id before streamed agent events', async () => {
     calculateRunCost: () => 0.001,
     runAgentFn,
     sessionService: createFakeSessionService(sessionCalls),
+    summaryService: createFakeSummaryService(summaryCalls),
   })
   const events: ServerEvent[] = []
 
@@ -123,6 +148,8 @@ test('emits run_id before streamed agent events', async () => {
     RunStatus.COMPLETED,
   )
   assert.deepEqual(sessionCalls.recentMessageRequests, [{ sessionId: 'session_1', take: 30 }])
+  assert.deepEqual(summaryCalls.getLatestSummaryRequests, ['session_1'])
+  assert.deepEqual(summaryCalls.refreshRequests, ['session_1'])
 })
 
 test('persists failed tool results with duration and error details', async () => {
@@ -150,6 +177,7 @@ test('persists failed tool results with duration and error details', async () =>
     calculateRunCost: () => 0.001,
     runAgentFn: runAgentWithFailedTool,
     sessionService: createFakeSessionService(),
+    summaryService: createFakeSummaryService(),
   })
   const events: ServerEvent[] = []
 
