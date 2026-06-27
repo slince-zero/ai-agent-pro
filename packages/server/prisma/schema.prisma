@@ -30,6 +30,7 @@ model Session {
   messages  Message[]
   agentRuns AgentRun[]
   memories  Memory[]
+  summaries SessionSummary[]
 
   @@index([userId, updatedAt])
 }
@@ -111,6 +112,21 @@ model Memory {
   @@index([userId, scope, status, updatedAt])
   @@index([sessionId, status, updatedAt])
   @@index([projectId, status, updatedAt])
+}
+
+model SessionSummary {
+  id                      String   @id @default(cuid())
+  sessionId               String
+  content                 String
+  coveredMessageCount     Int
+  coveredThroughMessageId String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, coveredMessageCount])
+  @@index([sessionId, updatedAt])
 }
 
 enum SessionStatus {

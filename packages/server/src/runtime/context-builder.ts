@@ -6,6 +6,7 @@ export const DEFAULT_CONTEXT_MAX_MESSAGES = 30
 export const DEFAULT_CONTEXT_CHAR_BUDGET = 24_000
 
 const TRUNCATION_PREFIX = '...'
+const SUMMARY_CONTEXT_PREFIX = 'Session summary:'
 
 export type ContextBudgetOptions = {
   maxMessages?: number
@@ -29,6 +30,7 @@ export type ContextBuilderOptions = ContextBudgetOptions & {
 
 export type ContextMessageSource = {
   loadRecentMessages: (sessionId: string, take: number) => Promise<ClientMessage[]>
+  loadSessionSummary?: (sessionId: string) => Promise<string | null>
 }
 
 export type ContextBuilderDeps = {
@@ -71,6 +73,13 @@ function truncateMessageToChars(message: ClientMessage, maxChars: number): Clien
 
 function flattenInjections(injections: ContextInjection[] | undefined) {
   return injections?.flatMap((injection) => injection.messages) ?? []
+}
+
+export function formatSummaryForContext(content: string): ClientMessage {
+  return {
+    role: 'assistant',
+    content: `${SUMMARY_CONTEXT_PREFIX}\n${content}`,
+  }
 }
 
 export function selectContextMessages(
@@ -129,11 +138,22 @@ export function buildAgentConversation(
 export function createContextBuilder({ source, options = {} }: ContextBuilderDeps) {
   const buildClientMessages = async (sessionId: string, buildOptions: BuildContextOptions = {}) => {
     const budget = normalizeBudget({ ...options, ...buildOptions })
-    const recentMessages = await source.loadRecentMessages(sessionId, budget.maxMessages)
+    const [summary, recentMessages] = await Promise.all([
+      source.loadSessionSummary?.(sessionId) ?? Promise.resolve(null),
+      source.loadRecentMessages(sessionId, budget.maxMessages),
+    ])
+    const sourceInjections: ContextInjection[] = summary
+      ? [
+          {
+            source: 'summary',
+            messages: [formatSummaryForContext(summary)],
+          },
+        ]
+      : []
 
     return buildContextMessages(recentMessages, {
       ...budget,
-      injections: buildOptions.injections,
+      injections: [...sourceInjections, ...(buildOptions.injections ?? [])],
     })
   }
 
