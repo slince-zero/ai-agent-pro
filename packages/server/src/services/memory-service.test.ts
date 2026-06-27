@@ -190,6 +190,34 @@ test('lists active memories with deterministic filters and limits', async () => 
   })
 })
 
+test('lists context memories across user, session and project scopes', async () => {
+  const { calls, db } = createFakeDb()
+  const service = createMemoryService({ db })
+
+  await service.listContextMemories({
+    userId: 'user_1',
+    sessionId: 'session_1',
+    projectId: 'repo_1',
+    limit: 5,
+  })
+
+  assert.deepEqual(calls.queries[0], {
+    where: {
+      userId: 'user_1',
+      status: MemoryStatus.ACTIVE,
+      OR: [
+        { scope: MemoryScope.USER },
+        { scope: MemoryScope.SESSION, sessionId: 'session_1' },
+        { scope: MemoryScope.PROJECT, projectId: 'repo_1' },
+      ],
+    },
+    orderBy: {
+      updatedAt: 'desc',
+    },
+    take: 5,
+  })
+})
+
 test('updates active memories for the owning user', async () => {
   const { calls, db } = createFakeDb()
   const service = createMemoryService({ db })
