@@ -7,6 +7,7 @@ export const DEFAULT_CONTEXT_CHAR_BUDGET = 24_000
 
 const TRUNCATION_PREFIX = '...'
 const SUMMARY_CONTEXT_PREFIX = 'Session summary:'
+const MEMORY_CONTEXT_PREFIX = 'Relevant memory:'
 
 export type ContextBudgetOptions = {
   maxMessages?: number
@@ -28,9 +29,16 @@ export type ContextBuilderOptions = ContextBudgetOptions & {
   systemPrompt?: string
 }
 
+export type ContextBuildInput = {
+  sessionId: string
+  userId?: string
+  projectId?: string
+}
+
 export type ContextMessageSource = {
   loadRecentMessages: (sessionId: string, take: number) => Promise<ClientMessage[]>
-  loadSessionSummary?: (sessionId: string) => Promise<string | null>
+  loadSessionSummary?: (input: ContextBuildInput) => Promise<string | null>
+  loadRelevantMemories?: (input: ContextBuildInput) => Promise<string[]>
 }
 
 export type ContextBuilderDeps = {
@@ -52,6 +60,10 @@ function normalizeBudget(options: ContextBudgetOptions = {}) {
     maxMessages: toPositiveInteger(options.maxMessages, DEFAULT_CONTEXT_MAX_MESSAGES),
     maxChars: toPositiveInteger(options.maxChars, DEFAULT_CONTEXT_CHAR_BUDGET),
   }
+}
+
+function toContextBuildInput(input: string | ContextBuildInput): ContextBuildInput {
+  return typeof input === 'string' ? { sessionId: input } : input
 }
 
 function truncateMessageToChars(message: ClientMessage, maxChars: number): ClientMessage | null {
@@ -82,11 +94,22 @@ export function formatSummaryForContext(content: string): ClientMessage {
   }
 }
 
-export function selectContextMessages(
-  messages: ClientMessage[],
-  options: ContextBudgetOptions = {},
-): ClientMessage[] {
-  const { maxMessages, maxChars } = normalizeBudget(options)
+export function formatMemoriesForContext(memories: string[]): ClientMessage | null {
+  const normalizedMemories = memories
+    .map((memory) => memory.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+
+  if (normalizedMemories.length === 0) return null
+
+  return {
+    role: 'assistant',
+    content: `${MEMORY_CONTEXT_PREFIX}\n${normalizedMemories.map((memory) => `- ${memory}`).join('\n')}`,
+  }
+}
+
+function selectRecentMessages(messages: ClientMessage[], maxMessages: number, maxChars: number) {
+  if (maxMessages <= 0 || maxChars <= 0) return []
+
   const recentMessages = messages.slice(-maxMessages)
   const selected: ClientMessage[] = []
   let remainingChars = maxChars
@@ -111,14 +134,54 @@ export function selectContextMessages(
   return selected
 }
 
+function selectPrefixMessages(messages: ClientMessage[], maxMessages: number, maxChars: number) {
+  const selected: ClientMessage[] = []
+  let remainingChars = maxChars
+
+  if (maxMessages <= 0 || maxChars <= 0) {
+    return { messages: selected, remainingMessages: maxMessages, remainingChars }
+  }
+
+  for (const message of messages.slice(0, maxMessages)) {
+    const selectedMessage = truncateMessageToChars(message, remainingChars)
+    if (!selectedMessage) break
+
+    selected.push(selectedMessage)
+    remainingChars -= selectedMessage.content.length
+  }
+
+  return {
+    messages: selected,
+    remainingMessages: maxMessages - selected.length,
+    remainingChars,
+  }
+}
+
+export function selectContextMessages(
+  messages: ClientMessage[],
+  options: ContextBudgetOptions = {},
+): ClientMessage[] {
+  const { maxMessages, maxChars } = normalizeBudget(options)
+  return selectRecentMessages(messages, maxMessages, maxChars)
+}
+
 export function buildContextMessages(
   recentMessages: ClientMessage[],
   options: BuildContextOptions = {},
 ) {
-  return selectContextMessages(
-    [...flattenInjections(options.injections), ...recentMessages],
-    options,
+  const { maxMessages, maxChars } = normalizeBudget(options)
+  const injected = selectPrefixMessages(
+    flattenInjections(options.injections),
+    maxMessages,
+    maxChars,
   )
+  const selectedRecentMessages = selectRecentMessages(
+    recentMessages,
+    injected.remainingMessages,
+    injected.remainingChars,
+  )
+
+  return [...injected.messages, ...selectedRecentMessages]
 }
 
 export function buildAgentConversation(
@@ -136,12 +199,18 @@ export function buildAgentConversation(
 }
 
 export function createContextBuilder({ source, options = {} }: ContextBuilderDeps) {
-  const buildClientMessages = async (sessionId: string, buildOptions: BuildContextOptions = {}) => {
+  const buildClientMessages = async (
+    input: string | ContextBuildInput,
+    buildOptions: BuildContextOptions = {},
+  ) => {
+    const contextInput = toContextBuildInput(input)
     const budget = normalizeBudget({ ...options, ...buildOptions })
-    const [summary, recentMessages] = await Promise.all([
-      source.loadSessionSummary?.(sessionId) ?? Promise.resolve(null),
-      source.loadRecentMessages(sessionId, budget.maxMessages),
+    const [summary, memories, recentMessages] = await Promise.all([
+      source.loadSessionSummary?.(contextInput) ?? Promise.resolve(null),
+      source.loadRelevantMemories?.(contextInput) ?? Promise.resolve([]),
+      source.loadRecentMessages(contextInput.sessionId, budget.maxMessages),
     ])
+    const memoryMessage = formatMemoriesForContext(memories)
     const sourceInjections: ContextInjection[] = summary
       ? [
           {
@@ -150,6 +219,12 @@ export function createContextBuilder({ source, options = {} }: ContextBuilderDep
           },
         ]
       : []
+    if (memoryMessage) {
+      sourceInjections.push({
+        source: 'memory',
+        messages: [memoryMessage],
+      })
+    }
 
     return buildContextMessages(recentMessages, {
       ...budget,
@@ -159,8 +234,11 @@ export function createContextBuilder({ source, options = {} }: ContextBuilderDep
 
   return {
     buildClientMessages,
-    async buildConversation(sessionId: string, buildOptions: BuildContextOptions = {}) {
-      const messages = await buildClientMessages(sessionId, buildOptions)
+    async buildConversation(
+      input: string | ContextBuildInput,
+      buildOptions: BuildContextOptions = {},
+    ) {
+      const messages = await buildClientMessages(input, buildOptions)
       return buildAgentConversation(messages, options.systemPrompt)
     },
   }

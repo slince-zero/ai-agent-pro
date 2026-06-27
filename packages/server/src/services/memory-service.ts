@@ -65,6 +65,13 @@ export type ListMemoriesInput = {
   limit?: number
 }
 
+export type ListContextMemoriesInput = {
+  userId: string
+  sessionId?: string
+  projectId?: string
+  limit?: number
+}
+
 export type InvalidateMemoryInput = {
   userId: string
   memoryId: string
@@ -232,6 +239,38 @@ export function createMemoryService({
       return memories.map(serializeMemory)
     },
 
+    async listContextMemories(input: ListContextMemoriesInput) {
+      assertNonEmpty(input.userId, 'userId')
+
+      const scopeFilters: Record<string, unknown>[] = [{ scope: MemoryScope.USER }]
+      if (input.sessionId) {
+        scopeFilters.push({
+          scope: MemoryScope.SESSION,
+          sessionId: input.sessionId,
+        })
+      }
+      if (input.projectId) {
+        scopeFilters.push({
+          scope: MemoryScope.PROJECT,
+          projectId: input.projectId,
+        })
+      }
+
+      const memories = await db.memory.findMany({
+        where: {
+          userId: input.userId,
+          status: MemoryStatus.ACTIVE,
+          OR: scopeFilters,
+        },
+        orderBy: {
+          updatedAt: 'desc',
+        },
+        take: normalizeLimit(input.limit),
+      })
+
+      return memories.map(serializeMemory)
+    },
+
     async invalidateMemory(input: InvalidateMemoryInput) {
       assertNonEmpty(input.userId, 'userId')
       assertNonEmpty(input.memoryId, 'memoryId')
@@ -254,3 +293,5 @@ export function createMemoryService({
     },
   }
 }
+
+export type MemoryService = ReturnType<typeof createMemoryService>
