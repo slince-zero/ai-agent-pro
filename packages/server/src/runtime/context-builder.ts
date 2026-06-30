@@ -8,6 +8,7 @@ export const DEFAULT_CONTEXT_CHAR_BUDGET = 24_000
 const TRUNCATION_PREFIX = '...'
 const SUMMARY_CONTEXT_PREFIX = 'Session summary:'
 const MEMORY_CONTEXT_PREFIX = 'Relevant memory:'
+const RETRIEVAL_CONTEXT_PREFIX = 'Relevant documents:'
 
 export type ContextBudgetOptions = {
   maxMessages?: number
@@ -33,12 +34,24 @@ export type ContextBuildInput = {
   sessionId: string
   userId?: string
   projectId?: string
+  query?: string
+  signal?: AbortSignal
+}
+
+export type RetrievalContextItem = {
+  content: string
+  metadata?: unknown
+  score?: number | null
+  sourceRef?: string | null
+  title?: string | null
+  uri?: string | null
 }
 
 export type ContextMessageSource = {
   loadRecentMessages: (sessionId: string, take: number) => Promise<ClientMessage[]>
   loadSessionSummary?: (input: ContextBuildInput) => Promise<string | null>
   loadRelevantMemories?: (input: ContextBuildInput) => Promise<string[]>
+  loadRelevantDocuments?: (input: ContextBuildInput) => Promise<RetrievalContextItem[]>
 }
 
 export type ContextBuilderDeps = {
@@ -104,6 +117,34 @@ export function formatMemoriesForContext(memories: string[]): ClientMessage | nu
   return {
     role: 'assistant',
     content: `${MEMORY_CONTEXT_PREFIX}\n${normalizedMemories.map((memory) => `- ${memory}`).join('\n')}`,
+  }
+}
+
+function formatRetrievalSource(item: RetrievalContextItem, index: number) {
+  const title = item.title?.trim() || `Document ${index + 1}`
+  const location = item.sourceRef?.trim()
+  const uri = item.uri?.trim()
+  const parts = [`[${index + 1}] ${title}`]
+  if (location) parts.push(location)
+  if (uri) parts.push(uri)
+  return parts.join(' - ')
+}
+
+export function formatRetrievalForContext(items: RetrievalContextItem[]): ClientMessage | null {
+  const normalizedItems = items
+    .map((item) => ({
+      ...item,
+      content: item.content.replace(/\s+/g, ' ').trim(),
+    }))
+    .filter((item) => item.content)
+
+  if (normalizedItems.length === 0) return null
+
+  return {
+    role: 'assistant',
+    content: `${RETRIEVAL_CONTEXT_PREFIX}\n${normalizedItems
+      .map((item, index) => `${formatRetrievalSource(item, index)}\n${item.content}`)
+      .join('\n\n')}`,
   }
 }
 
@@ -205,12 +246,14 @@ export function createContextBuilder({ source, options = {} }: ContextBuilderDep
   ) => {
     const contextInput = toContextBuildInput(input)
     const budget = normalizeBudget({ ...options, ...buildOptions })
-    const [summary, memories, recentMessages] = await Promise.all([
+    const [summary, memories, documents, recentMessages] = await Promise.all([
       source.loadSessionSummary?.(contextInput) ?? Promise.resolve(null),
       source.loadRelevantMemories?.(contextInput) ?? Promise.resolve([]),
+      source.loadRelevantDocuments?.(contextInput) ?? Promise.resolve([]),
       source.loadRecentMessages(contextInput.sessionId, budget.maxMessages),
     ])
     const memoryMessage = formatMemoriesForContext(memories)
+    const retrievalMessage = formatRetrievalForContext(documents)
     const sourceInjections: ContextInjection[] = summary
       ? [
           {
@@ -223,6 +266,12 @@ export function createContextBuilder({ source, options = {} }: ContextBuilderDep
       sourceInjections.push({
         source: 'memory',
         messages: [memoryMessage],
+      })
+    }
+    if (retrievalMessage) {
+      sourceInjections.push({
+        source: 'retrieval',
+        messages: [retrievalMessage],
       })
     }
 
