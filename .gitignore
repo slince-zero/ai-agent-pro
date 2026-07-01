@@ -30,6 +30,9 @@ pnpm-store
 # Generated server files
 /packages/server/src/generated/
 
+# Eval run reports
+/evals/reports/*.md
+/evals/reports/*.json
+!/evals/reports/*.sample.md
 
 .env
-
