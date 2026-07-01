@@ -9,6 +9,7 @@ const {
   buildContextMessages,
   createContextBuilder,
   formatMemoriesForContext,
+  formatRetrievalForContext,
   formatSummaryForContext,
   selectContextMessages,
 } = await import('./context-builder.js')
@@ -107,6 +108,26 @@ test('formats relevant memories as one assistant context message', () => {
     content: 'Relevant memory:\n- Use pnpm.\n- Run node:test.',
   })
   assert.equal(formatMemoriesForContext(['   ']), null)
+})
+
+test('formats retrieved documents with citation metadata', () => {
+  assert.deepEqual(
+    formatRetrievalForContext([
+      {
+        title: 'README.md',
+        sourceRef: 'README.md#L1-L5',
+        uri: 'https://github.com/example/repo/blob/main/README.md',
+        content: '  Use   pnpm. ',
+        score: 0.8,
+      },
+    ]),
+    {
+      role: 'assistant',
+      content:
+        'Relevant documents:\n[1] README.md - README.md#L1-L5 - https://github.com/example/repo/blob/main/README.md\nUse pnpm.',
+    },
+  )
+  assert.equal(formatRetrievalForContext([{ content: '   ' }]), null)
 })
 
 test('loads recent history through the context builder source', async () => {
@@ -211,6 +232,43 @@ test('injects summary and memory before recent history in stable order', async (
       type: 'memory',
       input: { sessionId: 'session_1', userId: 'user_1', projectId: 'repo_1' },
     },
+  ])
+})
+
+test('injects summary, memory and retrieval before recent history in stable order', async () => {
+  const builder = createContextBuilder({
+    source: {
+      loadSessionSummary: async () => 'Earlier goals.',
+      loadRelevantMemories: async () => ['Use pnpm.'],
+      loadRelevantDocuments: async () => [
+        {
+          title: 'README.md',
+          sourceRef: 'README.md#L1-L2',
+          content: 'Install with pnpm.',
+        },
+      ],
+      loadRecentMessages: async () => [{ role: 'user', content: 'Continue' }],
+    },
+    options: {
+      maxMessages: 5,
+      maxChars: 300,
+    },
+  })
+
+  const messages = await builder.buildClientMessages({
+    sessionId: 'session_1',
+    userId: 'user_1',
+    query: 'How do I install?',
+  })
+
+  assert.deepEqual(messages, [
+    { role: 'assistant', content: 'Session summary:\nEarlier goals.' },
+    { role: 'assistant', content: 'Relevant memory:\n- Use pnpm.' },
+    {
+      role: 'assistant',
+      content: 'Relevant documents:\n[1] README.md - README.md#L1-L2\nInstall with pnpm.',
+    },
+    { role: 'user', content: 'Continue' },
   ])
 })
 

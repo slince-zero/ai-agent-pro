@@ -5,6 +5,7 @@ import type { ModelClient } from '../runtime/model-client/types.js'
 import type { ServerEvent } from '../sse/events.js'
 import type { runAgent } from './agent.js'
 import type { createMemoryService } from './memory-service.js'
+import type { createRagRetrievalService } from './rag-retrieval-service.js'
 import type { createSessionService } from './session-service.js'
 import type { createSessionSummaryService } from './session-summary-service.js'
 
@@ -34,6 +35,10 @@ type FakeSummaryServiceCalls = {
 
 type FakeMemoryServiceCalls = {
   contextMemoryRequests?: unknown[]
+}
+
+type FakeRagRetrievalServiceCalls = {
+  searchRequests?: unknown[]
 }
 
 function createFakeSessionService(calls: FakeSessionServiceCalls = {}) {
@@ -92,6 +97,22 @@ function createFakeMemoryService(calls: FakeMemoryServiceCalls = {}) {
   } as unknown as ReturnType<typeof createMemoryService>
 }
 
+function createFakeRagRetrievalService(calls: FakeRagRetrievalServiceCalls = {}) {
+  return {
+    searchRelevantChunks: async (input: unknown) => {
+      calls.searchRequests?.push(input)
+      return [
+        {
+          content: 'Use pnpm test before opening PRs.',
+          title: 'README.md',
+          sourceRef: 'README.md#L1-L3',
+          uri: 'https://github.com/slince-zero/ai-agent-pro/blob/main/README.md',
+        },
+      ]
+    },
+  } as unknown as ReturnType<typeof createRagRetrievalService>
+}
+
 const runAgentFn: typeof runAgent = async ({ onEvent }) => {
   await onEvent({ type: 'text', text: 'Hi' })
   return { inputTokens: 3, outputTokens: 4 }
@@ -129,6 +150,9 @@ test('emits run_id before streamed agent events', async () => {
   const memoryCalls = {
     contextMemoryRequests: [] as unknown[],
   }
+  const ragCalls = {
+    searchRequests: [] as unknown[],
+  }
   const fakeDb = {
     agentRun: {
       create: async () => ({ id: 'run_1' }),
@@ -149,6 +173,7 @@ test('emits run_id before streamed agent events', async () => {
     runAgentFn,
     sessionService: createFakeSessionService(sessionCalls),
     memoryService: createFakeMemoryService(memoryCalls),
+    ragRetrievalService: createFakeRagRetrievalService(ragCalls),
     summaryService: createFakeSummaryService(summaryCalls),
   })
   const events: ServerEvent[] = []
@@ -180,6 +205,18 @@ test('emits run_id before streamed agent events', async () => {
   assert.deepEqual(memoryCalls.contextMemoryRequests, [
     { userId: 'user_1', sessionId: 'session_1', projectId: undefined },
   ])
+  assert.deepEqual(ragCalls.searchRequests, [
+    {
+      userId: 'user_1',
+      projectId: undefined,
+      query: 'Hello',
+      signal: (ragCalls.searchRequests[0] as { signal: AbortSignal }).signal,
+    },
+  ])
+  assert.equal(
+    (ragCalls.searchRequests[0] as { signal: unknown }).signal instanceof AbortSignal,
+    true,
+  )
   assert.deepEqual(summaryCalls.getLatestSummaryRequests, ['session_1'])
   assert.deepEqual(summaryCalls.refreshRequests, ['session_1'])
 })
@@ -210,6 +247,7 @@ test('persists failed tool results with duration and error details', async () =>
     runAgentFn: runAgentWithFailedTool,
     sessionService: createFakeSessionService(),
     memoryService: createFakeMemoryService(),
+    ragRetrievalService: createFakeRagRetrievalService(),
     summaryService: createFakeSummaryService(),
   })
   const events: ServerEvent[] = []

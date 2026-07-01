@@ -12,6 +12,7 @@ const envSchema = z.object({
   MODEL_PROVIDER: z.enum(['openai-compatible', 'anthropic']).default('openai-compatible'),
   DEEPSEEK_BASE_URL: z.string().trim().min(1).default('https://api.deepseek.com'),
   DEEPSEEK_MODEL: z.string().trim().min(1).default('deepseek-v4-pro'),
+  EMBEDDING_MODEL: z.string().trim().min(1).default('text-embedding-3-small'),
   PORT: z.coerce.number().int().positive().default(3003),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   DEFAULT_USER_EMAIL: z.string().trim().min(1).default('local@ai-pro-agent.dev'),
@@ -19,6 +20,8 @@ const envSchema = z.object({
   // ---- 可选（无默认值） ----
   MODEL_BASE_URL: z.string().trim().min(1).optional(),
   MODEL_NAME: z.string().trim().min(1).optional(),
+  EMBEDDING_API_KEY: z.string().trim().min(1).optional(),
+  EMBEDDING_BASE_URL: z.string().trim().min(1).optional(),
   GITHUB_TOKEN: z.string().trim().optional(),
   CLIENT_DIST_DIR: z.string().trim().optional(),
 })

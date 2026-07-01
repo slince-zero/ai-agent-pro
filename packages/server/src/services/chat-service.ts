@@ -9,6 +9,7 @@ import { runAgent } from './agent.js'
 import { type MemoryService, createMemoryService } from './memory-service.js'
 import { MODEL } from './openai.js'
 import { calculateCost } from './pricing.js'
+import { type RagRetrievalService, createRagRetrievalService } from './rag-retrieval-service.js'
 import { type ActiveSession, createSessionService } from './session-service.js'
 import {
   type SessionSummaryService,
@@ -48,6 +49,7 @@ type ChatServiceDeps = {
   sessionService?: SessionService
   contextBuilder?: ContextBuilder
   memoryService?: MemoryService
+  ragRetrievalService?: RagRetrievalService
   summaryService?: SessionSummaryService
 }
 
@@ -81,6 +83,7 @@ export function createChatService({
   runAgentFn = runAgent,
   sessionService = createSessionService(),
   memoryService = createMemoryService(),
+  ragRetrievalService = createRagRetrievalService(),
   summaryService = createSessionSummaryService(),
   contextBuilder,
 }: ChatServiceDeps = {}) {
@@ -101,6 +104,16 @@ export function createChatService({
           })
 
           return memories.map((memory) => memory.content)
+        },
+        loadRelevantDocuments: async ({ userId, projectId, query, signal }) => {
+          if (!userId || !query) return []
+
+          return ragRetrievalService.searchRelevantChunks({
+            userId,
+            projectId,
+            query,
+            signal,
+          })
         },
       },
     })
@@ -138,6 +151,8 @@ export function createChatService({
         const messages = await resolvedContextBuilder.buildClientMessages({
           sessionId: session.id,
           userId: session.userId,
+          query: content,
+          signal,
         })
         const usage = await runAgentFn({
           modelClient,

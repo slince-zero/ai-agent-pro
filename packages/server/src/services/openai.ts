@@ -7,11 +7,19 @@ import type { ModelClient, ModelProvider } from '../runtime/model-client/types.j
 export const MODEL_PROVIDER = env.MODEL_PROVIDER as ModelProvider
 export const MODEL_BASE_URL = env.MODEL_BASE_URL ?? env.DEEPSEEK_BASE_URL
 export const MODEL = env.MODEL_NAME ?? env.DEEPSEEK_MODEL
+export const EMBEDDING_MODEL = env.EMBEDDING_MODEL
 
 export function createOpenAIClient() {
   return new OpenAI({
     apiKey: env.OPENAI_API_KEY,
     baseURL: MODEL_BASE_URL,
+  })
+}
+
+export function createOpenAIEmbeddingClient() {
+  return new OpenAI({
+    apiKey: env.EMBEDDING_API_KEY ?? env.OPENAI_API_KEY,
+    baseURL: env.EMBEDDING_BASE_URL,
   })
 }
 
