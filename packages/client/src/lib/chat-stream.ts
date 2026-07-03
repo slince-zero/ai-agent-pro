@@ -1,12 +1,15 @@
 import type { ServerEvent } from '@/types/chat'
 
 type StreamChatHandlers = {
+  onCitations?: (citations: ServerEventCitations) => void
   onRunId?: (runId: string) => void
   onText: (text: string) => void
   onToolCall?: (toolCallId: string, name: string, args: unknown) => void
   onToolResult?: (toolCallId: string, name: string, preview: string) => void
   onUsage?: (inputTokens: number, outputTokens: number, cost: number) => void
 }
+
+type ServerEventCitations = Extract<ServerEvent, { type: 'citations' }>['citations']
 
 type StreamChatOptions = {
   signal?: AbortSignal
@@ -68,6 +71,9 @@ function handleServerEvent(event: string, handlers: StreamChatHandlers) {
     switch (data.type) {
       case 'run_id':
         handlers.onRunId?.(data.runId)
+        break
+      case 'citations':
+        handlers.onCitations?.(data.citations)
         break
       case 'text':
         handlers.onText(data.text)
