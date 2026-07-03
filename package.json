@@ -12,7 +12,9 @@
     "fix": "pnpm fmt && pnpm lint:fix",
     "lint:ci": "pnpm lint && pnpm fmt:check",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "eval": "pnpm --filter server exec tsx src/evals/cli.ts",
+    "eval:smoke": "pnpm eval -- --suite smoke --provider mock"
   },
   "devDependencies": {
     "oxfmt": "^0.54.0",
