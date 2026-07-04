@@ -51,31 +51,18 @@ flowchart LR
 
 - Node.js 22+
 - pnpm
-- Docker Desktop 或本地 PostgreSQL
+- Docker Desktop
 - DeepSeek 或其他 OpenAI-compatible API Key
 
-### 1. 启动数据库
+### 1. 配置环境变量
 
-Docker Compose 会解析 `docker-compose.yml` 里的所有服务配置；其中 `ai-pro-agent` 服务声明了
-`env_file: .env`。因此即使只启动 `postgres`，根目录也需要先有 `.env` 文件。
-
-```bash
-cp packages/server/.env.example .env
-```
+本地开发推荐只维护根目录 `.env`：
 
 ```bash
-docker compose up -d postgres
+cp .env.example .env
 ```
 
-### 2. 配置环境变量
-
-本地后端开发脚本在 `packages/server` 目录下执行，所以还需要给 server 包准备一份 `.env`：
-
-```bash
-cp packages/server/.env.example packages/server/.env
-```
-
-至少填写 `packages/server/.env` 里的：
+至少填写 `.env` 里的：
 
 ```env
 OPENAI_API_KEY=your_api_key
@@ -91,14 +78,23 @@ DATABASE_URL=postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent
 
 `GITHUB_TOKEN` 可选；不配置时 GitHub API 会使用未认证额度。
 
-### 3. 安装依赖并启动
+如果你已经有旧的 `packages/server/.env`，直接运行 `pnpm dev` 也可以；脚本会在缺少根目录
+`.env` 时复制一份出来，后续建议只维护根目录 `.env`。
+
+### 2. 安装依赖并启动
 
 ```bash
 pnpm install
-pnpm --filter server run generate
-pnpm --filter server run migrate:dev
 pnpm dev
 ```
+
+`pnpm dev` 会自动完成：
+
+- 启动本地 Postgres：`docker compose up -d postgres`
+- 等待数据库健康
+- 生成 Prisma Client
+- 应用已有数据库迁移
+- 同时启动后端和前端开发服务器
 
 后端默认运行在 `http://localhost:3003`，前端默认运行在 `http://localhost:5173`（Vite 会将 `/api` 代理到后端）。
 
@@ -122,16 +118,12 @@ pnpm build
 pnpm start
 ```
 
-### `docker compose up -d postgres` 报 `.env not found`
+### `pnpm dev` 提示 `Fill OPENAI_API_KEY in .env`
 
-根因是 `docker-compose.yml` 中的 `ai-pro-agent` 服务配置了 `env_file: .env`，Compose
-在启动单个服务前也会解析整个文件。
-
-解决：
+根目录 `.env` 还没有配置模型 API Key。填好以后重新运行：
 
 ```bash
-cp packages/server/.env.example .env
-docker compose up -d postgres
+pnpm dev
 ```
 
 ### `docker compose up -d postgres` 报容器名冲突
@@ -162,7 +154,7 @@ docker compose up -d postgres
 执行：
 
 ```bash
-pnpm --filter server run migrate:dev
+pnpm dev:setup
 ```
 
 可用下面命令确认迁移状态：
@@ -174,8 +166,19 @@ pnpm --filter server exec prisma migrate status
 ## 常用脚本
 
 ```bash
-# 同时启动前后端开发服务器
+# 准备数据库、生成 Prisma Client、应用迁移，并启动前后端开发服务器
 pnpm dev
+
+# 只执行本地开发准备，不启动前后端
+pnpm dev:setup
+
+# 只启动前后端，适合数据库和迁移已经就绪时使用
+pnpm dev:app
+
+# 手动数据库命令
+pnpm db:up
+pnpm db:generate
+pnpm db:migrate
 
 # 构建所有包
 pnpm build
@@ -221,7 +224,8 @@ docker run \
 
 ## 环境变量
 
-本地开发时，后端读取 `packages/server/.env`；Docker Compose 解析配置时还需要根目录 `.env`。
+本地开发时，后端和 Prisma 会优先读取根目录 `.env`，再兼容读取旧的 `packages/server/.env`。
+Docker Compose 只启动 Postgres 时不需要 `.env`；如果启动 `ai-pro-agent` 应用服务，则仍需要根目录 `.env`。
 
 | 变量                 | 必填 | 默认值                                                       | 说明                                        |
 | -------------------- | ---- | ------------------------------------------------------------ | ------------------------------------------- |

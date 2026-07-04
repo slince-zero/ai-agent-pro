@@ -1,4 +1,15 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { config as loadDotenv } from 'dotenv'
 import { z } from 'zod'
+
+const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const repoRoot = path.resolve(packageRoot, '..', '..')
+
+for (const envPath of [path.join(repoRoot, '.env'), path.join(packageRoot, '.env')]) {
+  loadDotenv({ path: envPath, override: false, quiet: true })
+}
 
 const envSchema = z.object({
   // ---- 必填 ----
@@ -45,15 +56,15 @@ function parseEnv(): Env {
   }
 
   const lines = result.error.issues.map((issue) => {
-    const path = issue.path.join('.')
-    return `  • ${path}: ${issue.message}`
+    const issuePath = issue.path.join('.')
+    return `  • ${issuePath}: ${issue.message}`
   })
 
   const message = [
     '❌ 环境变量配置错误，请检查以下变量：',
     ...lines,
     '',
-    '请参考 server/.env.example 配置正确的环境变量。',
+    '请参考根目录 .env.example 配置正确的环境变量。',
   ].join('\n')
 
   throw new Error(message)

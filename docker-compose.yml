@@ -26,7 +26,8 @@ services:
       postgres:
         condition: service_healthy
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       NODE_ENV: production
       CLIENT_DIST_DIR: /app/public
