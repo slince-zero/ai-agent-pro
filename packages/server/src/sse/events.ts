@@ -1,5 +1,7 @@
 import type { Response } from 'express'
 
+import type { Citation } from '../services/citation-service.js'
+
 type ServerEventMeta = {
   eventId?: string
 }
@@ -7,6 +9,7 @@ type ServerEventMeta = {
 export type ServerEvent = ServerEventMeta &
   (
     | { type: 'run_id'; runId: string }
+    | { type: 'citations'; citations: Citation[] }
     | { type: 'text'; text: string }
     | { type: 'tool_call'; toolCallId: string; name: string; args: unknown }
     | {

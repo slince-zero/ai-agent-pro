@@ -39,8 +39,12 @@ export type ContextBuildInput = {
 }
 
 export type RetrievalContextItem = {
+  chunkId?: string | null
+  chunkIndex?: number | null
   content: string
+  documentId?: string | null
   metadata?: unknown
+  projectId?: string | null
   score?: number | null
   sourceRef?: string | null
   title?: string | null
@@ -60,6 +64,11 @@ export type ContextBuilderDeps = {
 }
 
 export type ContextBuilder = ReturnType<typeof createContextBuilder>
+
+export type BuiltContext = {
+  messages: ClientMessage[]
+  retrievalItems: RetrievalContextItem[]
+}
 
 function toPositiveInteger(value: number | undefined, fallback: number) {
   if (!Number.isFinite(value) || value == null) return fallback
@@ -240,10 +249,10 @@ export function buildAgentConversation(
 }
 
 export function createContextBuilder({ source, options = {} }: ContextBuilderDeps) {
-  const buildClientMessages = async (
+  const buildContext = async (
     input: string | ContextBuildInput,
     buildOptions: BuildContextOptions = {},
-  ) => {
+  ): Promise<BuiltContext> => {
     const contextInput = toContextBuildInput(input)
     const budget = normalizeBudget({ ...options, ...buildOptions })
     const [summary, memories, documents, recentMessages] = await Promise.all([
@@ -275,13 +284,25 @@ export function createContextBuilder({ source, options = {} }: ContextBuilderDep
       })
     }
 
-    return buildContextMessages(recentMessages, {
-      ...budget,
-      injections: [...sourceInjections, ...(buildOptions.injections ?? [])],
-    })
+    return {
+      messages: buildContextMessages(recentMessages, {
+        ...budget,
+        injections: [...sourceInjections, ...(buildOptions.injections ?? [])],
+      }),
+      retrievalItems: documents,
+    }
+  }
+
+  const buildClientMessages = async (
+    input: string | ContextBuildInput,
+    buildOptions: BuildContextOptions = {},
+  ) => {
+    const context = await buildContext(input, buildOptions)
+    return context.messages
   }
 
   return {
+    buildContext,
     buildClientMessages,
     async buildConversation(
       input: string | ContextBuildInput,

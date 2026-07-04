@@ -1,6 +1,7 @@
 import { prisma } from '../db/client.js'
-import { MessageRole, RunStatus, SessionStatus } from '../generated/prisma/client.js'
+import { MessageRole, Prisma, RunStatus, SessionStatus } from '../generated/prisma/client.js'
 import type { ClientMessage } from '../types/chat.js'
+import { serializeCitation } from './citation-service.js'
 
 type SessionRecord = {
   id: string
@@ -18,12 +19,26 @@ type MessageRecord = {
   createdAt: Date
 }
 
+type CitationRecord = {
+  id: string
+  messageId: string
+  documentId: string | null
+  documentChunkId: string | null
+  title: string
+  uri: string | null
+  sourceRef: string | null
+  snippet: string
+  metadata: Prisma.JsonValue | null
+  createdAt: Date
+}
+
 type MessageWithUsage = MessageRecord & {
   assistantRuns?: {
     inputTokens: number | null
     outputTokens: number | null
     cost: number | null
   }[]
+  citations?: CitationRecord[]
 }
 
 type SessionServiceDb = {
@@ -68,7 +83,7 @@ export function serializeSession(session: SessionRecord) {
 }
 
 export function serializeMessage(
-  message: MessageRecord,
+  message: MessageRecord & { citations?: CitationRecord[] },
   usage?: {
     inputTokens: number | null
     outputTokens: number | null
@@ -83,6 +98,9 @@ export function serializeMessage(
     role: message.role.toLowerCase(),
     content: message.content,
     createdAt: message.createdAt.toISOString(),
+    ...(message.citations && message.citations.length > 0
+      ? { citations: message.citations.map(serializeCitation) }
+      : {}),
     ...(hasUsage
       ? {
           usage: {
@@ -157,6 +175,11 @@ export function createSessionService({
             where: { status: RunStatus.COMPLETED },
             select: { inputTokens: true, outputTokens: true, cost: true },
             take: 1,
+          },
+          citations: {
+            orderBy: {
+              createdAt: 'asc',
+            },
           },
         },
       })

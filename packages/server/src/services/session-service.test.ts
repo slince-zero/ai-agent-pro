@@ -31,6 +31,20 @@ const assistantMessage = {
   role: MessageRole.ASSISTANT,
   content: 'Here is the explanation.',
   createdAt: updatedAt,
+  citations: [
+    {
+      id: 'citation_1',
+      messageId: 'msg_assistant',
+      documentId: 'doc_1',
+      documentChunkId: 'chunk_1',
+      title: 'README.md',
+      uri: 'https://github.com/slince-zero/ai-agent-pro/blob/main/README.md',
+      sourceRef: 'README.md#L1-L3',
+      snippet: 'Use pnpm test before opening PRs.',
+      metadata: { score: 0.8 },
+      createdAt: updatedAt,
+    },
+  ],
   assistantRuns: [
     {
       inputTokens: 42,
@@ -120,6 +134,20 @@ test('serializes active sessions and messages with completed usage', async () =>
         outputTokens: 21,
         cost: 0.00042,
       },
+      citations: [
+        {
+          id: 'citation_1',
+          messageId: 'msg_assistant',
+          documentId: 'doc_1',
+          chunkId: 'chunk_1',
+          title: 'README.md',
+          uri: 'https://github.com/slince-zero/ai-agent-pro/blob/main/README.md',
+          sourceRef: 'README.md#L1-L3',
+          snippet: 'Use pnpm test before opening PRs.',
+          metadata: { score: 0.8 },
+          createdAt: updatedAt.toISOString(),
+        },
+      ],
     },
   ])
 })

@@ -236,17 +236,20 @@ test('injects summary and memory before recent history in stable order', async (
 })
 
 test('injects summary, memory and retrieval before recent history in stable order', async () => {
+  const retrievalItems = [
+    {
+      chunkId: 'chunk_1',
+      documentId: 'doc_1',
+      title: 'README.md',
+      sourceRef: 'README.md#L1-L2',
+      content: 'Install with pnpm.',
+    },
+  ]
   const builder = createContextBuilder({
     source: {
       loadSessionSummary: async () => 'Earlier goals.',
       loadRelevantMemories: async () => ['Use pnpm.'],
-      loadRelevantDocuments: async () => [
-        {
-          title: 'README.md',
-          sourceRef: 'README.md#L1-L2',
-          content: 'Install with pnpm.',
-        },
-      ],
+      loadRelevantDocuments: async () => retrievalItems,
       loadRecentMessages: async () => [{ role: 'user', content: 'Continue' }],
     },
     options: {
@@ -255,13 +258,13 @@ test('injects summary, memory and retrieval before recent history in stable orde
     },
   })
 
-  const messages = await builder.buildClientMessages({
+  const context = await builder.buildContext({
     sessionId: 'session_1',
     userId: 'user_1',
     query: 'How do I install?',
   })
 
-  assert.deepEqual(messages, [
+  assert.deepEqual(context.messages, [
     { role: 'assistant', content: 'Session summary:\nEarlier goals.' },
     { role: 'assistant', content: 'Relevant memory:\n- Use pnpm.' },
     {
@@ -270,6 +273,7 @@ test('injects summary, memory and retrieval before recent history in stable orde
     },
     { role: 'user', content: 'Continue' },
   ])
+  assert.deepEqual(context.retrievalItems, retrievalItems)
 })
 
 test('preserves injected context before trimming recent history by message budget', () => {

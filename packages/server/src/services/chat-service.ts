@@ -2,10 +2,15 @@ import type pino from 'pino'
 
 import { prisma } from '../db/client.js'
 import { Prisma, RunStatus, ToolCallStatus } from '../generated/prisma/client.js'
-import { type ContextBuilder, createContextBuilder } from '../runtime/context-builder.js'
+import {
+  type ContextBuilder,
+  type RetrievalContextItem,
+  createContextBuilder,
+} from '../runtime/context-builder.js'
 import type { ModelClient } from '../runtime/model-client/types.js'
 import type { ServerEvent } from '../sse/events.js'
 import { runAgent } from './agent.js'
+import { type Citation, type CitationService, createCitationService } from './citation-service.js'
 import { type MemoryService, createMemoryService } from './memory-service.js'
 import { MODEL } from './openai.js'
 import { calculateCost } from './pricing.js'
@@ -48,6 +53,7 @@ type ChatServiceDeps = {
   runAgentFn?: RunAgentFn
   sessionService?: SessionService
   contextBuilder?: ContextBuilder
+  citationService?: CitationService
   memoryService?: MemoryService
   ragRetrievalService?: RagRetrievalService
   summaryService?: SessionSummaryService
@@ -85,6 +91,7 @@ export function createChatService({
   memoryService = createMemoryService(),
   ragRetrievalService = createRagRetrievalService(),
   summaryService = createSessionSummaryService(),
+  citationService = createCitationService(),
   contextBuilder,
 }: ChatServiceDeps = {}) {
   const resolvedContextBuilder =
@@ -146,17 +153,19 @@ export function createChatService({
       let runError: string | null = null
       let inputTokens = 0
       let outputTokens = 0
+      let retrievalItems: RetrievalContextItem[] = []
 
       try {
-        const messages = await resolvedContextBuilder.buildClientMessages({
+        const context = await resolvedContextBuilder.buildContext({
           sessionId: session.id,
           userId: session.userId,
           query: content,
           signal,
         })
+        retrievalItems = context.retrievalItems
         const usage = await runAgentFn({
           modelClient,
-          messages,
+          messages: context.messages,
           signal,
           logger: runLogger,
           onEvent: async (event) => {
@@ -275,6 +284,25 @@ export function createChatService({
           finishedAt: new Date(),
         },
       })
+
+      let citations: Citation[] = []
+      if (assistantMessage) {
+        try {
+          citations = await citationService.createMessageCitations({
+            messageId: assistantMessage.id,
+            sources: retrievalItems,
+          })
+        } catch (error) {
+          runLogger?.warn({ err: error }, '引用记录保存失败')
+        }
+      }
+
+      if (citations.length > 0) {
+        await onEvent({
+          type: 'citations',
+          citations,
+        })
+      }
 
       if (!signal.aborted && !runError) {
         try {

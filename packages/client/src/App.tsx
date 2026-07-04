@@ -9,7 +9,7 @@ import { RunsView } from '@/components/runs/runs-view'
 import { streamChatResponse } from '@/lib/chat-stream'
 import { promptPresets } from '@/lib/prompt-presets'
 import { createSession, fetchSessionMessages, fetchSessions } from '@/lib/sessions'
-import type { ChatSession, Message } from '@/types/chat'
+import type { ChatSession, Citation, Message } from '@/types/chat'
 
 export default function App() {
   const [activeView, setActiveView] = useState<'chat' | 'runs'>('chat')
@@ -235,6 +235,22 @@ export default function App() {
     [],
   )
 
+  const setLastAssistantCitations = useCallback((citations: Citation[]) => {
+    setMessages((prev) => {
+      const copy = [...prev]
+      const last = copy[copy.length - 1]
+
+      if (!last || last.role !== 'assistant') return prev
+
+      copy[copy.length - 1] = {
+        ...last,
+        citations,
+      }
+
+      return copy
+    })
+  }, [])
+
   const selectSession = useCallback(
     async (sessionId: string) => {
       if (isSending || sessionId === activeSessionId) return
@@ -289,6 +305,7 @@ export default function App() {
         content,
         {
           onText: appendLastAssistant,
+          onCitations: setLastAssistantCitations,
           onToolCall: appendToolCall,
           onToolResult: completeToolCall,
           onUsage: setLastAssistantUsage,
@@ -317,6 +334,7 @@ export default function App() {
     input,
     isSending,
     refreshSessions,
+    setLastAssistantCitations,
     setLastAssistantUsage,
     updateLastAssistant,
   ])

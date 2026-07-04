@@ -47,6 +47,7 @@ model Message {
   session       Session    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   userRuns      AgentRun[] @relation("RunUserMessage")
   assistantRuns AgentRun[] @relation("RunAssistantMessage")
+  citations     Citation[]
 
   @@index([sessionId, createdAt])
 }
@@ -147,6 +148,7 @@ model Document {
 
   user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   chunks DocumentChunk[]
+  citations Citation[]
 
   @@index([userId, status, updatedAt])
   @@index([projectId, source, updatedAt])
@@ -167,11 +169,33 @@ model DocumentChunk {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document  Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  citations Citation[]
 
   @@unique([documentId, chunkIndex])
   @@index([documentId, chunkIndex])
   @@index([contentHash])
+}
+
+model Citation {
+  id              String   @id @default(cuid())
+  messageId       String
+  documentId      String?
+  documentChunkId String?
+  title           String
+  uri             String?
+  sourceRef       String?
+  snippet         String
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  message       Message        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  document      Document?      @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  documentChunk DocumentChunk? @relation(fields: [documentChunkId], references: [id], onDelete: SetNull)
+
+  @@index([messageId])
+  @@index([documentId])
+  @@index([documentChunkId])
 }
 
 enum SessionStatus {

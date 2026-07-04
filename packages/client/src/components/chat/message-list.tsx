@@ -1,8 +1,8 @@
-import { Bot, CheckCircle2, LoaderCircle, UserRound } from 'lucide-react'
+import { Bot, CheckCircle2, ExternalLink, FileText, LoaderCircle, UserRound } from 'lucide-react'
 
 import { AssistantHtml } from '@/components/assistant-html'
 import { cn } from '@/lib/utils'
-import type { Message, ToolEvent } from '@/types/chat'
+import type { Citation, Message, ToolEvent } from '@/types/chat'
 
 type MessageListProps = {
   messages: Message[]
@@ -30,6 +30,7 @@ export function MessageList({ messages, isSending }: MessageListProps) {
 
 function MessageItem({ isStreaming, message }: { isStreaming: boolean; message: Message }) {
   const toolEvents = message.role === 'assistant' ? (message.toolEvents ?? []) : []
+  const citations = message.role === 'assistant' ? (message.citations ?? []) : []
 
   return (
     <article className={cn('flex gap-3 py-5', message.role === 'user' && 'justify-end')}>
@@ -68,6 +69,7 @@ function MessageItem({ isStreaming, message }: { isStreaming: boolean; message: 
                   <span className="text-muted-foreground">正在生成</span>
                 </span>
               )}
+              {citations.length > 0 && <CitationList citations={citations} />}
               {message.usage && <UsageSummary usage={message.usage} />}
             </div>
           ) : message.content ? (
@@ -90,6 +92,61 @@ function MessageItem({ isStreaming, message }: { isStreaming: boolean; message: 
         </div>
       )}
     </article>
+  )
+}
+
+function CitationList({ citations }: { citations: Citation[] }) {
+  return (
+    <div className="space-y-2 pt-1">
+      <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
+        <FileText className="size-3.5" aria-hidden="true" />
+        <span>引用</span>
+      </div>
+      <div className="grid gap-2">
+        {citations.map((citation, index) => (
+          <CitationBubble
+            citation={citation}
+            index={index}
+            key={citation.id || `${citation.title}-${index}`}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function CitationBubble({ citation, index }: { citation: Citation; index: number }) {
+  const location = citation.sourceRef || citation.uri
+  const className =
+    'border-border/70 bg-background hover:bg-muted/45 block rounded-md border px-3 py-2 text-left text-xs leading-5 transition-colors'
+  const content = (
+    <>
+      <div className="flex min-w-0 items-start gap-2">
+        <span className="bg-primary/10 text-primary mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold">
+          {index + 1}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="text-foreground flex min-w-0 items-center gap-1.5 font-medium">
+            <span className="truncate">{citation.title}</span>
+            {citation.uri && (
+              <ExternalLink className="text-muted-foreground size-3 shrink-0" aria-hidden="true" />
+            )}
+          </span>
+          {location && (
+            <span className="text-muted-foreground block truncate text-[11px]">{location}</span>
+          )}
+        </span>
+      </div>
+      <p className="text-muted-foreground mt-1.5 line-clamp-2 wrap-anywhere">{citation.snippet}</p>
+    </>
+  )
+
+  return citation.uri ? (
+    <a className={className} href={citation.uri} rel="noreferrer" target="_blank">
+      {content}
+    </a>
+  ) : (
+    <div className={className}>{content}</div>
   )
 }
 
