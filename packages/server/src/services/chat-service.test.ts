@@ -14,6 +14,7 @@ process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test'
 
 const { RunStatus, SessionStatus, ToolCallStatus } = await import('../generated/prisma/client.js')
 const { createChatService } = await import('./chat-service.js')
+const { createCitationService } = await import('./citation-service.js')
 
 const session = {
   id: 'session_1',
@@ -39,6 +40,10 @@ type FakeMemoryServiceCalls = {
 
 type FakeRagRetrievalServiceCalls = {
   searchRequests?: unknown[]
+}
+
+type FakeCitationServiceCalls = {
+  createRequests?: unknown[]
 }
 
 function createFakeSessionService(calls: FakeSessionServiceCalls = {}) {
@@ -103,6 +108,8 @@ function createFakeRagRetrievalService(calls: FakeRagRetrievalServiceCalls = {})
       calls.searchRequests?.push(input)
       return [
         {
+          chunkId: 'chunk_1',
+          documentId: 'doc_1',
           content: 'Use pnpm test before opening PRs.',
           title: 'README.md',
           sourceRef: 'README.md#L1-L3',
@@ -111,6 +118,28 @@ function createFakeRagRetrievalService(calls: FakeRagRetrievalServiceCalls = {})
       ]
     },
   } as unknown as ReturnType<typeof createRagRetrievalService>
+}
+
+function createFakeCitationService(calls: FakeCitationServiceCalls = {}) {
+  return {
+    createMessageCitations: async (input: unknown) => {
+      calls.createRequests?.push(input)
+      return [
+        {
+          id: 'citation_1',
+          messageId: 'msg_assistant',
+          documentId: 'doc_1',
+          chunkId: 'chunk_1',
+          title: 'README.md',
+          uri: 'https://github.com/slince-zero/ai-agent-pro/blob/main/README.md',
+          sourceRef: 'README.md#L1-L3',
+          snippet: 'Use pnpm test before opening PRs.',
+          metadata: { score: null },
+          createdAt: '2026-06-17T07:01:00.000Z',
+        },
+      ]
+    },
+  } as unknown as ReturnType<typeof createCitationService>
 }
 
 const runAgentFn: typeof runAgent = async ({ onEvent }) => {
@@ -153,6 +182,9 @@ test('emits run_id before streamed agent events', async () => {
   const ragCalls = {
     searchRequests: [] as unknown[],
   }
+  const citationCalls = {
+    createRequests: [] as unknown[],
+  }
   const fakeDb = {
     agentRun: {
       create: async () => ({ id: 'run_1' }),
@@ -175,6 +207,7 @@ test('emits run_id before streamed agent events', async () => {
     memoryService: createFakeMemoryService(memoryCalls),
     ragRetrievalService: createFakeRagRetrievalService(ragCalls),
     summaryService: createFakeSummaryService(summaryCalls),
+    citationService: createFakeCitationService(citationCalls),
   })
   const events: ServerEvent[] = []
 
@@ -191,6 +224,23 @@ test('emits run_id before streamed agent events', async () => {
   assert.deepEqual(events, [
     { type: 'run_id', runId: 'run_1' },
     { type: 'text', text: 'Hi' },
+    {
+      type: 'citations',
+      citations: [
+        {
+          id: 'citation_1',
+          messageId: 'msg_assistant',
+          documentId: 'doc_1',
+          chunkId: 'chunk_1',
+          title: 'README.md',
+          uri: 'https://github.com/slince-zero/ai-agent-pro/blob/main/README.md',
+          sourceRef: 'README.md#L1-L3',
+          snippet: 'Use pnpm test before opening PRs.',
+          metadata: { score: null },
+          createdAt: '2026-06-17T07:01:00.000Z',
+        },
+      ],
+    },
   ])
   assert.deepEqual(result, {
     inputTokens: 3,
@@ -219,6 +269,21 @@ test('emits run_id before streamed agent events', async () => {
   )
   assert.deepEqual(summaryCalls.getLatestSummaryRequests, ['session_1'])
   assert.deepEqual(summaryCalls.refreshRequests, ['session_1'])
+  assert.deepEqual(citationCalls.createRequests, [
+    {
+      messageId: 'msg_assistant',
+      sources: [
+        {
+          chunkId: 'chunk_1',
+          documentId: 'doc_1',
+          content: 'Use pnpm test before opening PRs.',
+          title: 'README.md',
+          sourceRef: 'README.md#L1-L3',
+          uri: 'https://github.com/slince-zero/ai-agent-pro/blob/main/README.md',
+        },
+      ],
+    },
+  ])
 })
 
 test('persists failed tool results with duration and error details', async () => {
@@ -249,6 +314,7 @@ test('persists failed tool results with duration and error details', async () =>
     memoryService: createFakeMemoryService(),
     ragRetrievalService: createFakeRagRetrievalService(),
     summaryService: createFakeSummaryService(),
+    citationService: createFakeCitationService(),
   })
   const events: ServerEvent[] = []
 
