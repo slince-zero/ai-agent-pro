@@ -32,6 +32,7 @@ export type ContextBuilderOptions = ContextBudgetOptions & {
 
 export type ContextBuildInput = {
   sessionId: string
+  excludeMessageIds?: string[]
   userId?: string
   projectId?: string
   query?: string
@@ -52,7 +53,11 @@ export type RetrievalContextItem = {
 }
 
 export type ContextMessageSource = {
-  loadRecentMessages: (sessionId: string, take: number) => Promise<ClientMessage[]>
+  loadRecentMessages: (
+    sessionId: string,
+    take: number,
+    input: ContextBuildInput,
+  ) => Promise<ClientMessage[]>
   loadSessionSummary?: (input: ContextBuildInput) => Promise<string | null>
   loadRelevantMemories?: (input: ContextBuildInput) => Promise<string[]>
   loadRelevantDocuments?: (input: ContextBuildInput) => Promise<RetrievalContextItem[]>
@@ -259,7 +264,7 @@ export function createContextBuilder({ source, options = {} }: ContextBuilderDep
       source.loadSessionSummary?.(contextInput) ?? Promise.resolve(null),
       source.loadRelevantMemories?.(contextInput) ?? Promise.resolve([]),
       source.loadRelevantDocuments?.(contextInput) ?? Promise.resolve([]),
-      source.loadRecentMessages(contextInput.sessionId, budget.maxMessages),
+      source.loadRecentMessages(contextInput.sessionId, budget.maxMessages, contextInput),
     ])
     const memoryMessage = formatMemoriesForContext(memories)
     const retrievalMessage = formatRetrievalForContext(documents)

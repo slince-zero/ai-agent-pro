@@ -26,7 +26,8 @@ const session = {
 }
 
 type FakeSessionServiceCalls = {
-  recentMessageRequests?: { sessionId: string; take: number }[]
+  recentMessageRequests?: { excludeMessageIds?: string[]; sessionId: string; take: number }[]
+  updateAssistantRequests?: unknown[]
 }
 
 type FakeSummaryServiceCalls = {
@@ -43,7 +44,7 @@ type FakeRagRetrievalServiceCalls = {
 }
 
 type FakeCitationServiceCalls = {
-  createRequests?: unknown[]
+  replaceRequests?: unknown[]
 }
 
 function createFakeSessionService(calls: FakeSessionServiceCalls = {}) {
@@ -55,8 +56,16 @@ function createFakeSessionService(calls: FakeSessionServiceCalls = {}) {
       createdAt: session.createdAt,
     }),
     updateTitleFromMessageIfNeeded: async () => session,
-    getRecentClientMessages: async (sessionId: string, take: number) => {
-      calls.recentMessageRequests?.push({ sessionId, take })
+    getRecentClientMessages: async (
+      sessionId: string,
+      take: number,
+      options?: { excludeMessageIds?: string[] },
+    ) => {
+      calls.recentMessageRequests?.push({
+        sessionId,
+        take,
+        excludeMessageIds: options?.excludeMessageIds,
+      })
       return [{ role: 'user' as const, content: 'Hello' }]
     },
     createAssistantMessage: async () => ({
@@ -64,6 +73,29 @@ function createFakeSessionService(calls: FakeSessionServiceCalls = {}) {
       role: 'ASSISTANT',
       content: 'Hi',
       createdAt: session.updatedAt,
+    }),
+    updateAssistantMessage: async (messageId: string, content: string) => {
+      calls.updateAssistantRequests?.push({ messageId, content })
+      return {
+        id: messageId,
+        role: 'ASSISTANT',
+        content,
+        createdAt: session.updatedAt,
+      }
+    },
+    getLatestRegenerationTarget: async () => ({
+      userMessage: {
+        id: 'msg_user',
+        role: 'USER',
+        content: 'Hello',
+        createdAt: session.createdAt,
+      },
+      assistantMessage: {
+        id: 'msg_assistant',
+        role: 'ASSISTANT',
+        content: 'Old answer',
+        createdAt: session.updatedAt,
+      },
     }),
     touchSession: async () => session,
   } as unknown as ReturnType<typeof createSessionService>
@@ -122,8 +154,11 @@ function createFakeRagRetrievalService(calls: FakeRagRetrievalServiceCalls = {})
 
 function createFakeCitationService(calls: FakeCitationServiceCalls = {}) {
   return {
-    createMessageCitations: async (input: unknown) => {
-      calls.createRequests?.push(input)
+    createMessageCitations: async () => {
+      throw new Error('createMessageCitations should not be called by chat service')
+    },
+    replaceMessageCitations: async (input: unknown) => {
+      calls.replaceRequests?.push(input)
       return [
         {
           id: 'citation_1',
@@ -170,7 +205,11 @@ const runAgentWithFailedTool: typeof runAgent = async ({ onEvent }) => {
 test('emits run_id before streamed agent events', async () => {
   const agentRunUpdates: unknown[] = []
   const sessionCalls = {
-    recentMessageRequests: [] as { sessionId: string; take: number }[],
+    recentMessageRequests: [] as {
+      excludeMessageIds?: string[]
+      sessionId: string
+      take: number
+    }[],
   }
   const summaryCalls = {
     getLatestSummaryRequests: [] as string[],
@@ -183,7 +222,7 @@ test('emits run_id before streamed agent events', async () => {
     searchRequests: [] as unknown[],
   }
   const citationCalls = {
-    createRequests: [] as unknown[],
+    replaceRequests: [] as unknown[],
   }
   const fakeDb = {
     agentRun: {
@@ -251,7 +290,9 @@ test('emits run_id before streamed agent events', async () => {
     (agentRunUpdates[0] as { data?: { status?: string } }).data?.status,
     RunStatus.COMPLETED,
   )
-  assert.deepEqual(sessionCalls.recentMessageRequests, [{ sessionId: 'session_1', take: 30 }])
+  assert.deepEqual(sessionCalls.recentMessageRequests, [
+    { sessionId: 'session_1', take: 30, excludeMessageIds: [] },
+  ])
   assert.deepEqual(memoryCalls.contextMemoryRequests, [
     { userId: 'user_1', sessionId: 'session_1', projectId: undefined },
   ])
@@ -269,7 +310,109 @@ test('emits run_id before streamed agent events', async () => {
   )
   assert.deepEqual(summaryCalls.getLatestSummaryRequests, ['session_1'])
   assert.deepEqual(summaryCalls.refreshRequests, ['session_1'])
-  assert.deepEqual(citationCalls.createRequests, [
+  assert.deepEqual(citationCalls.replaceRequests, [
+    {
+      messageId: 'msg_assistant',
+      sources: [
+        {
+          chunkId: 'chunk_1',
+          documentId: 'doc_1',
+          content: 'Use pnpm test before opening PRs.',
+          title: 'README.md',
+          sourceRef: 'README.md#L1-L3',
+          uri: 'https://github.com/slince-zero/ai-agent-pro/blob/main/README.md',
+        },
+      ],
+    },
+  ])
+})
+
+test('regenerates the latest assistant message in place', async () => {
+  const agentRunCreates: unknown[] = []
+  const agentRunUpdates: unknown[] = []
+  const sessionCalls = {
+    recentMessageRequests: [] as {
+      excludeMessageIds?: string[]
+      sessionId: string
+      take: number
+    }[],
+    updateAssistantRequests: [] as unknown[],
+  }
+  const citationCalls = {
+    replaceRequests: [] as unknown[],
+  }
+  const fakeDb = {
+    agentRun: {
+      create: async (args: unknown) => {
+        agentRunCreates.push(args)
+        return { id: 'run_2' }
+      },
+      update: async (args: unknown) => {
+        agentRunUpdates.push(args)
+        return { id: 'run_2' }
+      },
+    },
+    toolCall: {
+      create: async () => ({ id: 'tool_1' }),
+      update: async () => ({ id: 'tool_1' }),
+    },
+  }
+  const service = createChatService({
+    db: fakeDb,
+    model: 'test-model',
+    calculateRunCost: () => 0.001,
+    runAgentFn,
+    sessionService: createFakeSessionService(sessionCalls),
+    memoryService: createFakeMemoryService(),
+    ragRetrievalService: createFakeRagRetrievalService(),
+    summaryService: createFakeSummaryService(),
+    citationService: createFakeCitationService(citationCalls),
+  })
+  const events: ServerEvent[] = []
+
+  const result = await service.regenerateLastAssistant({
+    modelClient: {} as ModelClient,
+    session,
+    signal: new AbortController().signal,
+    onEvent: (event) => {
+      events.push(event)
+    },
+  })
+
+  assert.deepEqual(result, {
+    inputTokens: 3,
+    outputTokens: 4,
+    cost: 0.001,
+  })
+  assert.deepEqual(agentRunCreates[0], {
+    data: {
+      sessionId: 'session_1',
+      userMessageId: 'msg_user',
+      model: 'test-model',
+    },
+  })
+  assert.deepEqual(sessionCalls.recentMessageRequests, [
+    { sessionId: 'session_1', take: 30, excludeMessageIds: ['msg_assistant'] },
+  ])
+  assert.deepEqual(sessionCalls.updateAssistantRequests, [
+    {
+      messageId: 'msg_assistant',
+      content: 'Hi',
+    },
+  ])
+  assert.equal(
+    (agentRunUpdates[0] as { data?: { assistantMessageId?: string; status?: string } }).data
+      ?.assistantMessageId,
+    'msg_assistant',
+  )
+  assert.equal(
+    (agentRunUpdates[0] as { data?: { status?: string } }).data?.status,
+    RunStatus.COMPLETED,
+  )
+  assert.equal((events[0] as { type?: string }).type, 'run_id')
+  assert.equal((events[1] as { type?: string }).type, 'text')
+  assert.equal((events[2] as { type?: string }).type, 'citations')
+  assert.deepEqual(citationCalls.replaceRequests, [
     {
       messageId: 'msg_assistant',
       sources: [

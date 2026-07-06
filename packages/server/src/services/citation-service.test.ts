@@ -45,6 +45,7 @@ test('normalizes retrieved chunks into bounded citations', () => {
 
 test('creates message citations and serializes records', async () => {
   const created: unknown[] = []
+  const deleted: unknown[] = []
   const service = createCitationService({
     db: {
       citation: {
@@ -63,6 +64,10 @@ test('creates message citations and serializes records', async () => {
             metadata: data.metadata as null,
             createdAt: new Date('2026-07-03T09:00:00.000Z'),
           }
+        },
+        deleteMany: async (args: unknown) => {
+          deleted.push(args)
+          return { count: 1 }
         },
       },
     },
@@ -113,6 +118,27 @@ test('creates message citations and serializes records', async () => {
         score: null,
       },
       createdAt: '2026-07-03T09:00:00.000Z',
+    },
+  ])
+  assert.deepEqual(deleted, [])
+
+  await service.replaceMessageCitations({
+    messageId: 'msg_1',
+    sources: [
+      {
+        chunkId: 'chunk_2',
+        documentId: 'doc_1',
+        title: 'README.md',
+        content: 'Updated answer source.',
+      },
+    ],
+  })
+
+  assert.deepEqual(deleted, [
+    {
+      where: {
+        messageId: 'msg_1',
+      },
     },
   ])
 })

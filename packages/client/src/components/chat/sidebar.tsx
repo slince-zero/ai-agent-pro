@@ -1,4 +1,4 @@
-import { Activity, Bot, MessageSquareText, Plus } from 'lucide-react'
+import { Activity, Bot, MessageSquareText, Pencil, Plus, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -13,6 +13,8 @@ type SidebarProps = {
   presets?: PromptPreset[]
   sessions: ChatSession[]
   onNewChat: () => void
+  onDeleteSession: (sessionId: string) => void
+  onRenameSession: (session: ChatSession) => void
   onSelectRuns: () => void
   onSelectPrompt?: (prompt: string) => void
   onSelectSession: (sessionId: string) => void
@@ -25,6 +27,8 @@ export function Sidebar({
   isLoadingMessages,
   sessions,
   onNewChat,
+  onDeleteSession,
+  onRenameSession,
   onSelectRuns,
   onSelectSession,
 }: SidebarProps) {
@@ -78,28 +82,58 @@ export function Sidebar({
                 const isActive = session.id === activeSessionId
 
                 return (
-                  <Button
+                  <div
                     className={cn(
-                      'h-auto w-full min-w-0 justify-start rounded-lg px-2.5 py-2 text-left text-sm font-normal',
+                      'group/session flex min-w-0 items-center gap-1 rounded-lg',
                       isActive && 'bg-accent text-accent-foreground',
                     )}
                     key={session.id}
-                    variant="ghost"
-                    aria-current={isActive ? 'page' : undefined}
-                    disabled={isSending || isLoadingMessages}
-                    onClick={() => onSelectSession(session.id)}
                   >
-                    <MessageSquareText
-                      className="text-muted-foreground size-4"
-                      aria-hidden="true"
-                    />
-                    <span className="min-w-0">
-                      <span className="block truncate">{session.title}</span>
-                      <span className="text-muted-foreground block truncate text-xs">
-                        {formatSessionDate(session.updatedAt)}
+                    <Button
+                      className="h-auto min-w-0 flex-1 justify-start rounded-lg px-2.5 py-2 text-left text-sm font-normal"
+                      variant="ghost"
+                      aria-current={isActive ? 'page' : undefined}
+                      disabled={isSending || isLoadingMessages}
+                      onClick={() => onSelectSession(session.id)}
+                    >
+                      <MessageSquareText
+                        className="text-muted-foreground size-4"
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate">{session.title}</span>
+                        <span className="text-muted-foreground block truncate text-xs">
+                          {formatSessionDate(session.updatedAt)}
+                        </span>
                       </span>
-                    </span>
-                  </Button>
+                    </Button>
+                    <div className="flex shrink-0 pr-1 opacity-0 transition-opacity group-hover/session:opacity-100 focus-within:opacity-100">
+                      <Button
+                        className="size-7 rounded-md"
+                        size="icon"
+                        title="重命名"
+                        type="button"
+                        variant="ghost"
+                        disabled={isSending || isLoadingMessages}
+                        onClick={() => onRenameSession(session)}
+                      >
+                        <Pencil className="size-3.5" aria-hidden="true" />
+                        <span className="sr-only">重命名</span>
+                      </Button>
+                      <Button
+                        className="text-destructive hover:text-destructive size-7 rounded-md"
+                        size="icon"
+                        title="删除"
+                        type="button"
+                        variant="ghost"
+                        disabled={isSending || isLoadingMessages}
+                        onClick={() => onDeleteSession(session.id)}
+                      >
+                        <Trash2 className="size-3.5" aria-hidden="true" />
+                        <span className="sr-only">删除</span>
+                      </Button>
+                    </div>
+                  </div>
                 )
               })
             )}
