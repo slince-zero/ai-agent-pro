@@ -97,6 +97,7 @@ DATABASE_URL=postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent
 pnpm install
 pnpm --filter server run generate
 pnpm --filter server run migrate:dev
+pnpm --filter server run db:seed
 pnpm dev
 ```
 
@@ -171,6 +172,19 @@ pnpm --filter server run migrate:dev
 pnpm --filter server exec prisma migrate status
 ```
 
+### 需要重置本地开发数据
+
+如果本地库里的演示数据已经混乱，可以先 reset 再重新 seed：
+
+```bash
+pnpm --filter server run db:reset -- --confirm-local-reset
+pnpm --filter server run db:seed
+```
+
+`db:reset` 会删除当前 `DATABASE_URL` 指向数据库里的应用数据。脚本默认只允许
+`localhost`、`127.0.0.1` 或 `::1`，并且必须显式传入 `--confirm-local-reset`；`NODE_ENV=production`
+时会直接拒绝执行。
+
 ## 常用脚本
 
 ```bash
@@ -187,6 +201,8 @@ pnpm --filter server dev
 pnpm --filter server build
 pnpm --filter server generate
 pnpm --filter server migrate:dev
+pnpm --filter server db:seed
+pnpm --filter server db:reset -- --confirm-local-reset
 ```
 
 Docker 本地构建：
