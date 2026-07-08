@@ -39,6 +39,26 @@ export async function createSession(title?: string) {
   return data.session
 }
 
+export async function renameSession(sessionId: string, title: string) {
+  const response = await fetch(`/api/sessions/${sessionId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ title }),
+  })
+  const data = await parseJsonResponse<SessionResponse>(response)
+  return data.session
+}
+
+export async function deleteSession(sessionId: string) {
+  const response = await fetch(`/api/sessions/${sessionId}`, {
+    method: 'DELETE',
+  })
+  const data = await parseJsonResponse<SessionResponse>(response)
+  return data.session
+}
+
 export async function fetchSessionMessages(sessionId: string) {
   const response = await fetch(`/api/sessions/${sessionId}/messages`)
   const data = await parseJsonResponse<MessagesResponse>(response)

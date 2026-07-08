@@ -21,12 +21,36 @@ export async function streamChatResponse(
   handlers: StreamChatHandlers,
   options: StreamChatOptions = {},
 ) {
-  const response = await fetch(`/api/sessions/${sessionId}/messages`, {
+  await streamSessionResponse(
+    `/api/sessions/${sessionId}/messages`,
+    {
+      content,
+    },
+    handlers,
+    options,
+  )
+}
+
+export async function streamRegeneratedResponse(
+  sessionId: string,
+  handlers: StreamChatHandlers,
+  options: StreamChatOptions = {},
+) {
+  await streamSessionResponse(`/api/sessions/${sessionId}/regenerate`, undefined, handlers, options)
+}
+
+async function streamSessionResponse(
+  url: string,
+  body: object | undefined,
+  handlers: StreamChatHandlers,
+  options: StreamChatOptions,
+) {
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ content }),
+    body: body ? JSON.stringify(body) : undefined,
     signal: options.signal,
   })
 

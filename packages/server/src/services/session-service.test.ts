@@ -55,9 +55,16 @@ const assistantMessage = {
 }
 
 function createFakeDb() {
-  const calls: { sessionUpdates: unknown[]; messageQueries: unknown[] } = {
+  const calls: {
+    messageFindFirsts: unknown[]
+    messageQueries: unknown[]
+    messageUpdates: unknown[]
+    sessionUpdates: unknown[]
+  } = {
+    messageFindFirsts: [],
     sessionUpdates: [],
     messageQueries: [],
+    messageUpdates: [],
   }
 
   const db = {
@@ -79,6 +86,9 @@ function createFakeDb() {
         return {
           ...activeSession,
           title: (args as { data?: { title?: string } }).data?.title ?? activeSession.title,
+          status:
+            (args as { data?: { status?: typeof SessionStatus.ACTIVE } }).data?.status ??
+            activeSession.status,
         }
       },
     },
@@ -89,11 +99,26 @@ function createFakeDb() {
         content: (args as { data: { content: string } }).data.content,
         createdAt,
       }),
+      findFirst: async (args: unknown) => {
+        calls.messageFindFirsts.push(args)
+        const role = (args as { where?: { role?: typeof MessageRole.USER } }).where?.role
+        if (role === MessageRole.USER) return userMessage
+        if (role === MessageRole.ASSISTANT) return assistantMessage
+        return null
+      },
       findMany: async (args: unknown) => {
         calls.messageQueries.push(args)
         return (args as { include?: unknown }).include
           ? [userMessage, assistantMessage]
           : [assistantMessage, userMessage, { ...userMessage, role: MessageRole.SYSTEM }]
+      },
+      update: async (args: unknown) => {
+        calls.messageUpdates.push(args)
+        return {
+          ...assistantMessage,
+          content:
+            (args as { data?: { content?: string } }).data?.content ?? assistantMessage.content,
+        }
       },
     },
   }
@@ -185,6 +210,103 @@ test('builds recent client messages and updates new session titles', async () =>
     },
     data: {
       title: 'Please summarize this agent run in detai...',
+    },
+  })
+})
+
+test('renames and archives active sessions for the owning user', async () => {
+  const { calls, db } = createFakeDb()
+  const service = createSessionService({ db })
+
+  const renamed = await service.renameActiveSession('user_1', 'session_1', '  New   title  ')
+  const archived = await service.archiveActiveSession('user_1', 'session_1')
+
+  assert.equal(renamed?.title, 'New title')
+  assert.equal(archived?.status, 'archived')
+  assert.deepEqual(calls.sessionUpdates, [
+    {
+      where: {
+        id: 'session_1',
+      },
+      data: {
+        title: 'New title',
+      },
+    },
+    {
+      where: {
+        id: 'session_1',
+      },
+      data: {
+        status: SessionStatus.ARCHIVED,
+      },
+    },
+  ])
+})
+
+test('loads recent context while excluding regenerated assistant messages', async () => {
+  const { calls, db } = createFakeDb()
+  const service = createSessionService({ db })
+
+  await service.getRecentClientMessages('session_1', 3, {
+    excludeMessageIds: ['msg_assistant'],
+  })
+
+  assert.deepEqual(calls.messageQueries[0], {
+    where: {
+      sessionId: 'session_1',
+      id: {
+        notIn: ['msg_assistant'],
+      },
+      role: {
+        in: [MessageRole.USER, MessageRole.ASSISTANT],
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    take: 3,
+  })
+})
+
+test('finds regeneration target and updates assistant message content', async () => {
+  const { calls, db } = createFakeDb()
+  const service = createSessionService({ db })
+
+  const target = await service.getLatestRegenerationTarget('session_1')
+  const updated = await service.updateAssistantMessage('msg_assistant', 'Updated answer')
+
+  assert.equal(target?.userMessage.id, 'msg_user')
+  assert.equal(target?.assistantMessage.id, 'msg_assistant')
+  assert.equal(updated.content, 'Updated answer')
+  assert.deepEqual(calls.messageFindFirsts, [
+    {
+      where: {
+        sessionId: 'session_1',
+        role: MessageRole.USER,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    },
+    {
+      where: {
+        sessionId: 'session_1',
+        role: MessageRole.ASSISTANT,
+        createdAt: {
+          gt: userMessage.createdAt,
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    },
+  ])
+  assert.deepEqual(calls.messageUpdates[0], {
+    where: {
+      id: 'msg_assistant',
+    },
+    data: {
+      content: 'Updated answer',
     },
   })
 })

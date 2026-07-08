@@ -50,7 +50,9 @@ type SessionServiceDb = {
   }
   message: {
     create: (args: unknown) => Promise<MessageRecord>
+    findFirst: (args: unknown) => Promise<MessageRecord | null>
     findMany: (args: unknown) => Promise<MessageWithUsage[]>
+    update: (args: unknown) => Promise<MessageRecord>
   }
 }
 
@@ -60,10 +62,21 @@ type SessionServiceDeps = {
 
 export type ActiveSession = SessionRecord
 
+export type RegenerationTarget = {
+  assistantMessage: MessageRecord
+  userMessage: MessageRecord
+}
+
 function toTitle(content: string) {
   const normalized = content.replace(/\s+/g, ' ').trim()
   if (!normalized) return '新对话'
   return normalized.length > 40 ? `${normalized.slice(0, 40)}...` : normalized
+}
+
+function normalizeSessionTitle(title: string) {
+  const normalized = title.replace(/\s+/g, ' ').trim()
+  if (!normalized) throw new Error('title is required')
+  return normalized.length > 120 ? normalized.slice(0, 120) : normalized
 }
 
 function toClientRole(role: MessageRole): ClientMessage['role'] | null {
@@ -152,6 +165,38 @@ export function createSessionService({
       return serializeSession(session)
     },
 
+    async renameActiveSession(userId: string, sessionId: string, title: string) {
+      const session = await getActiveSession(userId, sessionId)
+      if (!session) return null
+
+      const updated = await db.session.update({
+        where: {
+          id: session.id,
+        },
+        data: {
+          title: normalizeSessionTitle(title),
+        },
+      })
+
+      return serializeSession(updated)
+    },
+
+    async archiveActiveSession(userId: string, sessionId: string) {
+      const session = await getActiveSession(userId, sessionId)
+      if (!session) return null
+
+      const archived = await db.session.update({
+        where: {
+          id: session.id,
+        },
+        data: {
+          status: SessionStatus.ARCHIVED,
+        },
+      })
+
+      return serializeSession(archived)
+    },
+
     async getActiveSession(userId: string, sessionId: string) {
       return getActiveSession(userId, sessionId)
     },
@@ -173,6 +218,9 @@ export function createSessionService({
         include: {
           assistantRuns: {
             where: { status: RunStatus.COMPLETED },
+            orderBy: {
+              startedAt: 'desc',
+            },
             select: { inputTokens: true, outputTokens: true, cost: true },
             take: 1,
           },
@@ -210,6 +258,46 @@ export function createSessionService({
       })
     },
 
+    async updateAssistantMessage(messageId: string, content: string) {
+      return db.message.update({
+        where: {
+          id: messageId,
+        },
+        data: {
+          content,
+        },
+      })
+    },
+
+    async getLatestRegenerationTarget(sessionId: string): Promise<RegenerationTarget | null> {
+      const userMessage = await db.message.findFirst({
+        where: {
+          sessionId,
+          role: MessageRole.USER,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      })
+      if (!userMessage) return null
+
+      const assistantMessage = await db.message.findFirst({
+        where: {
+          sessionId,
+          role: MessageRole.ASSISTANT,
+          createdAt: {
+            gt: userMessage.createdAt,
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      })
+      if (!assistantMessage) return null
+
+      return { userMessage, assistantMessage }
+    },
+
     async updateTitleFromMessageIfNeeded(session: ActiveSession, content: string) {
       if (session.title !== '新对话') return session
 
@@ -234,10 +322,22 @@ export function createSessionService({
       })
     },
 
-    async getRecentClientMessages(sessionId: string, take: number) {
+    async getRecentClientMessages(
+      sessionId: string,
+      take: number,
+      options: { excludeMessageIds?: string[] } = {},
+    ) {
+      const excludeMessageIds = options.excludeMessageIds?.filter(Boolean) ?? []
       const dbMessages = await db.message.findMany({
         where: {
           sessionId,
+          ...(excludeMessageIds.length > 0
+            ? {
+                id: {
+                  notIn: excludeMessageIds,
+                },
+              }
+            : {}),
           role: {
             in: [MessageRole.USER, MessageRole.ASSISTANT],
           },

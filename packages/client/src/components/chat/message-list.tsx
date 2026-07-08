@@ -1,26 +1,43 @@
-import { Bot, CheckCircle2, ExternalLink, FileText, LoaderCircle, UserRound } from 'lucide-react'
+import {
+  Bot,
+  CheckCircle2,
+  ExternalLink,
+  FileText,
+  LoaderCircle,
+  RotateCcw,
+  UserRound,
+} from 'lucide-react'
 
 import { AssistantHtml } from '@/components/assistant-html'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { Citation, Message, ToolEvent } from '@/types/chat'
 
 type MessageListProps = {
   messages: Message[]
   isSending: boolean
+  onRegenerate?: () => void
 }
 
-export function MessageList({ messages, isSending }: MessageListProps) {
+export function MessageList({ messages, isSending, onRegenerate }: MessageListProps) {
   return (
     <div className="mx-auto w-full max-w-3xl py-6 pb-10">
       {messages.map((message, index) => {
         const isStreaming =
           isSending && index === messages.length - 1 && message.role === 'assistant'
+        const canRegenerate =
+          Boolean(onRegenerate) &&
+          !isSending &&
+          message.role === 'assistant' &&
+          index === messages.length - 1
 
         return (
           <MessageItem
             key={message.id ?? `${message.role}-${index}`}
+            canRegenerate={canRegenerate}
             isStreaming={isStreaming}
             message={message}
+            onRegenerate={onRegenerate}
           />
         )
       })}
@@ -28,7 +45,17 @@ export function MessageList({ messages, isSending }: MessageListProps) {
   )
 }
 
-function MessageItem({ isStreaming, message }: { isStreaming: boolean; message: Message }) {
+function MessageItem({
+  canRegenerate,
+  isStreaming,
+  message,
+  onRegenerate,
+}: {
+  canRegenerate: boolean
+  isStreaming: boolean
+  message: Message
+  onRegenerate?: () => void
+}) {
   const toolEvents = message.role === 'assistant' ? (message.toolEvents ?? []) : []
   const citations = message.role === 'assistant' ? (message.citations ?? []) : []
 
@@ -71,6 +98,17 @@ function MessageItem({ isStreaming, message }: { isStreaming: boolean; message: 
               )}
               {citations.length > 0 && <CitationList citations={citations} />}
               {message.usage && <UsageSummary usage={message.usage} />}
+              {canRegenerate && (
+                <Button
+                  className="h-7 px-2 text-xs"
+                  type="button"
+                  variant="ghost"
+                  onClick={onRegenerate}
+                >
+                  <RotateCcw className="size-3.5" aria-hidden="true" />
+                  重新生成
+                </Button>
+              )}
             </div>
           ) : message.content ? (
             message.content
