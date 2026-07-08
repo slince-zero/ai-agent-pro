@@ -21,6 +21,7 @@ type CitationRecord = {
 type CitationDb = {
   citation: {
     create: (args: unknown) => Promise<CitationRecord>
+    deleteMany: (args: unknown) => Promise<unknown>
   }
 }
 
@@ -130,28 +131,41 @@ export function serializeCitation(citation: CitationRecord): Citation {
 export function createCitationService({
   db = prisma as unknown as CitationDb,
 }: CitationServiceDeps = {}) {
+  const createCitations = async (messageId: string, sources: RetrievalContextItem[]) => {
+    const inputs = normalizeCitationSources(sources)
+    const citations: Citation[] = []
+
+    for (const input of inputs) {
+      const citation = await db.citation.create({
+        data: {
+          messageId,
+          documentId: input.documentId,
+          documentChunkId: input.documentChunkId,
+          title: input.title,
+          uri: input.uri,
+          sourceRef: input.sourceRef,
+          snippet: input.snippet,
+          metadata: input.metadata,
+        },
+      })
+      citations.push(serializeCitation(citation))
+    }
+
+    return citations
+  }
+
   return {
     async createMessageCitations({ messageId, sources }: CreateMessageCitationsInput) {
-      const inputs = normalizeCitationSources(sources)
-      const citations: Citation[] = []
+      return createCitations(messageId, sources)
+    },
 
-      for (const input of inputs) {
-        const citation = await db.citation.create({
-          data: {
-            messageId,
-            documentId: input.documentId,
-            documentChunkId: input.documentChunkId,
-            title: input.title,
-            uri: input.uri,
-            sourceRef: input.sourceRef,
-            snippet: input.snippet,
-            metadata: input.metadata,
-          },
-        })
-        citations.push(serializeCitation(citation))
-      }
-
-      return citations
+    async replaceMessageCitations({ messageId, sources }: CreateMessageCitationsInput) {
+      await db.citation.deleteMany({
+        where: {
+          messageId,
+        },
+      })
+      return createCitations(messageId, sources)
     },
   }
 }

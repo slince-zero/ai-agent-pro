@@ -25,6 +25,12 @@ const createMessageSchema = z
   })
   .strict()
 
+const updateSessionSchema = z
+  .object({
+    title: z.string().trim().min(1).max(120),
+  })
+  .strict()
+
 export function createSessionsRouter({
   modelClient,
   sessionService = createSessionService(),
@@ -58,6 +64,47 @@ export function createSessionsRouter({
     } catch (error) {
       req.log.error({ err: error }, '创建会话失败')
       res.status(500).json({ error: '创建会话失败' })
+    }
+  })
+
+  router.patch('/:sessionId', async (req, res) => {
+    const parsed = updateSessionSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ error: '会话参数无效' })
+    }
+
+    try {
+      const user = await getCurrentUser()
+      const session = await sessionService.renameActiveSession(
+        user.id,
+        req.params.sessionId,
+        parsed.data.title,
+      )
+
+      if (!session) {
+        return res.status(404).json({ error: '会话不存在' })
+      }
+
+      res.json({ session })
+    } catch (error) {
+      req.log.error({ err: error }, '重命名会话失败')
+      res.status(500).json({ error: '重命名会话失败' })
+    }
+  })
+
+  router.delete('/:sessionId', async (req, res) => {
+    try {
+      const user = await getCurrentUser()
+      const session = await sessionService.archiveActiveSession(user.id, req.params.sessionId)
+
+      if (!session) {
+        return res.status(404).json({ error: '会话不存在' })
+      }
+
+      res.json({ session })
+    } catch (error) {
+      req.log.error({ err: error }, '删除会话失败')
+      res.status(500).json({ error: '删除会话失败' })
     }
   })
 
@@ -134,6 +181,82 @@ export function createSessionsRouter({
         sse.write({
           type: 'error',
           error: '请求处理失败，请查看 server 终端日志。',
+        })
+        stopHeartbeat()
+        res.end()
+      }
+    }
+  })
+
+  router.post('/:sessionId/regenerate', async (req, res) => {
+    const user = await getCurrentUser()
+    const session = await sessionService.getActiveSession(user.id, req.params.sessionId)
+
+    if (!session) {
+      return res.status(404).json({ error: '会话不存在' })
+    }
+
+    const target = await sessionService.getLatestRegenerationTarget(session.id)
+    if (!target) {
+      return res.status(409).json({ error: '没有可重新生成的回复' })
+    }
+
+    prepareSse(res)
+    const sse = createSseWriter(res)
+    const stopHeartbeat = startSseHeartbeat(res)
+
+    const controller = new AbortController()
+    res.on('close', () => {
+      stopHeartbeat()
+      controller.abort()
+    })
+
+    try {
+      const result = await chatService.regenerateLastAssistant({
+        modelClient,
+        session,
+        target,
+        signal: controller.signal,
+        logger: req.log,
+        onEvent: async (event) => {
+          if (!controller.signal.aborted && !res.writableEnded) {
+            sse.write(event)
+          }
+        },
+      })
+
+      if (!result) {
+        if (!res.writableEnded) {
+          sse.write({
+            type: 'error',
+            error: '没有可重新生成的回复',
+          })
+          stopHeartbeat()
+          res.end()
+        }
+        return
+      }
+
+      if (!controller.signal.aborted && !res.writableEnded) {
+        sse.write({
+          type: 'usage',
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          cost: result.cost,
+        })
+        sse.write({ type: 'done' })
+        stopHeartbeat()
+        res.end()
+      }
+    } catch (error) {
+      if (controller.signal.aborted) return
+
+      req.log.error({ err: error, sessionId: session.id }, '重新生成会话回复失败')
+
+      if (!res.writableEnded) {
+        sse.write({
+          type: 'error',
+          error: '重新生成失败，请查看 server 终端日志。',
         })
         stopHeartbeat()
         res.end()

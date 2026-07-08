@@ -6,9 +6,15 @@ import { MessageList } from '@/components/chat/message-list'
 import { Sidebar } from '@/components/chat/sidebar'
 import { WelcomePanel } from '@/components/chat/welcome-panel'
 import { RunsView } from '@/components/runs/runs-view'
-import { streamChatResponse } from '@/lib/chat-stream'
+import { streamChatResponse, streamRegeneratedResponse } from '@/lib/chat-stream'
 import { promptPresets } from '@/lib/prompt-presets'
-import { createSession, fetchSessionMessages, fetchSessions } from '@/lib/sessions'
+import {
+  createSession,
+  deleteSession,
+  fetchSessionMessages,
+  fetchSessions,
+  renameSession,
+} from '@/lib/sessions'
 import type { ChatSession, Citation, Message } from '@/types/chat'
 
 export default function App() {
@@ -339,6 +345,114 @@ export default function App() {
     updateLastAssistant,
   ])
 
+  const regenerateLastAssistant = useCallback(async () => {
+    if (!activeSessionId || isSending) return
+
+    const lastMessage = messages[messages.length - 1]
+    if (!lastMessage || lastMessage.role !== 'assistant') return
+
+    setIsSending(true)
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
+    setMessages((prev) => {
+      const copy = [...prev]
+      const last = copy[copy.length - 1]
+
+      if (!last || last.role !== 'assistant') return prev
+
+      copy[copy.length - 1] = {
+        ...last,
+        content: '',
+        citations: undefined,
+        toolEvents: [],
+        usage: undefined,
+      }
+
+      return copy
+    })
+
+    try {
+      await streamRegeneratedResponse(
+        activeSessionId,
+        {
+          onText: appendLastAssistant,
+          onCitations: setLastAssistantCitations,
+          onToolCall: appendToolCall,
+          onToolResult: completeToolCall,
+          onUsage: setLastAssistantUsage,
+        },
+        { signal: controller.signal },
+      )
+      await refreshSessions()
+    } catch (error) {
+      if (controller.signal.aborted) {
+        return
+      }
+
+      const message = error instanceof Error ? error.message : '重新生成失败'
+      updateLastAssistant(`重新生成失败：${message}`)
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null
+      }
+      setIsSending(false)
+    }
+  }, [
+    activeSessionId,
+    appendLastAssistant,
+    appendToolCall,
+    completeToolCall,
+    isSending,
+    messages,
+    refreshSessions,
+    setLastAssistantCitations,
+    setLastAssistantUsage,
+    updateLastAssistant,
+  ])
+
+  const renameExistingSession = useCallback(
+    async (session: ChatSession) => {
+      if (isSending) return
+
+      const nextTitle = window.prompt('重命名会话', session.title)?.trim()
+      if (!nextTitle || nextTitle === session.title) return
+
+      const updated = await renameSession(session.id, nextTitle)
+      setSessions((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
+    },
+    [isSending],
+  )
+
+  const deleteExistingSession = useCallback(
+    async (sessionId: string) => {
+      if (isSending) return
+
+      const session = sessions.find((item) => item.id === sessionId)
+      const confirmed = window.confirm(`删除会话“${session?.title ?? '未命名会话'}”？`)
+      if (!confirmed) return
+
+      await deleteSession(sessionId)
+      const nextSessions = sessions.filter((item) => item.id !== sessionId)
+      setSessions(nextSessions)
+
+      if (activeSessionId !== sessionId) return
+
+      const nextSession = nextSessions[0]
+      if (!nextSession) {
+        setActiveSessionId(null)
+        setMessages([])
+        setInput('')
+        return
+      }
+
+      setActiveSessionId(nextSession.id)
+      await loadSessionMessages(nextSession.id)
+    },
+    [activeSessionId, isSending, loadSessionMessages, sessions],
+  )
+
   const stopGeneration = useCallback(() => {
     abortControllerRef.current?.abort()
     markLastAssistantStopped()
@@ -375,6 +489,8 @@ export default function App() {
         isLoadingMessages={isLoadingMessages}
         sessions={sessions}
         onNewChat={startNewChat}
+        onDeleteSession={(sessionId) => void deleteExistingSession(sessionId)}
+        onRenameSession={(session) => void renameExistingSession(session)}
         onSelectRuns={selectRuns}
         onSelectSession={(sessionId) => void selectSession(sessionId)}
       />
@@ -402,7 +518,11 @@ export default function App() {
           ) : !hasMessages ? (
             <WelcomePanel presets={promptPresets} onSelectPrompt={fillSuggestedPrompt} />
           ) : (
-            <MessageList messages={messages} isSending={isSending} />
+            <MessageList
+              messages={messages}
+              isSending={isSending}
+              onRegenerate={() => void regenerateLastAssistant()}
+            />
           )}
         </div>
 
