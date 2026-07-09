@@ -12,6 +12,8 @@
     "generate": "prisma generate",
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
+    "db:seed": "prisma generate && tsx prisma/seed.ts",
+    "db:reset": "prisma generate && tsx prisma/reset.ts",
     "studio": "prisma studio",
     "build": "prisma generate && tsc -p tsconfig.json",
     "typecheck": "prisma generate && tsc --noEmit",
