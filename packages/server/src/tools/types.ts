@@ -5,6 +5,7 @@ export type JsonSchema = {
   properties: Record<string, unknown>
   required?: readonly string[]
   additionalProperties?: boolean
+  [key: string]: unknown
 }
 
 export type ToolCategory = 'web' | 'code' | 'repository' | 'system'
