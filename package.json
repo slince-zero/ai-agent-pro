@@ -13,6 +13,8 @@
     "lint:ci": "pnpm lint && pnpm fmt:check",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "db:seed": "pnpm --filter server run db:seed",
+    "db:reset": "pnpm --filter server run db:reset",
     "eval": "pnpm --filter server exec tsx src/evals/cli.ts",
     "eval:smoke": "pnpm eval -- --suite smoke --provider mock"
   },
