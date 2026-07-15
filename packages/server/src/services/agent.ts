@@ -16,7 +16,7 @@ export async function runAgent({
   logger,
 }: RunAgentOptions): Promise<AgentUsage> {
   const conversation = buildAgentConversation(messages)
-  const tools = getModelTools()
+  const tools = await getModelTools(logger)
   let totalInputTokens = 0
   let totalOutputTokens = 0
 

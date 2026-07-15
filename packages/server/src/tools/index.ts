@@ -1,20 +1,63 @@
 import type pino from 'pino'
 import type { z } from 'zod'
 
+import { env } from '../env.js'
+import { discoverMcpTools, parseMcpServersConfig } from '../services/mcp-client.js'
 import { githubRepoTool } from './github.js'
 import type { AppTool, ToolDefinition, ToolRunResult } from './types.js'
 import { webFetchTool } from './web-fetch.js'
 
-const tools = [githubRepoTool, webFetchTool]
-type RegisteredTool = AppTool<unknown>
+const builtinTools = [githubRepoTool, webFetchTool]
+type RegisteredTool = AppTool<any>
+type ToolRegistry = Record<string, RegisteredTool | undefined>
 
-export const toolDispatch = Object.fromEntries(tools.map((tool) => [tool.name, tool])) as Record<
-  string,
-  RegisteredTool | undefined
->
+let mcpTools: RegisteredTool[] = []
+let mcpToolsPromise: Promise<void> | undefined
 
-export function getModelTools(): ToolDefinition[] {
-  return tools.map((tool) => ({
+export const toolDispatch = Object.fromEntries(
+  builtinTools.map((tool) => [tool.name, tool]),
+) as ToolRegistry
+
+function getAllTools() {
+  return [...builtinTools, ...mcpTools]
+}
+
+function rebuildToolDispatch() {
+  for (const key of Object.keys(toolDispatch)) {
+    delete toolDispatch[key]
+  }
+
+  for (const tool of getAllTools()) {
+    toolDispatch[tool.name] = tool
+  }
+}
+
+async function ensureMcpToolsLoaded(logger?: pino.Logger) {
+  if (!mcpToolsPromise) {
+    mcpToolsPromise = (async () => {
+      const configs = parseMcpServersConfig(env.MCP_SERVERS_JSON)
+      if (configs.length === 0) return
+
+      mcpTools = await discoverMcpTools({
+        configs,
+        logger,
+      })
+      rebuildToolDispatch()
+      logger?.info({ count: mcpTools.length }, 'MCP tools loaded')
+    })().catch((error) => {
+      mcpTools = []
+      rebuildToolDispatch()
+      logger?.warn({ err: error }, 'MCP tool loading failed')
+    })
+  }
+
+  await mcpToolsPromise
+}
+
+export async function getModelTools(logger?: pino.Logger): Promise<ToolDefinition[]> {
+  await ensureMcpToolsLoaded(logger)
+
+  return getAllTools().map((tool) => ({
     name: tool.name,
     description: tool.description,
     parameters: tool.parameters,
@@ -22,7 +65,9 @@ export function getModelTools(): ToolDefinition[] {
   }))
 }
 
-export function getOpenAITools() {
+export async function getOpenAITools(logger?: pino.Logger) {
+  const tools = await getModelTools(logger)
+
   return tools.map((tool) => ({
     type: 'function',
     function: {
@@ -78,10 +123,15 @@ export async function runToolDetailed(
   name: string,
   args: unknown,
   logger?: pino.Logger,
-  registry: Record<string, RegisteredTool | undefined> = toolDispatch,
+  registry?: ToolRegistry,
 ): Promise<ToolRunResult> {
   const startedAt = Date.now()
-  const tool = registry[name]
+  if (!registry) {
+    await ensureMcpToolsLoaded(logger)
+  }
+
+  const resolvedRegistry = registry ?? toolDispatch
+  const tool = resolvedRegistry[name]
 
   if (!tool) {
     const durationMs = Date.now() - startedAt
