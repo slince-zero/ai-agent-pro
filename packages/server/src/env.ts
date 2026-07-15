@@ -1,5 +1,10 @@
 import { z } from 'zod'
 
+const booleanEnv = z
+  .enum(['true', 'false'])
+  .default('false')
+  .transform((value) => value === 'true')
+
 const envSchema = z.object({
   // ---- 必填 ----
   OPENAI_API_KEY: z
@@ -16,6 +21,10 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3003),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   DEFAULT_USER_EMAIL: z.string().trim().min(1).default('local@ai-pro-agent.dev'),
+  CODE_SANDBOX_ENABLED: booleanEnv,
+  CODE_SANDBOX_DOCKER_BINARY: z.string().trim().min(1).default('docker'),
+  CODE_SANDBOX_JAVASCRIPT_IMAGE: z.string().trim().min(1).default('node:22-alpine'),
+  CODE_SANDBOX_PYTHON_IMAGE: z.string().trim().min(1).default('python:3.13-alpine'),
 
   // ---- 可选（无默认值） ----
   MODEL_BASE_URL: z.string().trim().min(1).optional(),

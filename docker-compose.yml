@@ -31,6 +31,7 @@ services:
       NODE_ENV: production
       CLIENT_DIST_DIR: /app/public
       PORT: 3003
+      CODE_SANDBOX_ENABLED: ${CODE_SANDBOX_ENABLED:-false}
       DATABASE_URL: postgresql://${POSTGRES_USER:-ai_agent}:${POSTGRES_PASSWORD:-ai_agent}@postgres:5432/${POSTGRES_DB:-ai_pro_agent}
     ports:
       - '3903:3003'

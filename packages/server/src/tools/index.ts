@@ -3,14 +3,19 @@ import type { z } from 'zod'
 
 import { env } from '../env.js'
 import { discoverMcpTools, parseMcpServersConfig } from '../services/mcp-client.js'
+import { codeExecuteTool } from './code-execute.js'
 import { githubRepoTool } from './github.js'
 import { definePlugin, type AppTool, type ToolDefinition, type ToolRunResult } from './types.js'
 import { webFetchTool } from './web-fetch.js'
 
+export function getBuiltinTools(sandboxEnabled: boolean) {
+  return [githubRepoTool, webFetchTool, ...(sandboxEnabled ? [codeExecuteTool] : [])]
+}
+
 const builtinPlugin = definePlugin({
   name: 'builtin',
   version: '1.0.0',
-  tools: [githubRepoTool, webFetchTool],
+  tools: getBuiltinTools(env.CODE_SANDBOX_ENABLED),
 })
 const builtinTools = [...builtinPlugin.tools]
 type RegisteredTool = AppTool<any>

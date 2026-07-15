@@ -11,6 +11,7 @@
 - 会话持久化：Postgres 保存用户、会话、消息、AgentRun、ToolCall。
 - 内置工具：公开 GitHub 仓库元数据查询、公开网页文本读取。
 - Tool SDK：统一 Zod schema、治理元数据、取消信号和 plugin 工具集合。
+- 可选代码沙箱：在无网络、只读、受资源限制的 Docker 容器中执行 JavaScript/Python。
 - 可容器化部署：Dockerfile 构建前端静态资源并打包后端服务。
 
 ## 技术栈
@@ -98,6 +99,9 @@ DATABASE_URL=postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent
 ```env
 MCP_SERVERS_JSON={"mcpServers":{"filesystem":{"command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","/tmp"]}}}
 ```
+
+`CODE_SANDBOX_ENABLED` 默认是 `false`。启用 `code_execute` 前需要预先准备 Docker 和固定运行
+镜像，并阅读 [Docker 代码沙箱安全说明](docs/CODE_SANDBOX.md)。
 
 ### 3. 安装依赖并启动
 
@@ -250,25 +254,30 @@ docker run \
 
 本地开发时，后端读取 `packages/server/.env`；Docker Compose 解析配置时还需要根目录 `.env`。
 
-| 变量                 | 必填 | 默认值                                                       | 说明                                                      |
-| -------------------- | ---- | ------------------------------------------------------------ | --------------------------------------------------------- |
-| `OPENAI_API_KEY`     | 是   | 空                                                           | OpenAI-compatible API Key。                               |
-| `MODEL_PROVIDER`     | 否   | `openai-compatible`                                          | 模型供应商；`anthropic` 目前为预留入口。                  |
-| `MODEL_BASE_URL`     | 否   | 空                                                           | OpenAI-compatible base URL，优先于旧变量。                |
-| `MODEL_NAME`         | 否   | 空                                                           | 后端请求的模型名，优先于旧变量。                          |
-| `DEEPSEEK_BASE_URL`  | 否   | `https://api.deepseek.com`                                   | 兼容旧配置的模型服务 base URL。                           |
-| `DEEPSEEK_MODEL`     | 否   | `deepseek-v4-pro`                                            | 兼容旧配置的模型名。                                      |
-| `DATABASE_URL`       | 是   | `postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent` | Prisma/Postgres 连接串。                                  |
-| `GITHUB_TOKEN`       | 否   | 空                                                           | GitHub 仓库查询工具的可选 token。                         |
-| `MCP_SERVERS_JSON`   | 否   | 空                                                           | 外部 MCP server 配置 JSON，支持 `mcpServers` 对象或数组。 |
-| `DEFAULT_USER_EMAIL` | 否   | `local@ai-pro-agent.dev`                                     | 当前无鉴权版本使用的本地用户标识。                        |
-| `PORT`               | 否   | `3003`                                                       | 后端监听端口。                                            |
-| `CLIENT_DIST_DIR`    | 否   | `public`                                                     | 生产模式下 Express 托管前端静态资源的位置。               |
+| 变量                            | 必填 | 默认值                                                       | 说明                                                      |
+| ------------------------------- | ---- | ------------------------------------------------------------ | --------------------------------------------------------- |
+| `OPENAI_API_KEY`                | 是   | 空                                                           | OpenAI-compatible API Key。                               |
+| `MODEL_PROVIDER`                | 否   | `openai-compatible`                                          | 模型供应商；`anthropic` 目前为预留入口。                  |
+| `MODEL_BASE_URL`                | 否   | 空                                                           | OpenAI-compatible base URL，优先于旧变量。                |
+| `MODEL_NAME`                    | 否   | 空                                                           | 后端请求的模型名，优先于旧变量。                          |
+| `DEEPSEEK_BASE_URL`             | 否   | `https://api.deepseek.com`                                   | 兼容旧配置的模型服务 base URL。                           |
+| `DEEPSEEK_MODEL`                | 否   | `deepseek-v4-pro`                                            | 兼容旧配置的模型名。                                      |
+| `DATABASE_URL`                  | 是   | `postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent` | Prisma/Postgres 连接串。                                  |
+| `GITHUB_TOKEN`                  | 否   | 空                                                           | GitHub 仓库查询工具的可选 token。                         |
+| `MCP_SERVERS_JSON`              | 否   | 空                                                           | 外部 MCP server 配置 JSON，支持 `mcpServers` 对象或数组。 |
+| `CODE_SANDBOX_ENABLED`          | 否   | `false`                                                      | 是否注册 Docker `code_execute` 工具。                     |
+| `CODE_SANDBOX_DOCKER_BINARY`    | 否   | `docker`                                                     | Docker CLI 路径或命令名。                                 |
+| `CODE_SANDBOX_JAVASCRIPT_IMAGE` | 否   | `node:22-alpine`                                             | JavaScript 沙箱固定镜像，推荐使用 digest。                |
+| `CODE_SANDBOX_PYTHON_IMAGE`     | 否   | `python:3.13-alpine`                                         | Python 沙箱固定镜像，推荐使用 digest。                    |
+| `DEFAULT_USER_EMAIL`            | 否   | `local@ai-pro-agent.dev`                                     | 当前无鉴权版本使用的本地用户标识。                        |
+| `PORT`                          | 否   | `3003`                                                       | 后端监听端口。                                            |
+| `CLIENT_DIST_DIR`               | 否   | `public`                                                     | 生产模式下 Express 托管前端静态资源的位置。               |
 
 ## 当前限制
 
 - 当前没有正式鉴权，多用户部署前需要补认证和会话隔离。
 - 聊天链路为 `/api/sessions/:sessionId/messages`，支持会话持久化。
+- Docker 代码沙箱默认关闭；生产环境必须使用专用 daemon/VM，不能依赖共享宿主 socket 作为强隔离边界。
 - `web_fetch` 工具只做了基础协议和内容大小限制，还需要 SSRF 防护后再暴露到公网。
 - 后端测试和 CI 仍待补齐。
 
