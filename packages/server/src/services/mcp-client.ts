@@ -11,7 +11,7 @@ import {
 import type pino from 'pino'
 import { z } from 'zod'
 
-import type { AppTool, JsonSchema } from '../tools/types.js'
+import { defineTool, type AppTool, type JsonSchema } from '../tools/types.js'
 
 const DEFAULT_TIMEOUT_MS = 10_000
 const MCP_TOOL_PREFIX = 'mcp'
@@ -153,7 +153,7 @@ function toMcpAppTool({
   const readOnly = tool.annotations?.readOnlyHint === true
   const destructive = tool.annotations?.destructiveHint === true
 
-  return {
+  return defineTool({
     name: modelToolName,
     description: [
       `[MCP:${server.config.name}]`,
@@ -177,7 +177,7 @@ function toMcpAppTool({
 
       return content
     },
-  }
+  })
 }
 
 function normalizeMcpConfigEntry(name: string, value: z.infer<typeof mcpServerEntrySchema>) {

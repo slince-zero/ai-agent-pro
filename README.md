@@ -10,6 +10,7 @@
 - 流式 Agent 回复：后端通过 SSE 推送文本、工具调用和工具结果。
 - 会话持久化：Postgres 保存用户、会话、消息、AgentRun、ToolCall。
 - 内置工具：公开 GitHub 仓库元数据查询、公开网页文本读取。
+- Tool SDK：统一 Zod schema、治理元数据、取消信号和 plugin 工具集合。
 - 可容器化部署：Dockerfile 构建前端静态资源并打包后端服务。
 
 ## 技术栈
@@ -229,13 +230,16 @@ docker run \
 .
 ├── packages/
 │   ├── client/             # React + Vite 前端
-│   └── server/             # Express + Prisma 后端
-│       ├── prisma/         # Prisma schema 和 migrations
-│       └── src/
-│           ├── routes/     # chat/session API
-│           ├── services/   # OpenAI client、Agent runtime、用户服务
-│           ├── tools/      # Agent 工具定义和执行器
-│           └── sse/        # SSE event helpers
+│   ├── server/             # Express + Prisma 后端
+│   │   ├── prisma/         # Prisma schema 和 migrations
+│   │   └── src/
+│   │       ├── routes/     # chat/session API
+│   │       ├── services/   # OpenAI client、Agent runtime、用户服务
+│   │       ├── tools/      # Agent 工具定义和执行器
+│   │       └── sse/        # SSE event helpers
+│   └── tool-sdk/           # 公共 Tool/Plugin 类型和定义校验
+├── examples/
+│   └── simple-tool/        # 最小工具与 plugin 示例
 ├── docs/                   # 架构、路线图、截图
 ├── pnpm-workspace.yaml
 ├── Dockerfile
@@ -270,6 +274,8 @@ docker run \
 
 ## 参与贡献
 
+- 新增工具先阅读 [Tool SDK 开发指南](docs/TOOLS.md)，并从
+  [`examples/simple-tool`](examples/simple-tool) 开始。
 - 每个 PR 聚焦一个明确目标。
 - 修改行为时优先补测试或最小化验证步骤。
 - 分支命名建议使用 `fix/`、`feat/`、`chore/` 等前缀。

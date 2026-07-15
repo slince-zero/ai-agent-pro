@@ -2,6 +2,7 @@
   "name": "ai-agent-pro",
   "private": true,
   "scripts": {
+    "predev": "pnpm --filter @ai-agent-pro/tool-sdk build",
     "dev": "pnpm -r dev",
     "build": "pnpm -r build",
     "start": "pnpm -r start",
@@ -11,10 +12,13 @@
     "fmt:check": "oxfmt --check",
     "fix": "pnpm fmt && pnpm lint:fix",
     "lint:ci": "pnpm lint && pnpm fmt:check",
+    "pretypecheck": "pnpm --filter @ai-agent-pro/tool-sdk build",
     "typecheck": "pnpm -r typecheck",
+    "pretest": "pnpm --filter @ai-agent-pro/tool-sdk build",
     "test": "pnpm -r test",
     "db:seed": "pnpm --filter server run db:seed",
     "db:reset": "pnpm --filter server run db:reset",
+    "preeval": "pnpm --filter @ai-agent-pro/tool-sdk build",
     "eval": "pnpm --filter server exec tsx src/evals/cli.ts",
     "eval:smoke": "pnpm eval -- --suite smoke --provider mock"
   },

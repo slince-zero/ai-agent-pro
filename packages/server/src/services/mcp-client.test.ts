@@ -161,7 +161,7 @@ test('discovers MCP tools and adapts them to AppTool definitions', async () => {
   })
   assert.deepEqual(tools[0]?.parameters.required, ['query'])
 
-  const result = await tools[0]?.run({ query: 'README' })
+  const result = await tools[0]?.run({ query: 'README' }, { signal: new AbortController().signal })
   assert.equal(result, 'result for README')
   assert.deepEqual(calls, [
     {
@@ -198,5 +198,8 @@ test('throws when an MCP tool returns isError', async () => {
     connectServer,
   })
 
-  await assert.rejects(() => tool?.run({}), /permission denied/)
+  await assert.rejects(
+    async () => tool?.run({}, { signal: new AbortController().signal }),
+    /permission denied/,
+  )
 })

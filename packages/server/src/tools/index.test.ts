@@ -138,6 +138,7 @@ test('surfaces tool-level network errors as tool results', async () => {
 
 test('fails detailed tool execution after the configured timeout', async () => {
   const { runToolDetailed } = await import('./index.js')
+  let receivedAbort = false
 
   const result = await runToolDetailed('slow_tool', {}, undefined, {
     slow_tool: {
@@ -155,14 +156,18 @@ test('fails detailed tool execution after the configured timeout', async () => {
         additionalProperties: false,
       },
       schema: z.object({}).strict(),
-      run: async () =>
-        new Promise<string>((resolve) => {
-          setTimeout(() => resolve('too late'), 50)
+      run: async (_args, { signal }) =>
+        new Promise<string>((_resolve, reject) => {
+          signal.addEventListener('abort', () => {
+            receivedAbort = signal.aborted
+            reject(signal.reason)
+          })
         }),
     },
   })
 
   assert.equal(result.status, 'failed')
+  assert.equal(receivedAbort, true)
   assert.match(result.error ?? '', /超时/)
   assert.match(result.content, /工具执行出错/)
 })
