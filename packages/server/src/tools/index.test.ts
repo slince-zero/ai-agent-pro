@@ -5,19 +5,25 @@ import { z } from 'zod'
 
 process.env.OPENAI_API_KEY = 'test-api-key'
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test'
+process.env.CODE_SANDBOX_ENABLED = 'false'
 
 afterEach(() => {
   mock.restoreAll()
 })
 
 test('returns OpenAI-compatible tool definitions', async () => {
-  const { getOpenAITools } = await import('./index.js')
+  const { getBuiltinTools, getOpenAITools } = await import('./index.js')
 
   const tools = await getOpenAITools()
   const toolNames = tools.flatMap((tool) => ('function' in tool ? [tool.function.name] : []))
 
   assert.ok(toolNames.includes('github_repository_lookup'))
   assert.ok(toolNames.includes('web_fetch'))
+  assert.equal(toolNames.includes('code_execute'), false)
+  assert.equal(
+    getBuiltinTools(true).some((tool) => tool.name === 'code_execute'),
+    true,
+  )
   assert.equal(
     tools.every((tool) => tool.type === 'function'),
     true,
