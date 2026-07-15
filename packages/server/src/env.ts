@@ -23,6 +23,7 @@ const envSchema = z.object({
   EMBEDDING_API_KEY: z.string().trim().min(1).optional(),
   EMBEDDING_BASE_URL: z.string().trim().min(1).optional(),
   GITHUB_TOKEN: z.string().trim().optional(),
+  MCP_SERVERS_JSON: z.string().trim().optional(),
   CLIENT_DIST_DIR: z.string().trim().optional(),
 })
 

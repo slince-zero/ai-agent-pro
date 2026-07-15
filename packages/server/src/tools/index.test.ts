@@ -13,7 +13,7 @@ afterEach(() => {
 test('returns OpenAI-compatible tool definitions', async () => {
   const { getOpenAITools } = await import('./index.js')
 
-  const tools = getOpenAITools()
+  const tools = await getOpenAITools()
   const toolNames = tools.flatMap((tool) => ('function' in tool ? [tool.function.name] : []))
 
   assert.ok(toolNames.includes('github_repository_lookup'))
@@ -27,7 +27,7 @@ test('returns OpenAI-compatible tool definitions', async () => {
 test('returns model tool definitions with governance metadata', async () => {
   const { getModelTools } = await import('./index.js')
 
-  const tools = getModelTools()
+  const tools = await getModelTools()
   const webFetch = tools.find((tool) => tool.name === 'web_fetch')
   const githubLookup = tools.find((tool) => tool.name === 'github_repository_lookup')
 

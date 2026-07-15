@@ -91,6 +91,13 @@ DATABASE_URL=postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent
 
 `GITHUB_TOKEN` 可选；不配置时 GitHub API 会使用未认证额度。
 
+`MCP_SERVERS_JSON` 可选；配置后后端会在首次 Agent run 时连接外部 MCP server，发现 tools 并以
+`mcp_<server>_<tool>` 的命名空间暴露给模型。只在可信环境中配置会启动进程的 command，例如：
+
+```env
+MCP_SERVERS_JSON={"mcpServers":{"filesystem":{"command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","/tmp"]}}}
+```
+
 ### 3. 安装依赖并启动
 
 ```bash
@@ -239,19 +246,20 @@ docker run \
 
 本地开发时，后端读取 `packages/server/.env`；Docker Compose 解析配置时还需要根目录 `.env`。
 
-| 变量                 | 必填 | 默认值                                                       | 说明                                        |
-| -------------------- | ---- | ------------------------------------------------------------ | ------------------------------------------- |
-| `OPENAI_API_KEY`     | 是   | 空                                                           | OpenAI-compatible API Key。                 |
-| `MODEL_PROVIDER`     | 否   | `openai-compatible`                                          | 模型供应商；`anthropic` 目前为预留入口。    |
-| `MODEL_BASE_URL`     | 否   | 空                                                           | OpenAI-compatible base URL，优先于旧变量。  |
-| `MODEL_NAME`         | 否   | 空                                                           | 后端请求的模型名，优先于旧变量。            |
-| `DEEPSEEK_BASE_URL`  | 否   | `https://api.deepseek.com`                                   | 兼容旧配置的模型服务 base URL。             |
-| `DEEPSEEK_MODEL`     | 否   | `deepseek-v4-pro`                                            | 兼容旧配置的模型名。                        |
-| `DATABASE_URL`       | 是   | `postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent` | Prisma/Postgres 连接串。                    |
-| `GITHUB_TOKEN`       | 否   | 空                                                           | GitHub 仓库查询工具的可选 token。           |
-| `DEFAULT_USER_EMAIL` | 否   | `local@ai-pro-agent.dev`                                     | 当前无鉴权版本使用的本地用户标识。          |
-| `PORT`               | 否   | `3003`                                                       | 后端监听端口。                              |
-| `CLIENT_DIST_DIR`    | 否   | `public`                                                     | 生产模式下 Express 托管前端静态资源的位置。 |
+| 变量                 | 必填 | 默认值                                                       | 说明                                                      |
+| -------------------- | ---- | ------------------------------------------------------------ | --------------------------------------------------------- |
+| `OPENAI_API_KEY`     | 是   | 空                                                           | OpenAI-compatible API Key。                               |
+| `MODEL_PROVIDER`     | 否   | `openai-compatible`                                          | 模型供应商；`anthropic` 目前为预留入口。                  |
+| `MODEL_BASE_URL`     | 否   | 空                                                           | OpenAI-compatible base URL，优先于旧变量。                |
+| `MODEL_NAME`         | 否   | 空                                                           | 后端请求的模型名，优先于旧变量。                          |
+| `DEEPSEEK_BASE_URL`  | 否   | `https://api.deepseek.com`                                   | 兼容旧配置的模型服务 base URL。                           |
+| `DEEPSEEK_MODEL`     | 否   | `deepseek-v4-pro`                                            | 兼容旧配置的模型名。                                      |
+| `DATABASE_URL`       | 是   | `postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent` | Prisma/Postgres 连接串。                                  |
+| `GITHUB_TOKEN`       | 否   | 空                                                           | GitHub 仓库查询工具的可选 token。                         |
+| `MCP_SERVERS_JSON`   | 否   | 空                                                           | 外部 MCP server 配置 JSON，支持 `mcpServers` 对象或数组。 |
+| `DEFAULT_USER_EMAIL` | 否   | `local@ai-pro-agent.dev`                                     | 当前无鉴权版本使用的本地用户标识。                        |
+| `PORT`               | 否   | `3003`                                                       | 后端监听端口。                                            |
+| `CLIENT_DIST_DIR`    | 否   | `public`                                                     | 生产模式下 Express 托管前端静态资源的位置。               |
 
 ## 当前限制
 
