@@ -1,0 +1,33 @@
+{
+  "name": "@ai-agent-pro/tool-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed tool contracts for ai-agent-pro",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src",
+    "test": "node --import tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "zod": "^4.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}

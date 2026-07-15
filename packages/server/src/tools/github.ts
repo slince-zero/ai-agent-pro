@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 import { env } from '../env.js'
-import type { AppTool } from './types.js'
+import { defineTool } from './types.js'
 
 const githubRepoLookupSchema = z
   .object({
@@ -85,7 +85,7 @@ function resolveRef(args: GitHubRepoLookupArgs) {
   return null
 }
 
-export const githubRepoTool: AppTool<GitHubRepoLookupArgs> = {
+export const githubRepoTool = defineTool({
   name: 'github_repository_lookup',
   description:
     '查询单个公开 GitHub 仓库的元数据：描述、stars、forks、open issues、主要语言、默认分支、最近更新、最近推送、许可证、homepage、topics。当用户提到 GitHub 仓库链接、想要某个仓库的概况或对比多个仓库时调用。每次只查询一个仓库，需要查询多个时分别多次调用。',
@@ -115,7 +115,7 @@ export const githubRepoTool: AppTool<GitHubRepoLookupArgs> = {
     additionalProperties: false,
   },
   schema: githubRepoLookupSchema,
-  async run(args) {
+  async run(args: GitHubRepoLookupArgs, { signal }) {
     const ref = resolveRef(args)
     if (!ref) {
       return JSON.stringify({
@@ -130,6 +130,7 @@ export const githubRepoTool: AppTool<GitHubRepoLookupArgs> = {
     let response: Response
     try {
       response = await fetch(apiUrl, {
+        signal,
         headers: {
           Accept: 'application/vnd.github+json',
           ...(env.GITHUB_TOKEN ? { Authorization: `Bearer ${env.GITHUB_TOKEN}` } : {}),
@@ -182,4 +183,4 @@ export const githubRepoTool: AppTool<GitHubRepoLookupArgs> = {
       2,
     )
   },
-}
+})

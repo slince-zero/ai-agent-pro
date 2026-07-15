@@ -4,10 +4,15 @@ import type { z } from 'zod'
 import { env } from '../env.js'
 import { discoverMcpTools, parseMcpServersConfig } from '../services/mcp-client.js'
 import { githubRepoTool } from './github.js'
-import type { AppTool, ToolDefinition, ToolRunResult } from './types.js'
+import { definePlugin, type AppTool, type ToolDefinition, type ToolRunResult } from './types.js'
 import { webFetchTool } from './web-fetch.js'
 
-const builtinTools = [githubRepoTool, webFetchTool]
+const builtinPlugin = definePlugin({
+  name: 'builtin',
+  version: '1.0.0',
+  tools: [githubRepoTool, webFetchTool],
+})
+const builtinTools = [...builtinPlugin.tools]
 type RegisteredTool = AppTool<any>
 type ToolRegistry = Record<string, RegisteredTool | undefined>
 
@@ -102,20 +107,51 @@ function completed(content: string, durationMs: number): ToolRunResult {
   }
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, toolName: string) {
+async function withTimeout<T>(
+  run: (signal: AbortSignal) => T | Promise<T>,
+  timeoutMs: number,
+  toolName: string,
+  parentSignal?: AbortSignal,
+) {
+  if (parentSignal?.aborted) {
+    throw new Error(`工具执行已取消：${toolName}`)
+  }
+
+  const controller = new AbortController()
   let timeout: NodeJS.Timeout | undefined
+  let onParentAbort: (() => void) | undefined
 
   try {
-    return await Promise.race([
-      promise,
+    const pending: Promise<T>[] = [
+      Promise.resolve().then(() => run(controller.signal)),
       new Promise<T>((_resolve, reject) => {
         timeout = setTimeout(() => {
-          reject(new Error(`工具执行超时：${toolName} 超过 ${timeoutMs}ms 未完成`))
+          const error = new Error(`工具执行超时：${toolName} 超过 ${timeoutMs}ms 未完成`)
+          reject(error)
+          controller.abort(error)
         }, timeoutMs)
       }),
-    ])
+    ]
+
+    if (parentSignal) {
+      pending.push(
+        new Promise<T>((_resolve, reject) => {
+          onParentAbort = () => {
+            const error = new Error(`工具执行已取消：${toolName}`)
+            reject(error)
+            controller.abort(parentSignal.reason ?? error)
+          }
+          parentSignal.addEventListener('abort', onParentAbort, { once: true })
+        }),
+      )
+    }
+
+    return await Promise.race(pending)
   } finally {
     if (timeout) clearTimeout(timeout)
+    if (parentSignal && onParentAbort) {
+      parentSignal.removeEventListener('abort', onParentAbort)
+    }
   }
 }
 
@@ -124,6 +160,7 @@ export async function runToolDetailed(
   args: unknown,
   logger?: pino.Logger,
   registry?: ToolRegistry,
+  signal?: AbortSignal,
 ): Promise<ToolRunResult> {
   const startedAt = Date.now()
   if (!registry) {
@@ -157,7 +194,12 @@ export async function runToolDetailed(
   }
 
   try {
-    const content = await withTimeout(tool.run(parsed.data), tool.governance.timeoutMs, name)
+    const content = await withTimeout(
+      (toolSignal) => tool.run(parsed.data, { signal: toolSignal }),
+      tool.governance.timeoutMs,
+      name,
+      signal,
+    )
     return completed(content, Date.now() - startedAt)
   } catch (error) {
     const durationMs = Date.now() - startedAt
