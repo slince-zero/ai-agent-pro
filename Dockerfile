@@ -8,15 +8,18 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
 # Copy sub-package manifests for dependency resolution
 COPY packages/client/package.json packages/client/
 COPY packages/server/package.json packages/server/
+COPY packages/tool-sdk/package.json packages/tool-sdk/
 
-# Install all dependencies for both packages
+# Install workspace dependencies
 RUN pnpm install --frozen-lockfile
 
 # Copy source code
 COPY packages/client packages/client
 COPY packages/server packages/server
+COPY packages/tool-sdk packages/tool-sdk
 
-# Build client and server
+# Build workspace packages used by the production image
+RUN pnpm --filter @ai-agent-pro/tool-sdk run build
 RUN pnpm --filter client run build
 RUN pnpm --filter server run build
 
@@ -38,7 +41,9 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
+RUN apk add --no-cache docker-cli \
+    && corepack enable \
+    && corepack prepare pnpm@11.5.2 --activate
 
 # Copy self-contained server deployment
 COPY --from=build /deploy /app

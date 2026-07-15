@@ -3,8 +3,9 @@
 `@ai-agent-pro/tool-sdk` 是仓库内所有 Agent tool 的公共契约。它负责类型推导、定义校验和
 plugin 分组；server runtime 负责参数校验、超时、取消、日志和结果记录。
 
-当前 plugin 是声明式工具集合，不包含 npm 动态安装、目录扫描或隔离执行。新增可信工具时需要
-显式注册；不可信代码应等待 sandbox 能力落地后再接入。
+当前 plugin 是声明式工具集合，不包含 npm 动态安装或目录扫描。新增可信工具时需要显式注册；
+Plugin 的 `run` 函数仍在 Agent server 进程中执行，不能用来运行不可信代码。不可信的短代码片段
+应通过受限的 [`code_execute` Docker 沙箱](CODE_SANDBOX.md) 执行。
 
 ## 定义一个工具
 
