@@ -15,7 +15,7 @@ import {
   fetchSessions,
   renameSession,
 } from '@/lib/sessions'
-import type { ChatSession, Citation, Message } from '@/types/chat'
+import type { ChatSession, Citation, Message, WorkflowMode } from '@/types/chat'
 
 export default function App() {
   const [activeView, setActiveView] = useState<'chat' | 'runs'>('chat')
@@ -23,6 +23,7 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
+  const [workflow, setWorkflow] = useState<WorkflowMode>('single')
   const [isSending, setIsSending] = useState(false)
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -309,6 +310,7 @@ export default function App() {
       await streamChatResponse(
         sessionId,
         content,
+        workflow,
         {
           onText: appendLastAssistant,
           onCitations: setLastAssistantCitations,
@@ -343,6 +345,7 @@ export default function App() {
     setLastAssistantCitations,
     setLastAssistantUsage,
     updateLastAssistant,
+    workflow,
   ])
 
   const regenerateLastAssistant = useCallback(async () => {
@@ -376,6 +379,7 @@ export default function App() {
     try {
       await streamRegeneratedResponse(
         activeSessionId,
+        workflow,
         {
           onText: appendLastAssistant,
           onCitations: setLastAssistantCitations,
@@ -410,6 +414,7 @@ export default function App() {
     setLastAssistantCitations,
     setLastAssistantUsage,
     updateLastAssistant,
+    workflow,
   ])
 
   const renameExistingSession = useCallback(
@@ -531,10 +536,12 @@ export default function App() {
             canSend={canSend}
             input={input}
             isSending={isSending}
+            workflow={workflow}
             textareaRef={textareaRef}
             onInputChange={setInput}
             onStop={stopGeneration}
             onSubmit={() => void sendMessage()}
+            onWorkflowChange={setWorkflow}
           />
         )}
       </section>
