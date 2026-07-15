@@ -3,7 +3,7 @@ import { isIP } from 'node:net'
 
 import { z } from 'zod'
 
-import type { AppTool } from './types.js'
+import { defineTool } from './types.js'
 
 const FETCH_TIMEOUT_MS = 10_000
 const MAX_RESPONSE_BYTES = 1_000_000
@@ -300,7 +300,7 @@ function truncateText(text: string) {
   }
 }
 
-export const webFetchTool: AppTool<WebFetchArgs> = {
+export const webFetchTool = defineTool({
   name: 'web_fetch',
   description:
     '读取一个公开 http/https URL 的文本内容，用于分析技术文档、博客文章、网页说明或接口返回的文本。返回标题、状态码、content-type 和清洗后的正文预览；不要用于 GitHub 仓库元数据查询，GitHub 仓库概况优先使用 github_repository_lookup。',
@@ -322,18 +322,14 @@ export const webFetchTool: AppTool<WebFetchArgs> = {
     additionalProperties: false,
   },
   schema: webFetchSchema,
-  async run(args) {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
-
+  async run(args: WebFetchArgs, { signal }) {
     let response: Response
     let finalUrl = args.url
     try {
-      const result = await fetchPublicUrl(args.url, controller.signal)
+      const result = await fetchPublicUrl(args.url, signal)
       response = result.response
       finalUrl = result.finalUrl
     } catch (error) {
-      clearTimeout(timeout)
       return JSON.stringify({
         error:
           error instanceof UnsafeUrlError
@@ -404,8 +400,6 @@ export const webFetchTool: AppTool<WebFetchArgs> = {
             : `网络请求失败：${(error as Error).message}`,
         url: args.url,
       })
-    } finally {
-      clearTimeout(timeout)
     }
   },
-}
+})

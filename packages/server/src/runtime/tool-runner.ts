@@ -81,7 +81,7 @@ export async function runToolCalls({
       args: parsedArgs,
     })
 
-    const result = await executeTool(call.name, parsedArgs, logger)
+    const result = await executeTool(call.name, parsedArgs, logger, undefined, signal)
     conversation.push({
       role: 'tool',
       toolCallId: call.id,

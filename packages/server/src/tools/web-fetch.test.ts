@@ -15,6 +15,10 @@ function parseResult(result: string) {
   return JSON.parse(result) as WebFetchResult
 }
 
+function createContext() {
+  return { signal: new AbortController().signal }
+}
+
 afterEach(() => {
   mock.restoreAll()
 })
@@ -24,7 +28,9 @@ test('rejects direct private addresses before fetch', async () => {
     throw new Error('fetch should not be called')
   })
 
-  const result = parseResult(await webFetchTool.run({ url: 'http://127.0.0.1/admin' }))
+  const result = parseResult(
+    await webFetchTool.run({ url: 'http://127.0.0.1/admin' }, createContext()),
+  )
 
   assert.match(result.error ?? '', /内网|本机|保留地址/)
   assert.equal(fetchMock.mock.callCount(), 0)
@@ -35,7 +41,9 @@ test('rejects localhost before fetch', async () => {
     throw new Error('fetch should not be called')
   })
 
-  const result = parseResult(await webFetchTool.run({ url: 'http://localhost:3000/health' }))
+  const result = parseResult(
+    await webFetchTool.run({ url: 'http://localhost:3000/health' }, createContext()),
+  )
 
   assert.match(result.error ?? '', /localhost/)
   assert.equal(fetchMock.mock.callCount(), 0)
@@ -46,7 +54,9 @@ test('rejects ipv4-mapped ipv6 loopback addresses before fetch', async () => {
     throw new Error('fetch should not be called')
   })
 
-  const result = parseResult(await webFetchTool.run({ url: 'http://[::ffff:127.0.0.1]/admin' }))
+  const result = parseResult(
+    await webFetchTool.run({ url: 'http://[::ffff:127.0.0.1]/admin' }, createContext()),
+  )
 
   assert.match(result.error ?? '', /内网|本机|保留地址/)
   assert.equal(fetchMock.mock.callCount(), 0)
@@ -65,7 +75,9 @@ test('rejects redirects to private addresses', async () => {
       }),
   )
 
-  const result = parseResult(await webFetchTool.run({ url: 'http://93.184.216.34/start' }))
+  const result = parseResult(
+    await webFetchTool.run({ url: 'http://93.184.216.34/start' }, createContext()),
+  )
 
   assert.match(result.error ?? '', /内网|本机|保留地址/)
   assert.equal(fetchMock.mock.callCount(), 1)
@@ -87,7 +99,9 @@ test('fetches and sanitizes public text responses', async () => {
       ),
   )
 
-  const result = parseResult(await webFetchTool.run({ url: 'http://93.184.216.34/page' }))
+  const result = parseResult(
+    await webFetchTool.run({ url: 'http://93.184.216.34/page' }, createContext()),
+  )
 
   assert.equal(result.status, 200)
   assert.equal(result.final_url, 'http://93.184.216.34/page')
