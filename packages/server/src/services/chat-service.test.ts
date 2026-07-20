@@ -601,8 +601,14 @@ test('persists multi-agent workflow stages without changing the single-agent def
   )
   assert.equal((stageUpdates[2] as { data: { output: string } }).data.output, 'Reviewed answer')
   assert.deepEqual(result, { inputTokens: 9, outputTokens: 12, cost: 0.002 })
-  assert.deepEqual(events.slice(0, 2), [
+  assert.deepEqual(events.slice(0, 8), [
     { type: 'run_id', runId: 'run_multi' },
+    { type: 'workflow_stage', role: 'planner', sequence: 0, status: 'running' },
+    { type: 'workflow_stage', role: 'planner', sequence: 0, status: 'completed' },
+    { type: 'workflow_stage', role: 'executor', sequence: 1, status: 'running' },
+    { type: 'workflow_stage', role: 'executor', sequence: 1, status: 'completed' },
+    { type: 'workflow_stage', role: 'critic', sequence: 2, status: 'running' },
     { type: 'text', text: 'Reviewed answer' },
+    { type: 'workflow_stage', role: 'critic', sequence: 2, status: 'completed' },
   ])
 })

@@ -11,6 +11,7 @@ import {
 import { AssistantHtml } from '@/components/assistant-html'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { getWorkflowStageLabel } from '@/lib/workflow-stage'
 import type { Citation, Message, ToolEvent } from '@/types/chat'
 
 type MessageListProps = {
@@ -93,7 +94,9 @@ function MessageItem({
                     className="text-muted-foreground size-4 animate-spin"
                     aria-hidden="true"
                   />
-                  <span className="text-muted-foreground">正在生成</span>
+                  <span className="text-muted-foreground">
+                    {getWorkflowStageLabel(message.workflowStage)}
+                  </span>
                 </span>
               )}
               {citations.length > 0 && <CitationList citations={citations} />}

@@ -1,8 +1,9 @@
-import type { ServerEvent, WorkflowMode } from '@/types/chat'
+import type { ServerEvent, WorkflowMode, WorkflowStage } from '@/types/chat'
 
 type StreamChatHandlers = {
   onCitations?: (citations: ServerEventCitations) => void
   onRunId?: (runId: string) => void
+  onWorkflowStage?: (stage: WorkflowStage) => void
   onText: (text: string) => void
   onToolCall?: (toolCallId: string, name: string, args: unknown) => void
   onToolResult?: (toolCallId: string, name: string, preview: string) => void
@@ -91,7 +92,7 @@ async function streamSessionResponse(
   }
 }
 
-function handleServerEvent(event: string, handlers: StreamChatHandlers) {
+export function handleServerEvent(event: string, handlers: StreamChatHandlers) {
   for (const line of event.split('\n')) {
     if (!line.startsWith('data:')) continue
 
@@ -106,6 +107,13 @@ function handleServerEvent(event: string, handlers: StreamChatHandlers) {
         break
       case 'citations':
         handlers.onCitations?.(data.citations)
+        break
+      case 'workflow_stage':
+        handlers.onWorkflowStage?.({
+          role: data.role,
+          sequence: data.sequence,
+          status: data.status,
+        })
         break
       case 'text':
         handlers.onText(data.text)
