@@ -1,4 +1,12 @@
-import { AlertCircle, CheckCircle2, Clock3, LoaderCircle, RefreshCw, Wrench } from 'lucide-react'
+import {
+  AlertCircle,
+  BrainCircuit,
+  CheckCircle2,
+  Clock3,
+  LoaderCircle,
+  RefreshCw,
+  Wrench,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { Badge } from '@/components/ui/badge'
@@ -154,6 +162,7 @@ function RunListItem({
       </p>
       <div className="text-muted-foreground mt-2 flex items-center gap-3 text-xs">
         <span>{run.model}</span>
+        <span>{formatWorkflow(run.workflow)}</span>
         <span>{run.toolCalls.length} tools</span>
       </div>
     </button>
@@ -183,8 +192,9 @@ function RunDetail({ isLoadingTrace, run }: { isLoadingTrace: boolean; run: RunT
           </div>
         </div>
 
-        <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
+        <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="模型" value={run.model} />
+          <Metric label="工作流" value={formatWorkflow(run.workflow)} />
           <Metric label="Tokens" value={formatTokens(run.inputTokens, run.outputTokens)} />
           <Metric label="Cost" value={run.cost == null ? '-' : `$${run.cost.toFixed(6)}`} />
         </div>
@@ -201,6 +211,18 @@ function RunDetail({ isLoadingTrace, run }: { isLoadingTrace: boolean; run: RunT
         <MessagePanel title="Assistant Message" value={run.assistantMessage?.content} />
       </div>
 
+      {run.stages.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <BrainCircuit className="text-muted-foreground size-4" aria-hidden="true" />
+            <h3 className="text-sm font-semibold">工作流阶段</h3>
+          </div>
+          {run.stages.map((stage) => (
+            <StagePanel key={stage.id} stage={stage} />
+          ))}
+        </div>
+      )}
+
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <Wrench className="text-muted-foreground size-4" aria-hidden="true" />
@@ -214,6 +236,29 @@ function RunDetail({ isLoadingTrace, run }: { isLoadingTrace: boolean; run: RunT
           run.toolCalls.map((toolCall) => <ToolCallPanel key={toolCall.id} toolCall={toolCall} />)
         )}
       </div>
+    </div>
+  )
+}
+
+function StagePanel({ stage }: { stage: RunTrace['stages'][number] }) {
+  return (
+    <div className="rounded-lg border px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <StatusIcon status={stage.status} />
+          <span className="text-sm font-medium">{formatStageRole(stage.role)}</span>
+        </div>
+        <div className="text-muted-foreground flex items-center gap-3 text-xs">
+          <span>{formatTokens(stage.inputTokens, stage.outputTokens)}</span>
+          <span>{formatDuration(stage.startedAt, stage.finishedAt)}</span>
+        </div>
+      </div>
+      {stage.output && <TraceBlock label="Output" value={stage.output} />}
+      {stage.error && (
+        <div className="border-destructive/30 bg-destructive/5 text-destructive mt-3 rounded-md border px-3 py-2 text-sm">
+          {stage.error}
+        </div>
+      )}
     </div>
   )
 }
@@ -312,6 +357,16 @@ function getStatusLabel(status: RunStatus) {
   if (status === 'failed') return 'failed'
   if (status === 'canceled') return 'canceled'
   return 'running'
+}
+
+function formatWorkflow(workflow: RunTrace['workflow']) {
+  return workflow === 'multi_agent' ? 'Multi-Agent' : 'Single Agent'
+}
+
+function formatStageRole(role: RunTrace['stages'][number]['role']) {
+  if (role === 'planner') return 'Planner'
+  if (role === 'executor') return 'Executor'
+  return 'Critic'
 }
 
 function formatJson(value: unknown) {

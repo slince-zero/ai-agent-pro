@@ -1,6 +1,6 @@
 # ai-pro-agent
 
-面向工程协作场景的 AI Agent 工作台。当前版本提供聊天式任务入口、SSE 流式输出、OpenAI-compatible 模型调用、工具调用、会话持久化和运行记录落库。
+面向工程协作场景的 AI Agent 工作台。当前版本提供聊天式任务入口、SSE 流式输出、OpenAI-compatible 模型调用、工具调用、单/多 Agent 工作流、会话持久化和运行记录落库。
 
 ![AI Engineering Agent welcome screen](docs/screenshots/ai-pro-agent-welcome.png)
 
@@ -8,7 +8,8 @@
 
 - 工程任务聊天 UI：仓库研究、代码理解、Bug 排查、重构规划等预设入口。
 - 流式 Agent 回复：后端通过 SSE 推送文本、工具调用和工具结果。
-- 会话持久化：Postgres 保存用户、会话、消息、AgentRun、ToolCall。
+- 会话持久化：Postgres 保存用户、会话、消息、AgentRun、AgentStage、ToolCall。
+- 可选多 Agent：Planner 制定计划、Executor 使用工具执行、Critic 审查并输出最终答案。
 - 内置工具：公开 GitHub 仓库元数据查询、公开网页文本读取。
 - Tool SDK：统一 Zod schema、治理元数据、取消信号和 plugin 工具集合。
 - 可选代码沙箱：在无网络、只读、受资源限制的 Docker 容器中执行 JavaScript/Python。
@@ -32,7 +33,10 @@ flowchart LR
   client -->|"REST + SSE /api/sessions"| api["Express API"]
 
   api --> sessions["Session routes"]
-  sessions --> runtime["runAgent runtime"]
+  sessions --> mode{"Workflow mode"}
+  mode -->|"single"| runtime["runAgent runtime"]
+  mode -->|"multi_agent"| multi["Planner -> Executor -> Critic"]
+  multi --> runtime
   runtime --> model["OpenAI-compatible model\nDeepSeek by default"]
   runtime --> tools["Tool registry"]
 
@@ -45,7 +49,8 @@ flowchart LR
   api -. "production static files" .-> static["client/dist"]
 ```
 
-更详细的请求时序和模块说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+更详细的请求时序和模块说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，多 Agent
+角色和协议见 [docs/MULTI_AGENT.md](docs/MULTI_AGENT.md)。
 
 ## 快速启动
 
@@ -278,6 +283,7 @@ docker run \
 - 当前没有正式鉴权，多用户部署前需要补认证和会话隔离。
 - 聊天链路为 `/api/sessions/:sessionId/messages`，支持会话持久化。
 - Docker 代码沙箱默认关闭；生产环境必须使用专用 daemon/VM，不能依赖共享宿主 socket 作为强隔离边界。
+- 多 Agent 需要 Planner、Executor、Critic 三个模型阶段，会增加首字延迟和 token 成本，默认不启用。
 - `web_fetch` 工具只做了基础协议和内容大小限制，还需要 SSRF 防护后再暴露到公网。
 - 后端测试和 CI 仍待补齐。
 

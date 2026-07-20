@@ -5,6 +5,7 @@ import type { ModelClient } from '../runtime/model-client/types.js'
 import type { ServerEvent } from '../sse/events.js'
 import type { runAgent } from './agent.js'
 import type { createMemoryService } from './memory-service.js'
+import type { runMultiAgentWorkflow } from './multi-agent.js'
 import type { createRagRetrievalService } from './rag-retrieval-service.js'
 import type { createSessionService } from './session-service.js'
 import type { createSessionSummaryService } from './session-summary-service.js'
@@ -12,7 +13,14 @@ import type { createSessionSummaryService } from './session-summary-service.js'
 process.env.OPENAI_API_KEY = 'test-api-key'
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test'
 
-const { RunStatus, SessionStatus, ToolCallStatus } = await import('../generated/prisma/client.js')
+const {
+  AgentStageRole,
+  AgentStageStatus,
+  AgentWorkflow,
+  RunStatus,
+  SessionStatus,
+  ToolCallStatus,
+} = await import('../generated/prisma/client.js')
 const { createChatService } = await import('./chat-service.js')
 const { createCitationService } = await import('./citation-service.js')
 
@@ -200,6 +208,35 @@ const runAgentWithFailedTool: typeof runAgent = async ({ onEvent }) => {
     error: 'network unavailable',
   })
   return { inputTokens: 1, outputTokens: 2 }
+}
+
+const runMultiAgentWorkflowFn: typeof runMultiAgentWorkflow = async ({ onEvent, onStageEvent }) => {
+  await onStageEvent({ role: 'planner', sequence: 0, status: 'running' })
+  await onStageEvent({
+    role: 'planner',
+    sequence: 0,
+    status: 'completed',
+    output: 'Plan',
+    usage: { inputTokens: 1, outputTokens: 2 },
+  })
+  await onStageEvent({ role: 'executor', sequence: 1, status: 'running' })
+  await onStageEvent({
+    role: 'executor',
+    sequence: 1,
+    status: 'completed',
+    output: 'Draft',
+    usage: { inputTokens: 3, outputTokens: 4 },
+  })
+  await onStageEvent({ role: 'critic', sequence: 2, status: 'running' })
+  await onEvent({ type: 'text', text: 'Reviewed answer' })
+  await onStageEvent({
+    role: 'critic',
+    sequence: 2,
+    status: 'completed',
+    output: 'Reviewed answer',
+    usage: { inputTokens: 5, outputTokens: 6 },
+  })
+  return { inputTokens: 9, outputTokens: 12 }
 }
 
 test('emits run_id before streamed agent events', async () => {
@@ -488,4 +525,84 @@ test('persists failed tool results with duration and error details', async () =>
     durationMs: 123,
     error: 'network unavailable',
   })
+})
+
+test('persists multi-agent workflow stages without changing the single-agent default', async () => {
+  const runCreates: unknown[] = []
+  const stageCreates: unknown[] = []
+  const stageUpdates: unknown[] = []
+  const fakeDb = {
+    agentRun: {
+      create: async (args: unknown) => {
+        runCreates.push(args)
+        return { id: 'run_multi' }
+      },
+      update: async () => ({ id: 'run_multi' }),
+    },
+    agentStage: {
+      create: async (args: unknown) => {
+        stageCreates.push(args)
+        return { id: `stage_${stageCreates.length}` }
+      },
+      update: async (args: unknown) => {
+        stageUpdates.push(args)
+        return { id: `stage_${stageUpdates.length}` }
+      },
+    },
+    toolCall: {
+      create: async () => ({ id: 'tool_1' }),
+      update: async () => ({ id: 'tool_1' }),
+    },
+  }
+  const service = createChatService({
+    db: fakeDb,
+    model: 'test-model',
+    calculateRunCost: () => 0.002,
+    runMultiAgentWorkflowFn,
+    sessionService: createFakeSessionService(),
+    memoryService: createFakeMemoryService(),
+    ragRetrievalService: createFakeRagRetrievalService(),
+    summaryService: createFakeSummaryService(),
+    citationService: createFakeCitationService(),
+  })
+  const events: ServerEvent[] = []
+
+  const result = await service.sendMessage({
+    content: 'Handle a complex task',
+    modelClient: {} as ModelClient,
+    session,
+    signal: new AbortController().signal,
+    workflow: 'multi_agent',
+    onEvent: (event) => {
+      events.push(event)
+    },
+  })
+
+  assert.deepEqual(runCreates[0], {
+    data: {
+      sessionId: 'session_1',
+      userMessageId: 'msg_user',
+      model: 'test-model',
+      workflow: AgentWorkflow.MULTI_AGENT,
+    },
+  })
+  assert.deepEqual(
+    stageCreates.map((item) => (item as { data: unknown }).data),
+    [
+      { runId: 'run_multi', sequence: 0, role: AgentStageRole.PLANNER },
+      { runId: 'run_multi', sequence: 1, role: AgentStageRole.EXECUTOR },
+      { runId: 'run_multi', sequence: 2, role: AgentStageRole.CRITIC },
+    ],
+  )
+  assert.equal(stageUpdates.length, 3)
+  assert.equal(
+    (stageUpdates[2] as { data: { status: string } }).data.status,
+    AgentStageStatus.COMPLETED,
+  )
+  assert.equal((stageUpdates[2] as { data: { output: string } }).data.output, 'Reviewed answer')
+  assert.deepEqual(result, { inputTokens: 9, outputTokens: 12, cost: 0.002 })
+  assert.deepEqual(events.slice(0, 2), [
+    { type: 'run_id', runId: 'run_multi' },
+    { type: 'text', text: 'Reviewed answer' },
+  ])
 })

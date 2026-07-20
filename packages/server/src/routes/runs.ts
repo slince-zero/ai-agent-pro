@@ -1,7 +1,14 @@
 import { Router } from 'express'
 
 import { prisma } from '../db/client.js'
-import type { AgentRun, Message, Session, ToolCall, User } from '../generated/prisma/client.js'
+import type {
+  AgentRun,
+  AgentStage,
+  Message,
+  Session,
+  ToolCall,
+  User,
+} from '../generated/prisma/client.js'
 import { getCurrentUser } from '../services/users.js'
 
 const DEFAULT_RUN_LIMIT = 30
@@ -38,10 +45,26 @@ type ToolCallTrace = Pick<
   | 'finishedAt'
 >
 
+type AgentStageTrace = Pick<
+  AgentStage,
+  | 'id'
+  | 'sequence'
+  | 'role'
+  | 'status'
+  | 'error'
+  | 'inputTokens'
+  | 'outputTokens'
+  | 'startedAt'
+  | 'finishedAt'
+> & {
+  output?: string | null
+}
+
 type RunWithRelations = AgentRun & {
   session: Pick<Session, 'id' | 'title'>
   userMessage: MessageTrace | null
   assistantMessage: MessageTrace | null
+  stages: AgentStageTrace[]
   toolCalls: ToolCallTrace[]
 }
 
@@ -121,6 +144,21 @@ function serializeToolCall(toolCall: ToolCallTrace) {
   }
 }
 
+function serializeStage(stage: AgentStageTrace) {
+  return {
+    id: stage.id,
+    sequence: stage.sequence,
+    role: toLowerStatus(stage.role),
+    status: toLowerStatus(stage.status),
+    output: stage.output ?? null,
+    error: stage.error,
+    inputTokens: stage.inputTokens,
+    outputTokens: stage.outputTokens,
+    startedAt: stage.startedAt.toISOString(),
+    finishedAt: toIsoString(stage.finishedAt),
+  }
+}
+
 function serializeRun(run: RunWithRelations) {
   const userMessage = serializeMessage(run.userMessage)
   const assistantMessage = serializeMessage(run.assistantMessage)
@@ -132,6 +170,7 @@ function serializeRun(run: RunWithRelations) {
       title: run.session.title,
     },
     status: toLowerStatus(run.status),
+    workflow: toLowerStatus(run.workflow),
     model: run.model,
     error: run.error,
     inputTokens: run.inputTokens,
@@ -141,6 +180,7 @@ function serializeRun(run: RunWithRelations) {
     finishedAt: toIsoString(run.finishedAt),
     userMessage,
     assistantMessage,
+    stages: run.stages.map(serializeStage),
     toolCalls: run.toolCalls.map(serializeToolCall),
   }
 }
@@ -162,6 +202,7 @@ function serializeRunSummary(run: RunWithRelations) {
           content: serialized.assistantMessage.preview,
         }
       : null,
+    stages: serialized.stages.map(({ output: _output, ...stage }) => stage),
     toolCalls: serialized.toolCalls.map((toolCall) => ({
       id: toolCall.id,
       toolCallId: toolCall.toolCallId,
@@ -204,6 +245,22 @@ export function createRunsRouter({
           },
           userMessage: true,
           assistantMessage: true,
+          stages: {
+            orderBy: {
+              sequence: 'asc',
+            },
+            select: {
+              id: true,
+              sequence: true,
+              role: true,
+              status: true,
+              error: true,
+              inputTokens: true,
+              outputTokens: true,
+              startedAt: true,
+              finishedAt: true,
+            },
+          },
           toolCalls: {
             orderBy: {
               startedAt: 'asc',
@@ -238,6 +295,11 @@ export function createRunsRouter({
           },
           userMessage: true,
           assistantMessage: true,
+          stages: {
+            orderBy: {
+              sequence: 'asc',
+            },
+          },
           toolCalls: {
             orderBy: {
               startedAt: 'asc',

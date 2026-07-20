@@ -4,7 +4,14 @@ import { after, before, test } from 'node:test'
 
 import express from 'express'
 
-import { MessageRole, RunStatus, ToolCallStatus } from '../generated/prisma/client.js'
+import {
+  AgentStageRole,
+  AgentStageStatus,
+  AgentWorkflow,
+  MessageRole,
+  RunStatus,
+  ToolCallStatus,
+} from '../generated/prisma/client.js'
 
 process.env.OPENAI_API_KEY = 'test-api-key'
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test'
@@ -19,6 +26,7 @@ const traceRun = {
   sessionId: 'session_1',
   userMessageId: 'msg_user',
   assistantMessageId: 'msg_assistant',
+  workflow: AgentWorkflow.MULTI_AGENT,
   status: RunStatus.COMPLETED,
   model: 'deepseek-chat',
   error: null,
@@ -43,6 +51,21 @@ const traceRun = {
     content: 'Here is a trace summary.',
     createdAt: finishedAt,
   },
+  stages: [
+    {
+      id: 'stage_1',
+      runId: 'run_1',
+      sequence: 0,
+      role: AgentStageRole.PLANNER,
+      status: AgentStageStatus.COMPLETED,
+      output: 'Inspect the trace, then answer.',
+      error: null,
+      inputTokens: 20,
+      outputTokens: 10,
+      startedAt,
+      finishedAt: new Date('2026-06-17T06:00:01.000Z'),
+    },
+  ],
   toolCalls: [
     {
       id: 'tool_1',
@@ -115,18 +138,23 @@ test('lists recent runs with summaries and preview-only tool calls', async () =>
   const run = body.runs[0] as {
     id: string
     status: string
+    workflow: string
     session: { title: string }
     userMessage: { content: string }
     assistantMessage: { content: string }
     toolCalls: JsonObject[]
+    stages: JsonObject[]
   }
 
   assert.equal(run.id, 'run_1')
   assert.equal(run.status, 'completed')
+  assert.equal(run.workflow, 'multi_agent')
   assert.equal(run.session.title, 'Trace session')
   assert.equal(run.userMessage.content, 'Explain the trace')
   assert.equal(run.assistantMessage.content, 'Here is a trace summary.')
   assert.equal(run.toolCalls.length, 1)
+  assert.equal(run.stages.length, 1)
+  assert.equal('output' in run.stages[0]!, false)
   assert.equal('resultPreview' in run.toolCalls[0]!, false)
   assert.equal((run.toolCalls[0] as { durationMs?: number }).durationMs, 1234)
 })
@@ -138,6 +166,8 @@ test('returns run detail with messages, usage and truncated tool result', async 
     inputTokens: number
     outputTokens: number
     cost: number
+    workflow: string
+    stages: { role: string; status: string; output: string }[]
     toolCalls: {
       arguments: { long: string }
       resultPreview: string
@@ -149,6 +179,19 @@ test('returns run detail with messages, usage and truncated tool result', async 
   assert.equal(run.inputTokens, 100)
   assert.equal(run.outputTokens, 50)
   assert.equal(run.cost, 0.000123)
+  assert.equal(run.workflow, 'multi_agent')
+  assert.deepEqual(run.stages[0], {
+    id: 'stage_1',
+    sequence: 0,
+    role: 'planner',
+    status: 'completed',
+    output: 'Inspect the trace, then answer.',
+    error: null,
+    inputTokens: 20,
+    outputTokens: 10,
+    startedAt: startedAt.toISOString(),
+    finishedAt: '2026-06-17T06:00:01.000Z',
+  })
   assert.equal(run.toolCalls[0]?.arguments.long.length, 503)
   assert.equal(run.toolCalls[0]?.durationMs, 1234)
   assert.equal(run.toolCalls[0]?.resultPreview.endsWith('...'), true)

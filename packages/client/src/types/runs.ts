@@ -1,4 +1,6 @@
 export type RunStatus = 'running' | 'completed' | 'failed' | 'canceled'
+export type RunWorkflow = 'single' | 'multi_agent'
+export type AgentStageRole = 'planner' | 'executor' | 'critic'
 
 export type RunMessage = {
   id: string
@@ -20,6 +22,19 @@ export type RunToolCall = {
   finishedAt: string | null
 }
 
+export type RunStage = {
+  id: string
+  sequence: number
+  role: AgentStageRole
+  status: RunStatus
+  output?: string | null
+  error: string | null
+  inputTokens: number | null
+  outputTokens: number | null
+  startedAt: string
+  finishedAt: string | null
+}
+
 export type RunTrace = {
   id: string
   session: {
@@ -27,6 +42,7 @@ export type RunTrace = {
     title: string
   }
   status: RunStatus
+  workflow: RunWorkflow
   model: string
   error: string | null
   inputTokens: number | null
@@ -36,5 +52,6 @@ export type RunTrace = {
   finishedAt: string | null
   userMessage: RunMessage | null
   assistantMessage: RunMessage | null
+  stages: RunStage[]
   toolCalls: RunToolCall[]
 }
