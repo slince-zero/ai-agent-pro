@@ -10,6 +10,12 @@ export type ServerEvent = ServerEventMeta &
   (
     | { type: 'run_id'; runId: string }
     | { type: 'citations'; citations: Citation[] }
+    | {
+        type: 'workflow_stage'
+        role: 'planner' | 'executor' | 'critic'
+        sequence: number
+        status: 'running' | 'completed' | 'failed' | 'canceled'
+      }
     | { type: 'text'; text: string }
     | { type: 'tool_call'; toolCallId: string; name: string; args: unknown }
     | {

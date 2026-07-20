@@ -6,6 +6,7 @@ export type Message = {
   content: string
   citations?: Citation[]
   toolEvents?: ToolEvent[]
+  workflowStage?: WorkflowStage
   createdAt?: string
   usage?: {
     inputTokens: number
@@ -35,6 +36,12 @@ export type ToolEvent = {
   preview?: string
 }
 
+export type WorkflowStage = {
+  role: 'planner' | 'executor' | 'critic'
+  sequence: number
+  status: 'running' | 'completed' | 'failed' | 'canceled'
+}
+
 type ServerEventMeta = {
   eventId?: string
 }
@@ -43,6 +50,7 @@ export type ServerEvent = ServerEventMeta &
   (
     | { type: 'run_id'; runId: string }
     | { type: 'citations'; citations: Citation[] }
+    | ({ type: 'workflow_stage' } & WorkflowStage)
     | { type: 'text'; text: string }
     | { type: 'tool_call'; toolCallId: string; name: string; args: unknown }
     | {
