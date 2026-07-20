@@ -292,6 +292,12 @@ export function createChatService({
           },
         })
         stageIds.set(event.role, stage.id)
+        await onEvent({
+          type: 'workflow_stage',
+          role: event.role,
+          sequence: event.sequence,
+          status: event.status,
+        })
         return
       }
 
@@ -310,6 +316,12 @@ export function createChatService({
           outputTokens: event.usage?.outputTokens,
           finishedAt: new Date(),
         },
+      })
+      await onEvent({
+        type: 'workflow_stage',
+        role: event.role,
+        sequence: event.sequence,
+        status: event.status,
       })
     }
 

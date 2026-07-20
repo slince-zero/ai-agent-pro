@@ -97,7 +97,7 @@ export function ChatComposer({
                   title={
                     option.value === 'single'
                       ? '单次 Agent 工具循环'
-                      : 'Planner、Executor、Critic 三阶段工作流'
+                      : 'Planner、Executor、Critic 串行执行，等待最终答案时会显示阶段进度'
                   }
                   type="button"
                   onClick={() => onWorkflowChange(option.value)}

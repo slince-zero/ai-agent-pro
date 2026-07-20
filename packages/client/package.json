@@ -10,7 +10,7 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "lint": "oxlint",
-    "test": "node -e \"console.log('No tests configured yet')\"",
+    "test": "node --import tsx --test $(find src -name '*.test.ts' 2>/dev/null)",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -31,6 +31,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "tsx": "^4.21.0",
     "typescript": "~6.0.2",
     "vite": "^8.0.10"
   }

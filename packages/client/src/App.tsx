@@ -15,7 +15,7 @@ import {
   fetchSessions,
   renameSession,
 } from '@/lib/sessions'
-import type { ChatSession, Citation, Message, WorkflowMode } from '@/types/chat'
+import type { ChatSession, Citation, Message, WorkflowMode, WorkflowStage } from '@/types/chat'
 
 export default function App() {
   const [activeView, setActiveView] = useState<'chat' | 'runs'>('chat')
@@ -258,6 +258,22 @@ export default function App() {
     })
   }, [])
 
+  const setLastAssistantWorkflowStage = useCallback((workflowStage: WorkflowStage) => {
+    setMessages((prev) => {
+      const copy = [...prev]
+      const last = copy[copy.length - 1]
+
+      if (!last || last.role !== 'assistant') return prev
+
+      copy[copy.length - 1] = {
+        ...last,
+        workflowStage,
+      }
+
+      return copy
+    })
+  }, [])
+
   const selectSession = useCallback(
     async (sessionId: string) => {
       if (isSending || sessionId === activeSessionId) return
@@ -314,6 +330,7 @@ export default function App() {
         {
           onText: appendLastAssistant,
           onCitations: setLastAssistantCitations,
+          onWorkflowStage: setLastAssistantWorkflowStage,
           onToolCall: appendToolCall,
           onToolResult: completeToolCall,
           onUsage: setLastAssistantUsage,
@@ -343,6 +360,7 @@ export default function App() {
     isSending,
     refreshSessions,
     setLastAssistantCitations,
+    setLastAssistantWorkflowStage,
     setLastAssistantUsage,
     updateLastAssistant,
     workflow,
@@ -370,6 +388,7 @@ export default function App() {
         content: '',
         citations: undefined,
         toolEvents: [],
+        workflowStage: undefined,
         usage: undefined,
       }
 
@@ -383,6 +402,7 @@ export default function App() {
         {
           onText: appendLastAssistant,
           onCitations: setLastAssistantCitations,
+          onWorkflowStage: setLastAssistantWorkflowStage,
           onToolCall: appendToolCall,
           onToolResult: completeToolCall,
           onUsage: setLastAssistantUsage,
@@ -412,6 +432,7 @@ export default function App() {
     messages,
     refreshSessions,
     setLastAssistantCitations,
+    setLastAssistantWorkflowStage,
     setLastAssistantUsage,
     updateLastAssistant,
     workflow,
