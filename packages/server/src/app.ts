@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 
+import { toNodeHandler } from 'better-auth/node'
 import cors from 'cors'
 import express from 'express'
 import { pinoHttp } from 'pino-http'
 
+import { auth, parseTrustedOrigins } from './auth.js'
 import { env } from './env.js'
 import { logger } from './logger.js'
 import { createRunsRouter } from './routes/runs.js'
@@ -39,10 +41,12 @@ export function createApp() {
 
   app.use(
     cors({
-      origin: env.NODE_ENV !== 'production',
+      origin: env.NODE_ENV !== 'production' ? true : parseTrustedOrigins(env.AUTH_TRUSTED_ORIGINS),
+      credentials: true,
     }),
   )
 
+  app.all('/api/auth/*splat', toNodeHandler(auth))
   app.use(express.json())
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true })
