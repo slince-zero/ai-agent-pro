@@ -19,9 +19,18 @@ const createSessionSchema = z
   })
   .strict()
 
+const workflowSchema = z.enum(['single', 'multi_agent'])
+
 const createMessageSchema = z
   .object({
     content: z.string().trim().min(1).max(30_000),
+    workflow: workflowSchema.optional(),
+  })
+  .strict()
+
+const regenerateMessageSchema = z
+  .object({
+    workflow: workflowSchema.optional(),
   })
   .strict()
 
@@ -154,6 +163,7 @@ export function createSessionsRouter({
         session,
         signal: controller.signal,
         logger: req.log,
+        workflow: parsed.data.workflow,
         onEvent: async (event) => {
           if (!controller.signal.aborted && !res.writableEnded) {
             sse.write(event)
@@ -189,6 +199,11 @@ export function createSessionsRouter({
   })
 
   router.post('/:sessionId/regenerate', async (req, res) => {
+    const parsed = regenerateMessageSchema.safeParse(req.body ?? {})
+    if (!parsed.success) {
+      return res.status(400).json({ error: '重新生成参数无效' })
+    }
+
     const user = await getCurrentUser()
     const session = await sessionService.getActiveSession(user.id, req.params.sessionId)
 
@@ -218,6 +233,7 @@ export function createSessionsRouter({
         target,
         signal: controller.signal,
         logger: req.log,
+        workflow: parsed.data.workflow,
         onEvent: async (event) => {
           if (!controller.signal.aborted && !res.writableEnded) {
             sse.write(event)

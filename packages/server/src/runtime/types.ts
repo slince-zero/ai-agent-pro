@@ -24,12 +24,15 @@ export type AgentUsage = {
   outputTokens: number
 }
 
+export type AgentWorkflowMode = 'single' | 'multi_agent'
+
 export type RunAgentOptions = {
   modelClient: ModelClient
   messages: ClientMessage[]
   onEvent: (event: AgentEvent) => void | Promise<void>
   signal: AbortSignal
   logger?: pino.Logger
+  systemPrompt?: string
 }
 
 export type ToolCallAccumulator = {

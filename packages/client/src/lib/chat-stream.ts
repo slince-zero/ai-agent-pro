@@ -1,4 +1,4 @@
-import type { ServerEvent } from '@/types/chat'
+import type { ServerEvent, WorkflowMode } from '@/types/chat'
 
 type StreamChatHandlers = {
   onCitations?: (citations: ServerEventCitations) => void
@@ -18,6 +18,7 @@ type StreamChatOptions = {
 export async function streamChatResponse(
   sessionId: string,
   content: string,
+  workflow: WorkflowMode,
   handlers: StreamChatHandlers,
   options: StreamChatOptions = {},
 ) {
@@ -25,6 +26,7 @@ export async function streamChatResponse(
     `/api/sessions/${sessionId}/messages`,
     {
       content,
+      workflow,
     },
     handlers,
     options,
@@ -33,10 +35,16 @@ export async function streamChatResponse(
 
 export async function streamRegeneratedResponse(
   sessionId: string,
+  workflow: WorkflowMode,
   handlers: StreamChatHandlers,
   options: StreamChatOptions = {},
 ) {
-  await streamSessionResponse(`/api/sessions/${sessionId}/regenerate`, undefined, handlers, options)
+  await streamSessionResponse(
+    `/api/sessions/${sessionId}/regenerate`,
+    { workflow },
+    handlers,
+    options,
+  )
 }
 
 async function streamSessionResponse(

@@ -1,17 +1,30 @@
 import type pino from 'pino'
 
 import { prisma } from '../db/client.js'
-import { Prisma, RunStatus, ToolCallStatus } from '../generated/prisma/client.js'
+import {
+  AgentStageRole,
+  AgentStageStatus,
+  AgentWorkflow,
+  Prisma,
+  RunStatus,
+  ToolCallStatus,
+} from '../generated/prisma/client.js'
 import {
   type ContextBuilder,
   type RetrievalContextItem,
   createContextBuilder,
 } from '../runtime/context-builder.js'
 import type { ModelClient } from '../runtime/model-client/types.js'
+import type { AgentEvent, AgentWorkflowMode } from '../runtime/types.js'
 import type { ServerEvent } from '../sse/events.js'
 import { runAgent } from './agent.js'
 import { type Citation, type CitationService, createCitationService } from './citation-service.js'
 import { type MemoryService, createMemoryService } from './memory-service.js'
+import {
+  type MultiAgentStageEvent,
+  type MultiAgentStageRole,
+  runMultiAgentWorkflow,
+} from './multi-agent.js'
 import { MODEL } from './openai.js'
 import { calculateCost } from './pricing.js'
 import { type RagRetrievalService, createRagRetrievalService } from './rag-retrieval-service.js'
@@ -33,10 +46,18 @@ type ToolCallRecord = {
   id: string
 }
 
+type AgentStageRecord = {
+  id: string
+}
+
 type ChatServiceDb = {
   agentRun: {
     create: (args: unknown) => Promise<AgentRunRecord>
     update: (args: unknown) => Promise<AgentRunRecord>
+  }
+  agentStage?: {
+    create: (args: unknown) => Promise<AgentStageRecord>
+    update: (args: unknown) => Promise<AgentStageRecord>
   }
   toolCall: {
     create: (args: unknown) => Promise<ToolCallRecord>
@@ -47,6 +68,7 @@ type ChatServiceDb = {
 type ChatClientEvent = Exclude<ServerEvent, { type: 'usage' } | { type: 'done' }>
 
 type RunAgentFn = typeof runAgent
+type RunMultiAgentWorkflowFn = typeof runMultiAgentWorkflow
 
 type SessionService = ReturnType<typeof createSessionService>
 
@@ -55,6 +77,7 @@ type ChatServiceDeps = {
   model?: string
   calculateRunCost?: typeof calculateCost
   runAgentFn?: RunAgentFn
+  runMultiAgentWorkflowFn?: RunMultiAgentWorkflowFn
   sessionService?: SessionService
   contextBuilder?: ContextBuilder
   citationService?: CitationService
@@ -70,6 +93,7 @@ type SendMessageInput = {
   signal: AbortSignal
   logger?: pino.Logger
   onEvent: (event: ChatClientEvent) => void | Promise<void>
+  workflow?: AgentWorkflowMode
 }
 
 type SendMessageResult = {
@@ -96,11 +120,25 @@ function toJsonValue(value: unknown) {
   return value === undefined ? Prisma.JsonNull : (value as Prisma.InputJsonValue)
 }
 
+function toAgentStageRole(role: MultiAgentStageRole) {
+  if (role === 'planner') return AgentStageRole.PLANNER
+  if (role === 'executor') return AgentStageRole.EXECUTOR
+  return AgentStageRole.CRITIC
+}
+
+function toAgentStageStatus(status: MultiAgentStageEvent['status']) {
+  if (status === 'completed') return AgentStageStatus.COMPLETED
+  if (status === 'failed') return AgentStageStatus.FAILED
+  if (status === 'canceled') return AgentStageStatus.CANCELED
+  return AgentStageStatus.RUNNING
+}
+
 export function createChatService({
   db = prisma as unknown as ChatServiceDb,
   model = MODEL,
   calculateRunCost = calculateCost,
   runAgentFn = runAgent,
+  runMultiAgentWorkflowFn = runMultiAgentWorkflow,
   sessionService = createSessionService(),
   memoryService = createMemoryService(),
   ragRetrievalService = createRagRetrievalService(),
@@ -151,12 +189,14 @@ export function createChatService({
     logger,
     onEvent,
     userMessageId,
+    workflow = 'single',
   }: RunAssistantTurnInput): Promise<SendMessageResult> => {
     const run = await db.agentRun.create({
       data: {
         sessionId: session.id,
         userMessageId,
         model,
+        ...(workflow === 'multi_agent' ? { workflow: AgentWorkflow.MULTI_AGENT } : {}),
       },
     })
 
@@ -164,11 +204,114 @@ export function createChatService({
 
     const runLogger = logger?.child({ sessionId: session.id, runId: run.id })
     const toolCallIds = new Map<string, string>()
+    const stageIds = new Map<MultiAgentStageRole, string>()
     let assistantText = ''
     let runError: string | null = null
     let inputTokens = 0
     let outputTokens = 0
     let retrievalItems: RetrievalContextItem[] = []
+
+    const handleAgentEvent = async (event: AgentEvent) => {
+      if (event.type === 'text') {
+        assistantText += event.text
+        await onEvent(event)
+        return
+      }
+
+      if (event.type === 'tool_call') {
+        const toolCall = await db.toolCall.create({
+          data: {
+            runId: run.id,
+            toolCallId: event.toolCallId,
+            name: event.name,
+            arguments: toJsonValue(event.args),
+          },
+        })
+        toolCallIds.set(event.toolCallId, toolCall.id)
+        await onEvent(event)
+        return
+      }
+
+      if (event.type === 'tool_result') {
+        const id = toolCallIds.get(event.toolCallId)
+        if (id) {
+          await db.toolCall.update({
+            where: {
+              id,
+            },
+            data: {
+              result: event.result,
+              status: toToolCallStatus(event.status),
+              error: event.error ?? null,
+              durationMs: event.durationMs,
+              finishedAt: new Date(),
+            },
+          })
+        } else {
+          await db.toolCall.create({
+            data: {
+              runId: run.id,
+              toolCallId: event.toolCallId,
+              name: event.name,
+              result: event.result,
+              status: toToolCallStatus(event.status),
+              error: event.error ?? null,
+              durationMs: event.durationMs,
+              finishedAt: new Date(),
+            },
+          })
+        }
+
+        await onEvent({
+          type: 'tool_result',
+          toolCallId: event.toolCallId,
+          name: event.name,
+          preview: event.preview,
+          status: event.status,
+          durationMs: event.durationMs,
+          error: event.error,
+        })
+        return
+      }
+
+      runError = event.error
+      await onEvent(event)
+    }
+
+    const handleStageEvent = async (event: MultiAgentStageEvent) => {
+      if (!db.agentStage) {
+        throw new Error('Agent stage persistence is unavailable.')
+      }
+
+      if (event.status === 'running') {
+        const stage = await db.agentStage.create({
+          data: {
+            runId: run.id,
+            sequence: event.sequence,
+            role: toAgentStageRole(event.role),
+          },
+        })
+        stageIds.set(event.role, stage.id)
+        return
+      }
+
+      const stageId = stageIds.get(event.role)
+      if (!stageId) {
+        throw new Error(`Agent stage ${event.role} was not started.`)
+      }
+
+      await db.agentStage.update({
+        where: { id: stageId },
+        data: {
+          status: toAgentStageStatus(event.status),
+          output: event.output,
+          error: event.error ?? null,
+          inputTokens: event.usage?.inputTokens,
+          outputTokens: event.usage?.outputTokens,
+          finishedAt: new Date(),
+        },
+      })
+    }
 
     try {
       const context = await resolvedContextBuilder.buildContext({
@@ -179,78 +322,20 @@ export function createChatService({
         signal,
       })
       retrievalItems = context.retrievalItems
-      const usage = await runAgentFn({
+      const agentOptions = {
         modelClient,
         messages: context.messages,
         signal,
         logger: runLogger,
-        onEvent: async (event) => {
-          if (event.type === 'text') {
-            assistantText += event.text
-            await onEvent(event)
-            return
-          }
-
-          if (event.type === 'tool_call') {
-            const toolCall = await db.toolCall.create({
-              data: {
-                runId: run.id,
-                toolCallId: event.toolCallId,
-                name: event.name,
-                arguments: toJsonValue(event.args),
-              },
+        onEvent: handleAgentEvent,
+      }
+      const usage =
+        workflow === 'multi_agent'
+          ? await runMultiAgentWorkflowFn({
+              ...agentOptions,
+              onStageEvent: handleStageEvent,
             })
-            toolCallIds.set(event.toolCallId, toolCall.id)
-            await onEvent(event)
-            return
-          }
-
-          if (event.type === 'tool_result') {
-            const id = toolCallIds.get(event.toolCallId)
-            if (id) {
-              await db.toolCall.update({
-                where: {
-                  id,
-                },
-                data: {
-                  result: event.result,
-                  status: toToolCallStatus(event.status),
-                  error: event.error ?? null,
-                  durationMs: event.durationMs,
-                  finishedAt: new Date(),
-                },
-              })
-            } else {
-              await db.toolCall.create({
-                data: {
-                  runId: run.id,
-                  toolCallId: event.toolCallId,
-                  name: event.name,
-                  result: event.result,
-                  status: toToolCallStatus(event.status),
-                  error: event.error ?? null,
-                  durationMs: event.durationMs,
-                  finishedAt: new Date(),
-                },
-              })
-            }
-
-            await onEvent({
-              type: 'tool_result',
-              toolCallId: event.toolCallId,
-              name: event.name,
-              preview: event.preview,
-              status: event.status,
-              durationMs: event.durationMs,
-              error: event.error,
-            })
-            return
-          }
-
-          runError = event.error
-          await onEvent(event)
-        },
-      })
+          : await runAgentFn(agentOptions)
 
       inputTokens = usage.inputTokens
       outputTokens = usage.outputTokens

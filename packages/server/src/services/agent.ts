@@ -14,8 +14,9 @@ export async function runAgent({
   onEvent,
   signal,
   logger,
+  systemPrompt,
 }: RunAgentOptions): Promise<AgentUsage> {
-  const conversation = buildAgentConversation(messages)
+  const conversation = buildAgentConversation(messages, systemPrompt)
   const tools = await getModelTools(logger)
   let totalInputTokens = 0
   let totalOutputTokens = 0

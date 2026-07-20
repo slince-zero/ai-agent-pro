@@ -72,3 +72,5 @@ export type ChatSession = {
   createdAt: string
   updatedAt: string
 }
+
+export type WorkflowMode = 'single' | 'multi_agent'
