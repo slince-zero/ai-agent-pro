@@ -10,7 +10,7 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "lint": "oxlint",
-    "test": "node --import tsx --test $(find src -name '*.test.ts' 2>/dev/null)",
+    "test": "TSX_TSCONFIG_PATH=tsconfig.app.json node --import tsx --test $(find src -name '*.test.ts' 2>/dev/null)",
     "preview": "vite preview"
   },
   "dependencies": {

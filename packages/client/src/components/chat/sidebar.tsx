@@ -1,7 +1,9 @@
 import { Activity, Bot, MessageSquareText, Pencil, Plus, Trash2 } from 'lucide-react'
 
+import { AccountMenu } from '@/components/auth/account-menu'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import type { AuthUser } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 import type { ChatSession, PromptPreset } from '@/types/chat'
 
@@ -12,12 +14,14 @@ type SidebarProps = {
   isLoadingMessages: boolean
   presets?: PromptPreset[]
   sessions: ChatSession[]
+  user: AuthUser
   onNewChat: () => void
   onDeleteSession: (sessionId: string) => void
   onRenameSession: (session: ChatSession) => void
   onSelectRuns: () => void
   onSelectPrompt?: (prompt: string) => void
   onSelectSession: (sessionId: string) => void
+  onSignOut: () => Promise<void>
 }
 
 export function Sidebar({
@@ -26,11 +30,13 @@ export function Sidebar({
   isSending,
   isLoadingMessages,
   sessions,
+  user,
   onNewChat,
   onDeleteSession,
   onRenameSession,
   onSelectRuns,
   onSelectSession,
+  onSignOut,
 }: SidebarProps) {
   return (
     <aside className="bg-muted/30 hidden h-svh min-w-0 flex-col border-r md:flex">
@@ -142,16 +148,7 @@ export function Sidebar({
       </div>
 
       <div className="mt-auto border-t px-3 py-3">
-        <div className="bg-background flex items-center justify-between rounded-xl px-3 py-2 text-xs shadow-xs">
-          <span className="text-muted-foreground">本地 API</span>
-          <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
-            <span
-              className={cn('size-1.5 rounded-full bg-emerald-500', isSending && 'animate-pulse')}
-              aria-hidden="true"
-            />
-            {isSending ? '生成中' : '待命'}
-          </span>
-        </div>
+        <AccountMenu onSignOut={onSignOut} user={user} />
       </div>
     </aside>
   )
