@@ -44,6 +44,10 @@ const envSchema = z
       .optional(),
     BETTER_AUTH_URL: z.url('BETTER_AUTH_URL 必须是有效的 URL').optional(),
     AUTH_TRUSTED_ORIGINS: z.string().trim().optional(),
+    AUTH_APP_URL: z.url('AUTH_APP_URL 必须是有效的 URL').optional(),
+    AUTH_EMAIL_PROVIDER: z.enum(['console', 'resend']).default('console'),
+    AUTH_EMAIL_FROM: z.string().trim().min(1).optional(),
+    RESEND_API_KEY: z.string().trim().min(1).optional(),
   })
   .superRefine((value, context) => {
     if (value.NODE_ENV !== 'production') return
@@ -61,6 +65,30 @@ const envSchema = z
         code: 'custom',
         path: ['BETTER_AUTH_URL'],
         message: '生产环境必须设置 BETTER_AUTH_URL',
+      })
+    }
+
+    if (value.AUTH_EMAIL_PROVIDER !== 'resend') {
+      context.addIssue({
+        code: 'custom',
+        path: ['AUTH_EMAIL_PROVIDER'],
+        message: '生产环境必须使用 resend 邮件 provider',
+      })
+    }
+
+    if (!value.AUTH_EMAIL_FROM) {
+      context.addIssue({
+        code: 'custom',
+        path: ['AUTH_EMAIL_FROM'],
+        message: '生产环境必须设置 AUTH_EMAIL_FROM',
+      })
+    }
+
+    if (!value.RESEND_API_KEY) {
+      context.addIssue({
+        code: 'custom',
+        path: ['RESEND_API_KEY'],
+        message: '生产环境必须设置 RESEND_API_KEY',
       })
     }
   })

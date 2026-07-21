@@ -8,10 +8,12 @@ import { AccountMenu } from './account-menu.tsx'
 import { AuthLoading } from './auth-loading.tsx'
 import { AuthScreen } from './auth-screen.tsx'
 
+const authenticate = async () => ({ status: 'authenticated' as const })
+
 test('renders an accessible email login entry without token storage controls', () => {
   const markup = renderToStaticMarkup(
     createElement(AuthScreen, {
-      onAuthenticate: async () => undefined,
+      onAuthenticate: authenticate,
     }),
   )
 
@@ -20,6 +22,26 @@ test('renders an accessible email login entry without token storage controls', (
   assert.match(markup, /autoComplete="email"/)
   assert.match(markup, /autoComplete="current-password"/)
   assert.doesNotMatch(markup, /token|localStorage/i)
+})
+
+test('renders verification and password reset link states', () => {
+  const verifiedMarkup = renderToStaticMarkup(
+    createElement(AuthScreen, {
+      initialAction: { type: 'email-verified' },
+      onAuthenticate: authenticate,
+    }),
+  )
+  const resetMarkup = renderToStaticMarkup(
+    createElement(AuthScreen, {
+      initialAction: { type: 'reset-password', token: 'secret-token' },
+      onAuthenticate: authenticate,
+    }),
+  )
+
+  assert.match(verifiedMarkup, /邮箱验证完成/)
+  assert.match(resetMarkup, /设置新密码/)
+  assert.match(resetMarkup, /autoComplete="new-password"/)
+  assert.doesNotMatch(resetMarkup, /secret-token/)
 })
 
 test('renders account identity and logout in the workspace menu', () => {

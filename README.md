@@ -9,6 +9,7 @@
 - 工程任务聊天 UI：仓库研究、代码理解、Bug 排查、重构规划等预设入口。
 - 流式 Agent 回复：后端通过 SSE 推送文本、工具调用和工具结果。
 - 会话持久化：Postgres 保存用户、会话、消息、AgentRun、AgentStage、ToolCall。
+- 个人账户：邮箱注册、验证、登录、找回密码和旧会话吊销。
 - 可选多 Agent：Planner 制定计划、Executor 使用工具执行、Critic 审查并输出最终答案。
 - 内置工具：公开 GitHub 仓库元数据查询、公开网页文本读取。
 - Tool SDK：统一 Zod schema、治理元数据、取消信号和 plugin 工具集合。
@@ -50,7 +51,8 @@ flowchart LR
 ```
 
 更详细的请求时序和模块说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，多 Agent
-角色和协议见 [docs/MULTI_AGENT.md](docs/MULTI_AGENT.md)。
+角色和协议见 [docs/MULTI_AGENT.md](docs/MULTI_AGENT.md)，生产邮件配置见
+[docs/AUTH_EMAIL.md](docs/AUTH_EMAIL.md)。
 
 ## 快速启动
 
@@ -270,7 +272,11 @@ docker run \
 | `DATABASE_URL`                  | 是   | `postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent` | Prisma/Postgres 连接串。                                  |
 | `BETTER_AUTH_SECRET`            | 生产 | 开发环境内置临时值                                           | Better Auth 密钥，生产环境至少 32 字符。                  |
 | `BETTER_AUTH_URL`               | 生产 | `http://localhost:PORT`                                      | 应用对外根 URL，不包含 `/api/auth`。                      |
+| `AUTH_APP_URL`                  | 否   | 开发为 `http://localhost:5173`，生产回退到 `BETTER_AUTH_URL` | 邮件操作完成后用户返回的可信前端根 URL。                  |
 | `AUTH_TRUSTED_ORIGINS`          | 否   | 空                                                           | 额外可信前端 Origin，多个值用逗号分隔。                   |
+| `AUTH_EMAIL_PROVIDER`           | 生产 | 开发为 `console`                                             | 事务邮件 provider；生产环境必须为 `resend`。              |
+| `AUTH_EMAIL_FROM`               | 生产 | 空                                                           | Resend 已验证域名下的发件地址。                           |
+| `RESEND_API_KEY`                | 生产 | 空                                                           | Resend API Key。                                          |
 | `GITHUB_TOKEN`                  | 否   | 空                                                           | GitHub 仓库查询工具的可选 token。                         |
 | `MCP_SERVERS_JSON`              | 否   | 空                                                           | 外部 MCP server 配置 JSON，支持 `mcpServers` 对象或数组。 |
 | `CODE_SANDBOX_ENABLED`          | 否   | `false`                                                      | 是否注册 Docker `code_execute` 工具。                     |
@@ -284,13 +290,12 @@ docker run \
 
 ## 当前限制
 
-- 后端已提供 Better Auth 邮箱密码注册、登录、退出和会话接口；前端登录页与业务 API
-  会话隔离仍待接入。
+- 认证邮件当前支持开发日志捕获和 Resend；其他事务邮件 provider 尚未实现。
+- 账户维度的邮件限流存储在单个 Node.js 进程内；多实例部署前需要迁移到 Redis 等共享存储。
 - 聊天链路为 `/api/sessions/:sessionId/messages`，支持会话持久化。
 - Docker 代码沙箱默认关闭；生产环境必须使用专用 daemon/VM，不能依赖共享宿主 socket 作为强隔离边界。
 - 多 Agent 需要 Planner、Executor、Critic 三个模型阶段，会增加首字延迟和 token 成本，默认不启用。
-- `web_fetch` 工具只做了基础协议和内容大小限制，还需要 SSRF 防护后再暴露到公网。
-- 后端测试和 CI 仍待补齐。
+- `web_fetch` 会拒绝私网地址并逐跳校验重定向；生产环境仍应配合网络出口策略。
 
 ## 参与贡献
 

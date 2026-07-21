@@ -47,10 +47,11 @@ async function main() {
 
   const user = await prisma.user.upsert({
     where: { email: defaultUserEmail },
-    update: { name: 'Local Developer' },
+    update: { name: 'Local Developer', emailVerified: true },
     create: {
       id: seedIds.user,
       email: defaultUserEmail,
+      emailVerified: true,
       name: 'Local Developer',
     },
   })
