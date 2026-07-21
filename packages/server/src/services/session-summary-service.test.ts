@@ -120,10 +120,21 @@ function createFakeDb({
 }
 
 test('returns the latest summary content for context injection', async () => {
-  const { db } = createFakeDb({ latestSummary: createSummary({ content: 'Latest summary.' }) })
+  const { calls, db } = createFakeDb({
+    latestSummary: createSummary({ content: 'Latest summary.' }),
+  })
   const service = createSessionSummaryService({ db })
 
-  assert.equal(await service.getLatestSummaryContent('session_1'), 'Latest summary.')
+  assert.equal(await service.getLatestSummaryContent('user_1', 'session_1'), 'Latest summary.')
+  assert.deepEqual(calls.summaryQueries[0], {
+    where: {
+      sessionId: 'session_1',
+      session: {
+        userId: 'user_1',
+      },
+    },
+    orderBy: [{ coveredMessageCount: 'desc' }, { createdAt: 'desc' }],
+  })
 })
 
 test('skips summary generation below the message threshold', async () => {
@@ -139,12 +150,24 @@ test('skips summary generation below the message threshold', async () => {
   })
 
   const result = await service.maybeRefreshSessionSummary({
+    userId: 'user_1',
     sessionId: 'session_1',
     modelClient,
     signal: new AbortController().signal,
   })
 
   assert.deepEqual(result, { created: false, reason: 'below_threshold' })
+  assert.deepEqual(calls.counts[0], {
+    where: {
+      sessionId: 'session_1',
+      session: {
+        userId: 'user_1',
+      },
+      role: {
+        in: [MessageRole.USER, MessageRole.ASSISTANT],
+      },
+    },
+  })
   assert.equal(requests.length, 0)
   assert.equal(calls.messageQueries.length, 0)
 })
@@ -165,6 +188,7 @@ test('creates a summary for messages outside the retained recent window', async 
   })
 
   const result = await service.maybeRefreshSessionSummary({
+    userId: 'user_1',
     sessionId: 'session_1',
     modelClient,
     signal: new AbortController().signal,
@@ -178,6 +202,9 @@ test('creates a summary for messages outside the retained recent window', async 
   assert.deepEqual(calls.messageQueries[0], {
     where: {
       sessionId: 'session_1',
+      session: {
+        userId: 'user_1',
+      },
       role: {
         in: [MessageRole.USER, MessageRole.ASSISTANT],
       },
@@ -189,7 +216,12 @@ test('creates a summary for messages outside the retained recent window', async 
   })
   assert.deepEqual(calls.summaryCreates[0], {
     data: {
-      sessionId: 'session_1',
+      session: {
+        connect: {
+          id: 'session_1',
+          userId: 'user_1',
+        },
+      },
       content: 'Compact summary.',
       coveredMessageCount: 4,
       coveredThroughMessageId: 'msg_4',
@@ -211,6 +243,7 @@ test('uses the previous summary and skips when too few new messages are covered'
   })
 
   const result = await service.maybeRefreshSessionSummary({
+    userId: 'user_1',
     sessionId: 'session_1',
     modelClient,
     signal: new AbortController().signal,
@@ -234,6 +267,7 @@ test('includes the previous summary when enough new messages are summarized', as
   })
 
   await service.maybeRefreshSessionSummary({
+    userId: 'user_1',
     sessionId: 'session_1',
     modelClient,
     signal: new AbortController().signal,

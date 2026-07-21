@@ -277,7 +277,7 @@ docker run \
 | `CODE_SANDBOX_DOCKER_BINARY`    | 否   | `docker`                                                     | Docker CLI 路径或命令名。                                 |
 | `CODE_SANDBOX_JAVASCRIPT_IMAGE` | 否   | `node:22-alpine`                                             | JavaScript 沙箱固定镜像，推荐使用 digest。                |
 | `CODE_SANDBOX_PYTHON_IMAGE`     | 否   | `python:3.13-alpine`                                         | Python 沙箱固定镜像，推荐使用 digest。                    |
-| `DEFAULT_USER_EMAIL`            | 否   | `local@ai-pro-agent.dev`                                     | 仅开发和测试环境使用的本地用户标识。                      |
+| `DEFAULT_USER_EMAIL`            | 否   | `local@ai-pro-agent.dev`                                     | `db:seed` 创建示例数据时使用的用户邮箱。                  |
 | `DEFAULT_USER_PASSWORD`         | 否   | 空                                                           | `db:seed` 可选登录密码，至少 8 字符。                     |
 | `PORT`                          | 否   | `3003`                                                       | 后端监听端口。                                            |
 | `CLIENT_DIST_DIR`               | 否   | `public`                                                     | 生产模式下 Express 托管前端静态资源的位置。               |

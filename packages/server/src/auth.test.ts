@@ -33,9 +33,19 @@ before(async () => {
     secret: 'test-secret-with-at-least-32-characters',
     secureCookies: false,
   })
+  const { createRequireAuth } = await import('./middleware/auth.js')
   const app = express()
 
   app.all('/api/auth/*splat', toNodeHandler(testAuth))
+  app.use(
+    '/api/protected',
+    createRequireAuth({
+      getSession: (headers) => testAuth.api.getSession({ headers }),
+    }),
+  )
+  app.get('/api/protected', (req, res) => {
+    res.json({ userId: req.auth.user.id, email: req.auth.user.email })
+  })
   app.use(express.json())
 
   await new Promise<void>((resolve) => {
@@ -125,6 +135,14 @@ test('supports email sign-up, session lookup, sign-out and sign-in', async () =>
   assert.doesNotMatch(setCookie, /;\s*Secure/i)
 
   const cookie = sessionCookie(signUpResponse)
+  const protectedResponse = await fetch(`${baseUrl}/api/protected`, {
+    headers: { cookie },
+  })
+  const protectedBody = (await protectedResponse.json()) as { email: string; userId: string }
+  assert.equal(protectedResponse.status, 200)
+  assert.equal(protectedBody.email, 'test@example.com')
+  assert.ok(protectedBody.userId)
+
   const sessionResponse = await authRequest('/get-session', {
     headers: {
       cookie,
@@ -177,6 +195,11 @@ test('supports email sign-up, session lookup, sign-out and sign-in', async () =>
     },
   })
   assert.equal(signOutResponse.status, 200)
+
+  const signedOutProtectedResponse = await fetch(`${baseUrl}/api/protected`, {
+    headers: { cookie },
+  })
+  assert.equal(signedOutProtectedResponse.status, 401)
 
   const signedOutSessionResponse = await authRequest('/get-session', {
     headers: {

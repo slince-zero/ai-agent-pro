@@ -43,6 +43,7 @@ export type Citation = {
 }
 
 export type CreateMessageCitationsInput = {
+  userId: string
   messageId: string
   sources: RetrievalContextItem[]
 }
@@ -131,16 +132,48 @@ export function serializeCitation(citation: CitationRecord): Citation {
 export function createCitationService({
   db = prisma as unknown as CitationDb,
 }: CitationServiceDeps = {}) {
-  const createCitations = async (messageId: string, sources: RetrievalContextItem[]) => {
+  const createCitations = async (
+    userId: string,
+    messageId: string,
+    sources: RetrievalContextItem[],
+  ) => {
     const inputs = normalizeCitationSources(sources)
     const citations: Citation[] = []
 
     for (const input of inputs) {
       const citation = await db.citation.create({
         data: {
-          messageId,
-          documentId: input.documentId,
-          documentChunkId: input.documentChunkId,
+          message: {
+            connect: {
+              id: messageId,
+              session: {
+                userId,
+              },
+            },
+          },
+          ...(input.documentId
+            ? {
+                document: {
+                  connect: {
+                    id: input.documentId,
+                    userId,
+                  },
+                },
+              }
+            : {}),
+          ...(input.documentChunkId
+            ? {
+                documentChunk: {
+                  connect: {
+                    id: input.documentChunkId,
+                    ...(input.documentId ? { documentId: input.documentId } : {}),
+                    document: {
+                      userId,
+                    },
+                  },
+                },
+              }
+            : {}),
           title: input.title,
           uri: input.uri,
           sourceRef: input.sourceRef,
@@ -155,17 +188,22 @@ export function createCitationService({
   }
 
   return {
-    async createMessageCitations({ messageId, sources }: CreateMessageCitationsInput) {
-      return createCitations(messageId, sources)
+    async createMessageCitations({ userId, messageId, sources }: CreateMessageCitationsInput) {
+      return createCitations(userId, messageId, sources)
     },
 
-    async replaceMessageCitations({ messageId, sources }: CreateMessageCitationsInput) {
+    async replaceMessageCitations({ userId, messageId, sources }: CreateMessageCitationsInput) {
       await db.citation.deleteMany({
         where: {
           messageId,
+          message: {
+            session: {
+              userId,
+            },
+          },
         },
       })
-      return createCitations(messageId, sources)
+      return createCitations(userId, messageId, sources)
     },
   }
 }

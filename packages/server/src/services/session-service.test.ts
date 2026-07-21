@@ -56,11 +56,13 @@ const assistantMessage = {
 
 function createFakeDb() {
   const calls: {
+    messageCreates: unknown[]
     messageFindFirsts: unknown[]
     messageQueries: unknown[]
     messageUpdates: unknown[]
     sessionUpdates: unknown[]
   } = {
+    messageCreates: [],
     messageFindFirsts: [],
     sessionUpdates: [],
     messageQueries: [],
@@ -93,12 +95,15 @@ function createFakeDb() {
       },
     },
     message: {
-      create: async (args: unknown) => ({
-        id: 'msg_created',
-        role: (args as { data: { role: typeof MessageRole.USER } }).data.role,
-        content: (args as { data: { content: string } }).data.content,
-        createdAt,
-      }),
+      create: async (args: unknown) => {
+        calls.messageCreates.push(args)
+        return {
+          id: 'msg_created',
+          role: (args as { data: { role: typeof MessageRole.USER } }).data.role,
+          content: (args as { data: { content: string } }).data.content,
+          createdAt,
+        }
+      },
       findFirst: async (args: unknown) => {
         calls.messageFindFirsts.push(args)
         const role = (args as { where?: { role?: typeof MessageRole.USER } }).where?.role
@@ -127,7 +132,7 @@ function createFakeDb() {
 }
 
 test('serializes active sessions and messages with completed usage', async () => {
-  const { db } = createFakeDb()
+  const { calls, db } = createFakeDb()
   const service = createSessionService({ db })
 
   const sessions = await service.listActiveSessions('user_1')
@@ -175,13 +180,17 @@ test('serializes active sessions and messages with completed usage', async () =>
       ],
     },
   ])
+  assert.deepEqual((calls.messageQueries[0] as { where: { session: unknown } }).where.session, {
+    userId: 'user_1',
+    status: SessionStatus.ACTIVE,
+  })
 })
 
 test('builds recent client messages and updates new session titles', async () => {
   const { calls, db } = createFakeDb()
   const service = createSessionService({ db })
 
-  const messages = await service.getRecentClientMessages('session_1', 2)
+  const messages = await service.getRecentClientMessages('user_1', 'session_1', 2)
   assert.deepEqual(messages, [
     { role: 'user', content: 'Explain this run' },
     { role: 'assistant', content: 'Here is the explanation.' },
@@ -189,6 +198,10 @@ test('builds recent client messages and updates new session titles', async () =>
   assert.deepEqual(calls.messageQueries[0], {
     where: {
       sessionId: 'session_1',
+      session: {
+        userId: 'user_1',
+        status: SessionStatus.ACTIVE,
+      },
       role: {
         in: [MessageRole.USER, MessageRole.ASSISTANT],
       },
@@ -207,6 +220,8 @@ test('builds recent client messages and updates new session titles', async () =>
   assert.deepEqual(calls.sessionUpdates[0], {
     where: {
       id: 'session_1',
+      userId: 'user_1',
+      status: SessionStatus.ACTIVE,
     },
     data: {
       title: 'Please summarize this agent run in detai...',
@@ -227,6 +242,8 @@ test('renames and archives active sessions for the owning user', async () => {
     {
       where: {
         id: 'session_1',
+        userId: 'user_1',
+        status: SessionStatus.ACTIVE,
       },
       data: {
         title: 'New title',
@@ -235,6 +252,8 @@ test('renames and archives active sessions for the owning user', async () => {
     {
       where: {
         id: 'session_1',
+        userId: 'user_1',
+        status: SessionStatus.ACTIVE,
       },
       data: {
         status: SessionStatus.ARCHIVED,
@@ -247,13 +266,17 @@ test('loads recent context while excluding regenerated assistant messages', asyn
   const { calls, db } = createFakeDb()
   const service = createSessionService({ db })
 
-  await service.getRecentClientMessages('session_1', 3, {
+  await service.getRecentClientMessages('user_1', 'session_1', 3, {
     excludeMessageIds: ['msg_assistant'],
   })
 
   assert.deepEqual(calls.messageQueries[0], {
     where: {
       sessionId: 'session_1',
+      session: {
+        userId: 'user_1',
+        status: SessionStatus.ACTIVE,
+      },
       id: {
         notIn: ['msg_assistant'],
       },
@@ -272,8 +295,8 @@ test('finds regeneration target and updates assistant message content', async ()
   const { calls, db } = createFakeDb()
   const service = createSessionService({ db })
 
-  const target = await service.getLatestRegenerationTarget('session_1')
-  const updated = await service.updateAssistantMessage('msg_assistant', 'Updated answer')
+  const target = await service.getLatestRegenerationTarget('user_1', 'session_1')
+  const updated = await service.updateAssistantMessage('user_1', 'msg_assistant', 'Updated answer')
 
   assert.equal(target?.userMessage.id, 'msg_user')
   assert.equal(target?.assistantMessage.id, 'msg_assistant')
@@ -282,6 +305,10 @@ test('finds regeneration target and updates assistant message content', async ()
     {
       where: {
         sessionId: 'session_1',
+        session: {
+          userId: 'user_1',
+          status: SessionStatus.ACTIVE,
+        },
         role: MessageRole.USER,
       },
       orderBy: {
@@ -291,6 +318,10 @@ test('finds regeneration target and updates assistant message content', async ()
     {
       where: {
         sessionId: 'session_1',
+        session: {
+          userId: 'user_1',
+          status: SessionStatus.ACTIVE,
+        },
         role: MessageRole.ASSISTANT,
         createdAt: {
           gt: userMessage.createdAt,
@@ -304,9 +335,52 @@ test('finds regeneration target and updates assistant message content', async ()
   assert.deepEqual(calls.messageUpdates[0], {
     where: {
       id: 'msg_assistant',
+      role: MessageRole.ASSISTANT,
+      session: {
+        userId: 'user_1',
+        status: SessionStatus.ACTIVE,
+      },
     },
     data: {
       content: 'Updated answer',
     },
+  })
+})
+
+test('creates messages and touches sessions through owner-constrained relations', async () => {
+  const { calls, db } = createFakeDb()
+  const service = createSessionService({ db })
+
+  await service.createUserMessage('user_1', 'session_1', 'Question')
+  await service.createAssistantMessage('user_1', 'session_1', 'Answer')
+  await service.touchSession('user_1', 'session_1')
+
+  const ownerConnect = {
+    connect: {
+      id: 'session_1',
+      userId: 'user_1',
+      status: SessionStatus.ACTIVE,
+    },
+  }
+  assert.deepEqual(calls.messageCreates, [
+    {
+      data: {
+        session: ownerConnect,
+        role: MessageRole.USER,
+        content: 'Question',
+      },
+    },
+    {
+      data: {
+        session: ownerConnect,
+        role: MessageRole.ASSISTANT,
+        content: 'Answer',
+      },
+    },
+  ])
+  assert.deepEqual((calls.sessionUpdates[0] as { where: unknown }).where, {
+    id: 'session_1',
+    userId: 'user_1',
+    status: SessionStatus.ACTIVE,
   })
 })
