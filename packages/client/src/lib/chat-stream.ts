@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api'
 import type { ServerEvent, WorkflowMode, WorkflowStage } from '@/types/chat'
 
 type StreamChatHandlers = {
@@ -54,7 +55,7 @@ async function streamSessionResponse(
   handlers: StreamChatHandlers,
   options: StreamChatOptions,
 ) {
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

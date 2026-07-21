@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { AuthLoading } from '@/components/auth/auth-loading'
+import { AuthScreen } from '@/components/auth/auth-screen'
 import { ChatComposer } from '@/components/chat/chat-composer'
 import { ChatHeader } from '@/components/chat/chat-header'
 import { MessageList } from '@/components/chat/message-list'
 import { Sidebar } from '@/components/chat/sidebar'
 import { WelcomePanel } from '@/components/chat/welcome-panel'
 import { RunsView } from '@/components/runs/runs-view'
+import { useAuth } from '@/hooks/use-auth'
+import type { AuthUser } from '@/lib/auth'
 import { streamChatResponse, streamRegeneratedResponse } from '@/lib/chat-stream'
 import { promptPresets } from '@/lib/prompt-presets'
 import {
@@ -18,6 +22,25 @@ import {
 import type { ChatSession, Citation, Message, WorkflowMode, WorkflowStage } from '@/types/chat'
 
 export default function App() {
+  const auth = useAuth()
+
+  if (auth.state.status === 'loading') {
+    return <AuthLoading />
+  }
+
+  if (auth.state.status === 'unauthenticated') {
+    return <AuthScreen onAuthenticate={auth.authenticate} />
+  }
+
+  return <Workspace onSignOut={auth.signOut} user={auth.state.user} />
+}
+
+type WorkspaceProps = {
+  onSignOut: () => Promise<void>
+  user: AuthUser
+}
+
+function Workspace({ onSignOut, user }: WorkspaceProps) {
   const [activeView, setActiveView] = useState<'chat' | 'runs'>('chat')
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
@@ -514,11 +537,13 @@ export default function App() {
         isSending={isSending}
         isLoadingMessages={isLoadingMessages}
         sessions={sessions}
+        user={user}
         onNewChat={startNewChat}
         onDeleteSession={(sessionId) => void deleteExistingSession(sessionId)}
         onRenameSession={(session) => void renameExistingSession(session)}
         onSelectRuns={selectRuns}
         onSelectSession={(sessionId) => void selectSession(sessionId)}
+        onSignOut={onSignOut}
       />
 
       <section className="grid h-svh min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]">
@@ -526,9 +551,11 @@ export default function App() {
           activeSessionTitle={activeSession?.title}
           activeView={activeView}
           isSending={isSending}
+          user={user}
           onNewChat={startNewChat}
           onSelectChat={() => setActiveView('chat')}
           onSelectRuns={selectRuns}
+          onSignOut={onSignOut}
         />
 
         <div
