@@ -9,6 +9,7 @@ import { pinoHttp } from 'pino-http'
 import { auth, parseTrustedOrigins } from './auth.js'
 import { env } from './env.js'
 import { logger } from './logger.js'
+import { requireAuth } from './middleware/auth.js'
 import { createRunsRouter } from './routes/runs.js'
 import { createSessionsRouter } from './routes/sessions.js'
 import { createDefaultModelClient } from './services/openai.js'
@@ -47,10 +48,11 @@ export function createApp() {
   )
 
   app.all('/api/auth/*splat', toNodeHandler(auth))
-  app.use(express.json())
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true })
   })
+  app.use('/api', requireAuth)
+  app.use(express.json())
 
   app.use('/api/sessions', createSessionsRouter({ modelClient }))
   app.use('/api/runs', createRunsRouter())

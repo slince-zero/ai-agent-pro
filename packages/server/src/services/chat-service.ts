@@ -151,10 +151,15 @@ export function createChatService({
     createContextBuilder({
       source: {
         loadRecentMessages: (sessionId, take, input) =>
-          sessionService.getRecentClientMessages(sessionId, take, {
-            excludeMessageIds: input.excludeMessageIds,
-          }),
-        loadSessionSummary: ({ sessionId }) => summaryService.getLatestSummaryContent(sessionId),
+          input.userId
+            ? sessionService.getRecentClientMessages(input.userId, sessionId, take, {
+                excludeMessageIds: input.excludeMessageIds,
+              })
+            : Promise.resolve([]),
+        loadSessionSummary: ({ sessionId, userId }) =>
+          userId
+            ? summaryService.getLatestSummaryContent(userId, sessionId)
+            : Promise.resolve(null),
         loadRelevantMemories: async ({ sessionId, userId, projectId }) => {
           if (!userId) return []
 
@@ -193,8 +198,21 @@ export function createChatService({
   }: RunAssistantTurnInput): Promise<SendMessageResult> => {
     const run = await db.agentRun.create({
       data: {
-        sessionId: session.id,
-        userMessageId,
+        session: {
+          connect: {
+            id: session.id,
+            userId: session.userId,
+          },
+        },
+        userMessage: {
+          connect: {
+            id: userMessageId,
+            session: {
+              id: session.id,
+              userId: session.userId,
+            },
+          },
+        },
         model,
         ...(workflow === 'multi_agent' ? { workflow: AgentWorkflow.MULTI_AGENT } : {}),
       },
@@ -377,8 +395,12 @@ export function createChatService({
     const runCost = calculateRunCost(model, inputTokens, outputTokens)
     const assistantMessage = assistantText.trim()
       ? assistantMessageId
-        ? await sessionService.updateAssistantMessage(assistantMessageId, assistantText)
-        : await sessionService.createAssistantMessage(session.id, assistantText)
+        ? await sessionService.updateAssistantMessage(
+            session.userId,
+            assistantMessageId,
+            assistantText,
+          )
+        : await sessionService.createAssistantMessage(session.userId, session.id, assistantText)
       : null
 
     await db.agentRun.update({
@@ -386,7 +408,19 @@ export function createChatService({
         id: run.id,
       },
       data: {
-        assistantMessageId: assistantMessage?.id,
+        ...(assistantMessage
+          ? {
+              assistantMessage: {
+                connect: {
+                  id: assistantMessage.id,
+                  session: {
+                    id: session.id,
+                    userId: session.userId,
+                  },
+                },
+              },
+            }
+          : {}),
         status: signal.aborted
           ? RunStatus.CANCELED
           : runError
@@ -404,6 +438,7 @@ export function createChatService({
     if (assistantMessage) {
       try {
         citations = await citationService.replaceMessageCitations({
+          userId: session.userId,
           messageId: assistantMessage.id,
           sources: retrievalItems,
         })
@@ -422,6 +457,7 @@ export function createChatService({
     if (!signal.aborted && !runError) {
       try {
         await summaryService.maybeRefreshSessionSummary({
+          userId: session.userId,
           sessionId: session.id,
           modelClient,
           signal,
@@ -432,7 +468,7 @@ export function createChatService({
       }
     }
 
-    await sessionService.touchSession(session.id)
+    await sessionService.touchSession(session.userId, session.id)
 
     return {
       inputTokens,
@@ -443,7 +479,11 @@ export function createChatService({
 
   return {
     async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
-      const userMessage = await sessionService.createUserMessage(input.session.id, input.content)
+      const userMessage = await sessionService.createUserMessage(
+        input.session.userId,
+        input.session.id,
+        input.content,
+      )
       await sessionService.updateTitleFromMessageIfNeeded(input.session, input.content)
 
       return runAssistantTurn({
@@ -456,7 +496,8 @@ export function createChatService({
       input: RegenerateMessageInput,
     ): Promise<SendMessageResult | null> {
       const target =
-        input.target ?? (await sessionService.getLatestRegenerationTarget(input.session.id))
+        input.target ??
+        (await sessionService.getLatestRegenerationTarget(input.session.userId, input.session.id))
       if (!target) return null
 
       return runAssistantTurn({

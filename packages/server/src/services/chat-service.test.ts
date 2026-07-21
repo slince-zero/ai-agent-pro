@@ -34,13 +34,18 @@ const session = {
 }
 
 type FakeSessionServiceCalls = {
-  recentMessageRequests?: { excludeMessageIds?: string[]; sessionId: string; take: number }[]
+  recentMessageRequests?: {
+    excludeMessageIds?: string[]
+    userId: string
+    sessionId: string
+    take: number
+  }[]
   updateAssistantRequests?: unknown[]
 }
 
 type FakeSummaryServiceCalls = {
-  getLatestSummaryRequests?: string[]
-  refreshRequests?: string[]
+  getLatestSummaryRequests?: { userId: string; sessionId: string }[]
+  refreshRequests?: { userId: string; sessionId: string }[]
 }
 
 type FakeMemoryServiceCalls = {
@@ -65,11 +70,13 @@ function createFakeSessionService(calls: FakeSessionServiceCalls = {}) {
     }),
     updateTitleFromMessageIfNeeded: async () => session,
     getRecentClientMessages: async (
+      userId: string,
       sessionId: string,
       take: number,
       options?: { excludeMessageIds?: string[] },
     ) => {
       calls.recentMessageRequests?.push({
+        userId,
         sessionId,
         take,
         excludeMessageIds: options?.excludeMessageIds,
@@ -82,8 +89,8 @@ function createFakeSessionService(calls: FakeSessionServiceCalls = {}) {
       content: 'Hi',
       createdAt: session.updatedAt,
     }),
-    updateAssistantMessage: async (messageId: string, content: string) => {
-      calls.updateAssistantRequests?.push({ messageId, content })
+    updateAssistantMessage: async (userId: string, messageId: string, content: string) => {
+      calls.updateAssistantRequests?.push({ userId, messageId, content })
       return {
         id: messageId,
         role: 'ASSISTANT',
@@ -112,12 +119,18 @@ function createFakeSessionService(calls: FakeSessionServiceCalls = {}) {
 function createFakeSummaryService(calls: FakeSummaryServiceCalls = {}) {
   return {
     getLatestSummary: async () => null,
-    getLatestSummaryContent: async (sessionId: string) => {
-      calls.getLatestSummaryRequests?.push(sessionId)
+    getLatestSummaryContent: async (userId: string, sessionId: string) => {
+      calls.getLatestSummaryRequests?.push({ userId, sessionId })
       return null
     },
-    maybeRefreshSessionSummary: async ({ sessionId }: { sessionId: string }) => {
-      calls.refreshRequests?.push(sessionId)
+    maybeRefreshSessionSummary: async ({
+      userId,
+      sessionId,
+    }: {
+      userId: string
+      sessionId: string
+    }) => {
+      calls.refreshRequests?.push({ userId, sessionId })
       return { created: false, reason: 'below_threshold' as const }
     },
   } as unknown as ReturnType<typeof createSessionSummaryService>
@@ -244,13 +257,14 @@ test('emits run_id before streamed agent events', async () => {
   const sessionCalls = {
     recentMessageRequests: [] as {
       excludeMessageIds?: string[]
+      userId: string
       sessionId: string
       take: number
     }[],
   }
   const summaryCalls = {
-    getLatestSummaryRequests: [] as string[],
-    refreshRequests: [] as string[],
+    getLatestSummaryRequests: [] as { userId: string; sessionId: string }[],
+    refreshRequests: [] as { userId: string; sessionId: string }[],
   }
   const memoryCalls = {
     contextMemoryRequests: [] as unknown[],
@@ -328,7 +342,7 @@ test('emits run_id before streamed agent events', async () => {
     RunStatus.COMPLETED,
   )
   assert.deepEqual(sessionCalls.recentMessageRequests, [
-    { sessionId: 'session_1', take: 30, excludeMessageIds: [] },
+    { userId: 'user_1', sessionId: 'session_1', take: 30, excludeMessageIds: [] },
   ])
   assert.deepEqual(memoryCalls.contextMemoryRequests, [
     { userId: 'user_1', sessionId: 'session_1', projectId: undefined },
@@ -345,10 +359,13 @@ test('emits run_id before streamed agent events', async () => {
     (ragCalls.searchRequests[0] as { signal: unknown }).signal instanceof AbortSignal,
     true,
   )
-  assert.deepEqual(summaryCalls.getLatestSummaryRequests, ['session_1'])
-  assert.deepEqual(summaryCalls.refreshRequests, ['session_1'])
+  assert.deepEqual(summaryCalls.getLatestSummaryRequests, [
+    { userId: 'user_1', sessionId: 'session_1' },
+  ])
+  assert.deepEqual(summaryCalls.refreshRequests, [{ userId: 'user_1', sessionId: 'session_1' }])
   assert.deepEqual(citationCalls.replaceRequests, [
     {
+      userId: 'user_1',
       messageId: 'msg_assistant',
       sources: [
         {
@@ -370,6 +387,7 @@ test('regenerates the latest assistant message in place', async () => {
   const sessionCalls = {
     recentMessageRequests: [] as {
       excludeMessageIds?: string[]
+      userId: string
       sessionId: string
       take: number
     }[],
@@ -423,23 +441,45 @@ test('regenerates the latest assistant message in place', async () => {
   })
   assert.deepEqual(agentRunCreates[0], {
     data: {
-      sessionId: 'session_1',
-      userMessageId: 'msg_user',
+      session: {
+        connect: {
+          id: 'session_1',
+          userId: 'user_1',
+        },
+      },
+      userMessage: {
+        connect: {
+          id: 'msg_user',
+          session: {
+            id: 'session_1',
+            userId: 'user_1',
+          },
+        },
+      },
       model: 'test-model',
     },
   })
   assert.deepEqual(sessionCalls.recentMessageRequests, [
-    { sessionId: 'session_1', take: 30, excludeMessageIds: ['msg_assistant'] },
+    {
+      userId: 'user_1',
+      sessionId: 'session_1',
+      take: 30,
+      excludeMessageIds: ['msg_assistant'],
+    },
   ])
   assert.deepEqual(sessionCalls.updateAssistantRequests, [
     {
+      userId: 'user_1',
       messageId: 'msg_assistant',
       content: 'Hi',
     },
   ])
   assert.equal(
-    (agentRunUpdates[0] as { data?: { assistantMessageId?: string; status?: string } }).data
-      ?.assistantMessageId,
+    (
+      agentRunUpdates[0] as {
+        data?: { assistantMessage?: { connect?: { id?: string } }; status?: string }
+      }
+    ).data?.assistantMessage?.connect?.id,
     'msg_assistant',
   )
   assert.equal(
@@ -451,6 +491,7 @@ test('regenerates the latest assistant message in place', async () => {
   assert.equal((events[2] as { type?: string }).type, 'citations')
   assert.deepEqual(citationCalls.replaceRequests, [
     {
+      userId: 'user_1',
       messageId: 'msg_assistant',
       sources: [
         {
@@ -580,8 +621,21 @@ test('persists multi-agent workflow stages without changing the single-agent def
 
   assert.deepEqual(runCreates[0], {
     data: {
-      sessionId: 'session_1',
-      userMessageId: 'msg_user',
+      session: {
+        connect: {
+          id: 'session_1',
+          userId: 'user_1',
+        },
+      },
+      userMessage: {
+        connect: {
+          id: 'msg_user',
+          session: {
+            id: 'session_1',
+            userId: 'user_1',
+          },
+        },
+      },
       model: 'test-model',
       workflow: AgentWorkflow.MULTI_AGENT,
     },

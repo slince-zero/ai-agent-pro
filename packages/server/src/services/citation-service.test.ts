@@ -54,9 +54,9 @@ test('creates message citations and serializes records', async () => {
           const data = (args as { data: Record<string, unknown> }).data
           return {
             id: 'citation_1',
-            messageId: data.messageId as string,
-            documentId: data.documentId as string | null,
-            documentChunkId: data.documentChunkId as string | null,
+            messageId: 'msg_1',
+            documentId: 'doc_1',
+            documentChunkId: 'chunk_1',
             title: data.title as string,
             uri: data.uri as string | null,
             sourceRef: data.sourceRef as string | null,
@@ -74,6 +74,7 @@ test('creates message citations and serializes records', async () => {
   })
 
   const citations = await service.createMessageCitations({
+    userId: 'user_1',
     messageId: 'msg_1',
     sources: [
       {
@@ -89,9 +90,29 @@ test('creates message citations and serializes records', async () => {
 
   assert.equal(created.length, 1)
   assert.deepEqual((created[0] as { data: unknown }).data, {
-    messageId: 'msg_1',
-    documentId: 'doc_1',
-    documentChunkId: 'chunk_1',
+    message: {
+      connect: {
+        id: 'msg_1',
+        session: {
+          userId: 'user_1',
+        },
+      },
+    },
+    document: {
+      connect: {
+        id: 'doc_1',
+        userId: 'user_1',
+      },
+    },
+    documentChunk: {
+      connect: {
+        id: 'chunk_1',
+        documentId: 'doc_1',
+        document: {
+          userId: 'user_1',
+        },
+      },
+    },
     title: 'README.md',
     uri: 'https://github.com/example/repo/blob/main/README.md',
     sourceRef: 'README.md#L1-L3',
@@ -123,6 +144,7 @@ test('creates message citations and serializes records', async () => {
   assert.deepEqual(deleted, [])
 
   await service.replaceMessageCitations({
+    userId: 'user_1',
     messageId: 'msg_1',
     sources: [
       {
@@ -138,6 +160,11 @@ test('creates message citations and serializes records', async () => {
     {
       where: {
         messageId: 'msg_1',
+        message: {
+          session: {
+            userId: 'user_1',
+          },
+        },
       },
     },
   ])

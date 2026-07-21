@@ -165,9 +165,22 @@ export function createMemoryService({
 
       const memory = await db.memory.create({
         data: {
-          userId: input.userId,
+          user: {
+            connect: {
+              id: input.userId,
+            },
+          },
           scope: toMemoryScope(input.scope),
-          sessionId: input.scope === 'session' ? input.sessionId : null,
+          ...(input.scope === 'session'
+            ? {
+                session: {
+                  connect: {
+                    id: input.sessionId,
+                    userId: input.userId,
+                  },
+                },
+              }
+            : {}),
           projectId: input.scope === 'project' ? input.projectId : null,
           content: normalizeContent(input.content),
           metadata: toJsonValue(input.metadata),

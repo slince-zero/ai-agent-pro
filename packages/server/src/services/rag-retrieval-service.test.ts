@@ -113,6 +113,39 @@ test('validates explicit query embeddings before vector search', async () => {
   )
 })
 
+test('keeps document retrieval scoped to the requesting user', async () => {
+  const queries: { sql: string; values: unknown[] }[] = []
+  const db = {
+    $queryRawUnsafe: async <T>(sql: string, ...values: unknown[]) => {
+      queries.push({ sql, values })
+      return (values[0] === 'user_1' ? [createRawChunk()] : []) as T
+    },
+  }
+  const service = createRagRetrievalService({ db, embeddingClient: null })
+
+  const ownerResults = await service.searchRelevantChunks({
+    userId: 'user_1',
+    query: 'pnpm',
+    queryEmbedding: createEmbedding(),
+  })
+  const otherUserResults = await service.searchRelevantChunks({
+    userId: 'user_2',
+    query: 'pnpm',
+    queryEmbedding: createEmbedding(),
+  })
+
+  assert.equal(ownerResults.length, 1)
+  assert.deepEqual(otherUserResults, [])
+  assert.equal(queries.length, 3)
+  for (const query of queries) {
+    assert.match(query.sql, /d\."userId" = \$1/)
+  }
+  assert.deepEqual(
+    queries.slice(1).map((query) => query.values[0]),
+    ['user_2', 'user_2'],
+  )
+})
+
 test('converts text into OpenAI-compatible embedding requests', async () => {
   const requests: { body: unknown; signal?: AbortSignal }[] = []
   const openai = {

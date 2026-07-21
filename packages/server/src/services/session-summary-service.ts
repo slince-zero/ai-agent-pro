@@ -52,6 +52,7 @@ type SessionSummaryOptions = {
 }
 
 type MaybeRefreshInput = {
+  userId: string
   sessionId: string
   modelClient: ModelClient
   signal: AbortSignal
@@ -133,26 +134,30 @@ export function createSessionSummaryService({
 }: SessionSummaryServiceDeps = {}) {
   const resolvedOptions = normalizeOptions(options)
 
-  const getLatestSummary = (sessionId: string) =>
+  const getLatestSummary = (userId: string, sessionId: string) =>
     db.sessionSummary.findFirst({
       where: {
         sessionId,
+        session: {
+          userId,
+        },
       },
       orderBy: [{ coveredMessageCount: 'desc' }, { createdAt: 'desc' }],
     })
 
   return {
-    async getLatestSummary(sessionId: string) {
-      const summary = await getLatestSummary(sessionId)
+    async getLatestSummary(userId: string, sessionId: string) {
+      const summary = await getLatestSummary(userId, sessionId)
       return summary ? serializeSessionSummary(summary) : null
     },
 
-    async getLatestSummaryContent(sessionId: string) {
-      const summary = await getLatestSummary(sessionId)
+    async getLatestSummaryContent(userId: string, sessionId: string) {
+      const summary = await getLatestSummary(userId, sessionId)
       return summary?.content ?? null
     },
 
     async maybeRefreshSessionSummary({
+      userId,
       sessionId,
       modelClient,
       signal,
@@ -161,6 +166,9 @@ export function createSessionSummaryService({
       const totalMessages = await db.message.count({
         where: {
           sessionId,
+          session: {
+            userId,
+          },
           role: {
             in: [MessageRole.USER, MessageRole.ASSISTANT],
           },
@@ -176,7 +184,7 @@ export function createSessionSummaryService({
         return { created: false, reason: 'no_messages' }
       }
 
-      const previousSummary = await getLatestSummary(sessionId)
+      const previousSummary = await getLatestSummary(userId, sessionId)
       const previousCoveredCount = previousSummary?.coveredMessageCount ?? 0
       if (coveredMessageCount - previousCoveredCount < resolvedOptions.minNewMessages) {
         return { created: false, reason: 'not_enough_new_messages' }
@@ -185,6 +193,9 @@ export function createSessionSummaryService({
       const messages = await db.message.findMany({
         where: {
           sessionId,
+          session: {
+            userId,
+          },
           role: {
             in: [MessageRole.USER, MessageRole.ASSISTANT],
           },
@@ -214,7 +225,12 @@ export function createSessionSummaryService({
 
       const summary = await db.sessionSummary.create({
         data: {
-          sessionId,
+          session: {
+            connect: {
+              id: sessionId,
+              userId,
+            },
+          },
           content,
           coveredMessageCount: messages.length,
           coveredThroughMessageId,

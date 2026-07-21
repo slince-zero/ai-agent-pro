@@ -309,3 +309,43 @@ test('lists chunks through the owning active document', async () => {
     take: 5,
   })
 })
+
+test("does not expose or replace another user's documents and chunks", async () => {
+  const db = {
+    document: {
+      create: async () => createDocumentRecord(),
+      findMany: async (args: unknown) => {
+        const userId = (args as { where: { userId: string } }).where.userId
+        return userId === 'user_1' ? [createDocumentRecord()] : []
+      },
+      update: async (args: unknown) => {
+        const userId = (args as { where: { userId: string } }).where.userId
+        if (userId !== 'user_1') throw new Error('record not found')
+        return createDocumentRecord()
+      },
+    },
+    documentChunk: {
+      findMany: async (args: unknown) => {
+        const userId = (args as { where: { document: { userId: string } } }).where.document.userId
+        return userId === 'user_1' ? [createChunkRecord()] : []
+      },
+    },
+  }
+  const service = createDocumentService({ db })
+
+  assert.equal((await service.listDocuments({ userId: 'user_1' })).length, 1)
+  assert.deepEqual(await service.listDocuments({ userId: 'user_2' }), [])
+  assert.deepEqual(
+    await service.listDocumentChunks({ userId: 'user_2', documentId: 'document_1' }),
+    [],
+  )
+  await assert.rejects(
+    () =>
+      service.replaceDocumentChunks({
+        userId: 'user_2',
+        documentId: 'document_1',
+        chunks: [{ content: 'Unauthorized replacement' }],
+      }),
+    /record not found/,
+  )
+})

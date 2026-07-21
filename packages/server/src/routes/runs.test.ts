@@ -12,6 +12,7 @@ import {
   RunStatus,
   ToolCallStatus,
 } from '../generated/prisma/client.js'
+import type { AuthenticatedSession } from '../middleware/auth.js'
 
 process.env.OPENAI_API_KEY = 'test-api-key'
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test'
@@ -89,11 +90,44 @@ const traceRun = {
 function createFakeDb() {
   return {
     agentRun: {
-      findMany: async () => [traceRun],
-      findFirst: async (args: unknown) => {
-        const runId = (args as { where?: { id?: string } }).where?.id
-        return runId === traceRun.id ? traceRun : null
+      findMany: async (args: unknown) => {
+        const userId = (args as { where?: { session?: { userId?: string } } }).where?.session
+          ?.userId
+        return userId === 'user_1' ? [traceRun] : []
       },
+      findFirst: async (args: unknown) => {
+        const where = (
+          args as {
+            where?: { id?: string; session?: { userId?: string } }
+          }
+        ).where
+        return where?.id === traceRun.id && where.session?.userId === 'user_1' ? traceRun : null
+      },
+    },
+  }
+}
+
+function testSession(userId: string): AuthenticatedSession {
+  const now = new Date('2026-07-21T08:00:00.000Z')
+  return {
+    session: {
+      id: `auth_session_${userId}`,
+      token: `token_${userId}`,
+      userId,
+      expiresAt: new Date('2026-07-22T08:00:00.000Z'),
+      createdAt: now,
+      updatedAt: now,
+      ipAddress: null,
+      userAgent: null,
+    },
+    user: {
+      id: userId,
+      name: userId,
+      email: `${userId}@example.com`,
+      emailVerified: true,
+      image: null,
+      createdAt: now,
+      updatedAt: now,
     },
   }
 }
@@ -103,15 +137,19 @@ let baseUrl: string
 
 before(async () => {
   const { createRunsRouter } = await import('./runs.js')
+  const { createRequireAuth } = await import('../middleware/auth.js')
   const app = express()
 
   app.use(
-    '/api/runs',
-    createRunsRouter({
-      db: createFakeDb(),
-      getUser: async () => ({ id: 'user_1' }),
+    '/api',
+    createRequireAuth({
+      getSession: async (headers) => {
+        const userId = headers.get('x-test-user')
+        return userId ? testSession(userId) : null
+      },
     }),
   )
+  app.use('/api/runs', createRunsRouter({ db: createFakeDb() }))
 
   await new Promise<void>((resolve) => {
     server = app.listen(0, () => resolve())
@@ -122,6 +160,12 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${address.port}`
 })
 
+function runRequest(path = '', userId = 'user_1') {
+  return fetch(`${baseUrl}/api/runs${path}`, {
+    headers: { 'x-test-user': userId },
+  })
+}
+
 after(async () => {
   await new Promise<void>((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()))
@@ -129,7 +173,7 @@ after(async () => {
 })
 
 test('lists recent runs with summaries and preview-only tool calls', async () => {
-  const response = await fetch(`${baseUrl}/api/runs`)
+  const response = await runRequest()
   const body = (await response.json()) as { runs: JsonObject[] }
 
   assert.equal(response.status, 200)
@@ -160,7 +204,7 @@ test('lists recent runs with summaries and preview-only tool calls', async () =>
 })
 
 test('returns run detail with messages, usage and truncated tool result', async () => {
-  const response = await fetch(`${baseUrl}/api/runs/run_1`)
+  const response = await runRequest('/run_1')
   const body = (await response.json()) as { run: JsonObject }
   const run = body.run as {
     inputTokens: number
@@ -198,9 +242,24 @@ test('returns run detail with messages, usage and truncated tool result', async 
 })
 
 test('returns 404 for missing runs', async () => {
-  const response = await fetch(`${baseUrl}/api/runs/missing`)
+  const response = await runRequest('/missing')
   const body = (await response.json()) as { error: string }
 
   assert.equal(response.status, 404)
   assert.equal(body.error, '运行记录不存在')
+})
+
+test("requires authentication and hides another user's run", async () => {
+  const unauthenticated = await fetch(`${baseUrl}/api/runs`)
+  assert.equal(unauthenticated.status, 401)
+
+  const otherUserResponse = await runRequest('/run_1', 'user_2')
+  const missingResponse = await runRequest('/missing', 'user_2')
+
+  assert.equal(otherUserResponse.status, 404)
+  assert.equal(missingResponse.status, 404)
+  assert.deepEqual(await otherUserResponse.json(), await missingResponse.json())
+
+  const listResponse = await runRequest('', 'user_2')
+  assert.deepEqual(await listResponse.json(), { runs: [] })
 })
