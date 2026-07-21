@@ -43,8 +43,13 @@ function createFakeDb() {
       create: async (args: unknown) => {
         calls.creates.push(args)
         const data = (args as { data: Record<string, unknown> }).data
+        const userId = (data.user as { connect: { id: string } }).connect.id
+        const sessionId =
+          (data.session as { connect: { id: string } } | undefined)?.connect.id ?? null
         return createMemoryRecord({
           ...data,
+          userId,
+          sessionId,
           id: 'memory_created',
           createdAt,
           updatedAt,
@@ -114,9 +119,18 @@ test('creates scoped memories with normalized content and metadata', async () =>
   })
   assert.deepEqual(calls.creates[0], {
     data: {
-      userId: 'user_1',
+      user: {
+        connect: {
+          id: 'user_1',
+        },
+      },
       scope: MemoryScope.SESSION,
-      sessionId: 'session_1',
+      session: {
+        connect: {
+          id: 'session_1',
+          userId: 'user_1',
+        },
+      },
       projectId: null,
       content: 'Remember that tests use node:test.',
       metadata: { source: 'manual' },
@@ -256,5 +270,34 @@ test('invalidates active memories without deleting them', async () => {
   assert.deepEqual(
     (calls.updates[0] as { data: { status: unknown } }).data.status,
     MemoryStatus.INVALIDATED,
+  )
+})
+
+test("does not expose or mutate another user's memories", async () => {
+  const db = {
+    memory: {
+      create: async () => createMemoryRecord(),
+      findMany: async (args: unknown) => {
+        const userId = (args as { where: { userId: string } }).where.userId
+        return userId === 'user_1' ? [createMemoryRecord()] : []
+      },
+      update: async (args: unknown) => {
+        const userId = (args as { where: { userId: string } }).where.userId
+        if (userId !== 'user_1') throw new Error('record not found')
+        return createMemoryRecord()
+      },
+    },
+  }
+  const service = createMemoryService({ db })
+
+  assert.equal((await service.listMemories({ userId: 'user_1' })).length, 1)
+  assert.deepEqual(await service.listMemories({ userId: 'user_2' }), [])
+  await assert.rejects(
+    () => service.updateMemory({ userId: 'user_2', memoryId: 'memory_1', content: 'Changed' }),
+    /record not found/,
+  )
+  await assert.rejects(
+    () => service.invalidateMemory({ userId: 'user_2', memoryId: 'memory_1' }),
+    /record not found/,
   )
 })

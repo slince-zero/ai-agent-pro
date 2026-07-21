@@ -4,7 +4,6 @@ import { z } from 'zod'
 import type { ModelClient } from '../runtime/model-client/types.js'
 import { createChatService } from '../services/chat-service.js'
 import { createSessionService } from '../services/session-service.js'
-import { getCurrentUser } from '../services/users.js'
 import { createSseWriter, prepareSse, startSseHeartbeat } from '../sse/events.js'
 
 type SessionsRouterDeps = {
@@ -49,8 +48,7 @@ export function createSessionsRouter({
 
   router.get('/', async (req, res) => {
     try {
-      const user = await getCurrentUser()
-      const sessions = await sessionService.listActiveSessions(user.id)
+      const sessions = await sessionService.listActiveSessions(req.auth.user.id)
 
       res.json({ sessions })
     } catch (error) {
@@ -66,8 +64,7 @@ export function createSessionsRouter({
     }
 
     try {
-      const user = await getCurrentUser()
-      const session = await sessionService.createSession(user.id, parsed.data.title)
+      const session = await sessionService.createSession(req.auth.user.id, parsed.data.title)
 
       res.status(201).json({ session })
     } catch (error) {
@@ -83,9 +80,8 @@ export function createSessionsRouter({
     }
 
     try {
-      const user = await getCurrentUser()
       const session = await sessionService.renameActiveSession(
-        user.id,
+        req.auth.user.id,
         req.params.sessionId,
         parsed.data.title,
       )
@@ -103,8 +99,10 @@ export function createSessionsRouter({
 
   router.delete('/:sessionId', async (req, res) => {
     try {
-      const user = await getCurrentUser()
-      const session = await sessionService.archiveActiveSession(user.id, req.params.sessionId)
+      const session = await sessionService.archiveActiveSession(
+        req.auth.user.id,
+        req.params.sessionId,
+      )
 
       if (!session) {
         return res.status(404).json({ error: '会话不存在' })
@@ -119,8 +117,10 @@ export function createSessionsRouter({
 
   router.get('/:sessionId/messages', async (req, res) => {
     try {
-      const user = await getCurrentUser()
-      const messages = await sessionService.listSessionMessages(user.id, req.params.sessionId)
+      const messages = await sessionService.listSessionMessages(
+        req.auth.user.id,
+        req.params.sessionId,
+      )
 
       if (!messages) {
         return res.status(404).json({ error: '会话不存在' })
@@ -139,8 +139,7 @@ export function createSessionsRouter({
       return res.status(400).json({ error: '消息内容无效' })
     }
 
-    const user = await getCurrentUser()
-    const session = await sessionService.getActiveSession(user.id, req.params.sessionId)
+    const session = await sessionService.getActiveSession(req.auth.user.id, req.params.sessionId)
 
     if (!session) {
       return res.status(404).json({ error: '会话不存在' })
@@ -204,14 +203,13 @@ export function createSessionsRouter({
       return res.status(400).json({ error: '重新生成参数无效' })
     }
 
-    const user = await getCurrentUser()
-    const session = await sessionService.getActiveSession(user.id, req.params.sessionId)
+    const session = await sessionService.getActiveSession(req.auth.user.id, req.params.sessionId)
 
     if (!session) {
       return res.status(404).json({ error: '会话不存在' })
     }
 
-    const target = await sessionService.getLatestRegenerationTarget(session.id)
+    const target = await sessionService.getLatestRegenerationTarget(req.auth.user.id, session.id)
     if (!target) {
       return res.status(409).json({ error: '没有可重新生成的回复' })
     }

@@ -24,7 +24,6 @@ const envSchema = z
     EMBEDDING_MODEL: z.string().trim().min(1).default('text-embedding-3-small'),
     PORT: z.coerce.number().int().positive().default(3003),
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-    DEFAULT_USER_EMAIL: z.string().trim().min(1).default('local@ai-pro-agent.dev'),
     CODE_SANDBOX_ENABLED: booleanEnv,
     CODE_SANDBOX_DOCKER_BINARY: z.string().trim().min(1).default('docker'),
     CODE_SANDBOX_JAVASCRIPT_IMAGE: z.string().trim().min(1).default('node:22-alpine'),

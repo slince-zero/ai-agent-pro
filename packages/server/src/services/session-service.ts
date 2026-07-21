@@ -172,6 +172,8 @@ export function createSessionService({
       const updated = await db.session.update({
         where: {
           id: session.id,
+          userId,
+          status: SessionStatus.ACTIVE,
         },
         data: {
           title: normalizeSessionTitle(title),
@@ -188,6 +190,8 @@ export function createSessionService({
       const archived = await db.session.update({
         where: {
           id: session.id,
+          userId,
+          status: SessionStatus.ACTIVE,
         },
         data: {
           status: SessionStatus.ARCHIVED,
@@ -208,6 +212,10 @@ export function createSessionService({
       const messages = await db.message.findMany({
         where: {
           sessionId: session.id,
+          session: {
+            userId,
+            status: SessionStatus.ACTIVE,
+          },
           role: {
             in: [MessageRole.USER, MessageRole.ASSISTANT],
           },
@@ -238,30 +246,47 @@ export function createSessionService({
       })
     },
 
-    async createUserMessage(sessionId: string, content: string) {
+    async createUserMessage(userId: string, sessionId: string, content: string) {
       return db.message.create({
         data: {
-          sessionId,
+          session: {
+            connect: {
+              id: sessionId,
+              userId,
+              status: SessionStatus.ACTIVE,
+            },
+          },
           role: MessageRole.USER,
           content,
         },
       })
     },
 
-    async createAssistantMessage(sessionId: string, content: string) {
+    async createAssistantMessage(userId: string, sessionId: string, content: string) {
       return db.message.create({
         data: {
-          sessionId,
+          session: {
+            connect: {
+              id: sessionId,
+              userId,
+              status: SessionStatus.ACTIVE,
+            },
+          },
           role: MessageRole.ASSISTANT,
           content,
         },
       })
     },
 
-    async updateAssistantMessage(messageId: string, content: string) {
+    async updateAssistantMessage(userId: string, messageId: string, content: string) {
       return db.message.update({
         where: {
           id: messageId,
+          role: MessageRole.ASSISTANT,
+          session: {
+            userId,
+            status: SessionStatus.ACTIVE,
+          },
         },
         data: {
           content,
@@ -269,10 +294,17 @@ export function createSessionService({
       })
     },
 
-    async getLatestRegenerationTarget(sessionId: string): Promise<RegenerationTarget | null> {
+    async getLatestRegenerationTarget(
+      userId: string,
+      sessionId: string,
+    ): Promise<RegenerationTarget | null> {
       const userMessage = await db.message.findFirst({
         where: {
           sessionId,
+          session: {
+            userId,
+            status: SessionStatus.ACTIVE,
+          },
           role: MessageRole.USER,
         },
         orderBy: {
@@ -284,6 +316,10 @@ export function createSessionService({
       const assistantMessage = await db.message.findFirst({
         where: {
           sessionId,
+          session: {
+            userId,
+            status: SessionStatus.ACTIVE,
+          },
           role: MessageRole.ASSISTANT,
           createdAt: {
             gt: userMessage.createdAt,
@@ -304,6 +340,8 @@ export function createSessionService({
       return db.session.update({
         where: {
           id: session.id,
+          userId: session.userId,
+          status: SessionStatus.ACTIVE,
         },
         data: {
           title: toTitle(content),
@@ -311,10 +349,12 @@ export function createSessionService({
       })
     },
 
-    async touchSession(sessionId: string) {
+    async touchSession(userId: string, sessionId: string) {
       return db.session.update({
         where: {
           id: sessionId,
+          userId,
+          status: SessionStatus.ACTIVE,
         },
         data: {
           updatedAt: new Date(),
@@ -323,6 +363,7 @@ export function createSessionService({
     },
 
     async getRecentClientMessages(
+      userId: string,
       sessionId: string,
       take: number,
       options: { excludeMessageIds?: string[] } = {},
@@ -331,6 +372,10 @@ export function createSessionService({
       const dbMessages = await db.message.findMany({
         where: {
           sessionId,
+          session: {
+            userId,
+            status: SessionStatus.ACTIVE,
+          },
           ...(excludeMessageIds.length > 0
             ? {
                 id: {

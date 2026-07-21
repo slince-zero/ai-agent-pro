@@ -7,9 +7,7 @@ import type {
   Message,
   Session,
   ToolCall,
-  User,
 } from '../generated/prisma/client.js'
-import { getCurrentUser } from '../services/users.js'
 
 const DEFAULT_RUN_LIMIT = 30
 const MAX_RUN_LIMIT = 100
@@ -26,7 +24,6 @@ type RunsDb = {
 
 type RunsRouterDeps = {
   db?: RunsDb
-  getUser?: () => Promise<Pick<User, 'id'>>
 }
 
 type MessageTrace = Pick<Message, 'id' | 'role' | 'content' | 'createdAt'>
@@ -216,20 +213,16 @@ function serializeRunSummary(run: RunWithRelations) {
   }
 }
 
-export function createRunsRouter({
-  db = prisma as unknown as RunsDb,
-  getUser = getCurrentUser,
-}: RunsRouterDeps = {}) {
+export function createRunsRouter({ db = prisma as unknown as RunsDb }: RunsRouterDeps = {}) {
   const router = Router()
 
   router.get('/', async (req, res) => {
     try {
-      const user = await getUser()
       const limit = parseLimit(req.query.limit)
       const runs = await db.agentRun.findMany({
         where: {
           session: {
-            userId: user.id,
+            userId: req.auth.user.id,
           },
         },
         orderBy: {
@@ -278,12 +271,11 @@ export function createRunsRouter({
 
   router.get('/:runId', async (req, res) => {
     try {
-      const user = await getUser()
       const run = await db.agentRun.findFirst({
         where: {
           id: req.params.runId,
           session: {
-            userId: user.id,
+            userId: req.auth.user.id,
           },
         },
         include: {
