@@ -268,19 +268,24 @@ docker run \
 | `DEEPSEEK_BASE_URL`             | 否   | `https://api.deepseek.com`                                   | 兼容旧配置的模型服务 base URL。                           |
 | `DEEPSEEK_MODEL`                | 否   | `deepseek-v4-pro`                                            | 兼容旧配置的模型名。                                      |
 | `DATABASE_URL`                  | 是   | `postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent` | Prisma/Postgres 连接串。                                  |
+| `BETTER_AUTH_SECRET`            | 生产 | 开发环境内置临时值                                           | Better Auth 密钥，生产环境至少 32 字符。                  |
+| `BETTER_AUTH_URL`               | 生产 | `http://localhost:PORT`                                      | 应用对外根 URL，不包含 `/api/auth`。                      |
+| `AUTH_TRUSTED_ORIGINS`          | 否   | 空                                                           | 额外可信前端 Origin，多个值用逗号分隔。                   |
 | `GITHUB_TOKEN`                  | 否   | 空                                                           | GitHub 仓库查询工具的可选 token。                         |
 | `MCP_SERVERS_JSON`              | 否   | 空                                                           | 外部 MCP server 配置 JSON，支持 `mcpServers` 对象或数组。 |
 | `CODE_SANDBOX_ENABLED`          | 否   | `false`                                                      | 是否注册 Docker `code_execute` 工具。                     |
 | `CODE_SANDBOX_DOCKER_BINARY`    | 否   | `docker`                                                     | Docker CLI 路径或命令名。                                 |
 | `CODE_SANDBOX_JAVASCRIPT_IMAGE` | 否   | `node:22-alpine`                                             | JavaScript 沙箱固定镜像，推荐使用 digest。                |
 | `CODE_SANDBOX_PYTHON_IMAGE`     | 否   | `python:3.13-alpine`                                         | Python 沙箱固定镜像，推荐使用 digest。                    |
-| `DEFAULT_USER_EMAIL`            | 否   | `local@ai-pro-agent.dev`                                     | 当前无鉴权版本使用的本地用户标识。                        |
+| `DEFAULT_USER_EMAIL`            | 否   | `local@ai-pro-agent.dev`                                     | 仅开发和测试环境使用的本地用户标识。                      |
+| `DEFAULT_USER_PASSWORD`         | 否   | 空                                                           | `db:seed` 可选登录密码，至少 8 字符。                     |
 | `PORT`                          | 否   | `3003`                                                       | 后端监听端口。                                            |
 | `CLIENT_DIST_DIR`               | 否   | `public`                                                     | 生产模式下 Express 托管前端静态资源的位置。               |
 
 ## 当前限制
 
-- 当前没有正式鉴权，多用户部署前需要补认证和会话隔离。
+- 后端已提供 Better Auth 邮箱密码注册、登录、退出和会话接口；前端登录页与业务 API
+  会话隔离仍待接入。
 - 聊天链路为 `/api/sessions/:sessionId/messages`，支持会话持久化。
 - Docker 代码沙箱默认关闭；生产环境必须使用专用 daemon/VM，不能依赖共享宿主 socket 作为强隔离边界。
 - 多 Agent 需要 Planner、Executor、Critic 三个模型阶段，会增加首字延迟和 token 成本，默认不启用。
