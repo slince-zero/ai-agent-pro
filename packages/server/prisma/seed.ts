@@ -2,6 +2,7 @@
 
 import 'dotenv/config'
 import { PrismaPg } from '@prisma/adapter-pg'
+import { hashPassword } from 'better-auth/crypto'
 
 import {
   MemoryScope,
@@ -16,6 +17,7 @@ import { PrismaClient } from '../src/generated/prisma/client.js'
 const databaseUrl =
   process.env.DATABASE_URL ?? 'postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent'
 const defaultUserEmail = process.env.DEFAULT_USER_EMAIL ?? 'local@ai-pro-agent.dev'
+const defaultUserPassword = process.env.DEFAULT_USER_PASSWORD
 
 const seedIds = {
   user: 'seed-user-local',
@@ -33,8 +35,15 @@ const prisma = new PrismaClient({
 })
 
 async function main() {
+  if (defaultUserPassword && defaultUserPassword.length < 8) {
+    throw new Error('DEFAULT_USER_PASSWORD must contain at least 8 characters.')
+  }
+
   const startedAt = new Date('2026-01-01T00:00:00.000Z')
   const finishedAt = new Date('2026-01-01T00:00:02.000Z')
+  const credentialPassword = defaultUserPassword
+    ? await hashPassword(defaultUserPassword)
+    : undefined
 
   const user = await prisma.user.upsert({
     where: { email: defaultUserEmail },
@@ -47,6 +56,31 @@ async function main() {
   })
 
   await prisma.$transaction(async (tx) => {
+    if (credentialPassword) {
+      const account = await tx.account.findFirst({
+        where: {
+          accountId: user.id,
+          providerId: 'credential',
+        },
+      })
+
+      if (account) {
+        await tx.account.update({
+          where: { id: account.id },
+          data: { password: credentialPassword },
+        })
+      } else {
+        await tx.account.create({
+          data: {
+            accountId: user.id,
+            providerId: 'credential',
+            userId: user.id,
+            password: credentialPassword,
+          },
+        })
+      }
+    }
+
     await tx.session.deleteMany({ where: { id: seedIds.session } })
     await tx.memory.deleteMany({ where: { id: seedIds.memory } })
 
@@ -143,6 +177,9 @@ async function main() {
   })
 
   console.log(`Seeded demo data for ${defaultUserEmail}.`)
+  if (credentialPassword) {
+    console.log('Seeded a Better Auth credential account from DEFAULT_USER_PASSWORD.')
+  }
   console.log(`Session: ${seedIds.session}`)
 }
 
