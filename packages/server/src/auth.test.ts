@@ -32,6 +32,8 @@ before(async () => {
     baseURL: 'http://127.0.0.1:3003',
     secret: 'test-secret-with-at-least-32-characters',
     secureCookies: false,
+    requireEmailVerification: false,
+    rateLimitEnabled: false,
   })
   const { createRequireAuth } = await import('./middleware/auth.js')
   const app = express()
@@ -248,6 +250,8 @@ test('uses secure session cookies when configured for production', async () => {
     baseURL: 'https://agent.example.com',
     secret: 'test-secret-with-at-least-32-characters',
     secureCookies: true,
+    requireEmailVerification: false,
+    rateLimitEnabled: false,
   })
   const response = await secureAuth.handler(
     new Request('https://agent.example.com/api/auth/sign-up/email', {

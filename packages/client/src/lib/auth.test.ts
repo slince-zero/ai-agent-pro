@@ -3,12 +3,18 @@ import { afterEach, mock, test } from 'node:test'
 
 import {
   AuthError,
+  getAuthAction,
   getSession,
   invalidateSessionCache,
+  requestPasswordReset,
+  resendVerificationEmail,
+  resetPassword,
   signIn,
   signOut,
   signUp,
   validateAuthFields,
+  validateEmail,
+  validateNewPassword,
 } from './auth.ts'
 
 const user = {
@@ -121,6 +127,46 @@ test('signs out through the cookie-auth endpoint', async () => {
   assert.equal(fetchMock.mock.calls[0]?.arguments[1]?.credentials, 'include')
 })
 
+test('sends generic recovery and verification requests with normalized emails', async () => {
+  const fetchMock = mock.method(globalThis, 'fetch', async () => Response.json({ status: true }))
+
+  await requestPasswordReset('  test@example.com  ')
+  await resendVerificationEmail('  test@example.com  ')
+
+  assert.equal(fetchMock.mock.calls[0]?.arguments[0], '/api/auth/request-password-reset')
+  assert.deepEqual(JSON.parse(String(fetchMock.mock.calls[0]?.arguments[1]?.body)), {
+    email: 'test@example.com',
+  })
+  assert.equal(fetchMock.mock.calls[1]?.arguments[0], '/api/auth/send-verification-email')
+})
+
+test('resets passwords with the one-time token without exposing it in the URL', async () => {
+  const fetchMock = mock.method(globalThis, 'fetch', async () => Response.json({ status: true }))
+
+  await resetPassword('reset-token', 'new-password')
+
+  const request = fetchMock.mock.calls[0]
+  assert.equal(request?.arguments[0], '/api/auth/reset-password')
+  assert.deepEqual(JSON.parse(String(request?.arguments[1]?.body)), {
+    token: 'reset-token',
+    newPassword: 'new-password',
+  })
+})
+
+test('parses supported auth links and rejects incomplete reset links', () => {
+  assert.deepEqual(getAuthAction('?auth_action=email-verified'), { type: 'email-verified' })
+  assert.deepEqual(getAuthAction('?auth_action=reset-password&token=abc'), {
+    type: 'reset-password',
+    token: 'abc',
+  })
+  assert.deepEqual(getAuthAction('', '#auth_action=reset-password&token=fragment-token'), {
+    type: 'reset-password',
+    token: 'fragment-token',
+  })
+  assert.deepEqual(getAuthAction('?auth_action=reset-password'), { type: 'reset-password-error' })
+  assert.equal(getAuthAction('?auth_action=unknown'), null)
+})
+
 test('validates login and registration fields before submission', () => {
   assert.deepEqual(
     validateAuthFields('sign-in', { name: '', email: 'invalid', password: 'short' }),
@@ -134,4 +180,8 @@ test('validates login and registration fields before submission', () => {
     email: '请输入邮箱地址。',
     password: '请输入密码。',
   })
+  assert.equal(validateEmail('invalid'), '请输入有效的邮箱地址。')
+  assert.equal(validateEmail('test@example.com'), undefined)
+  assert.equal(validateNewPassword('password', 'different'), '两次输入的密码不一致。')
+  assert.equal(validateNewPassword('password', 'password'), undefined)
 })

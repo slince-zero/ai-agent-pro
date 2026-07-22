@@ -7,6 +7,9 @@ import {
   signIn,
   signOut,
   signUp,
+  AuthError,
+  type AuthFields,
+  type AuthMode,
   type AuthUser,
 } from '@/lib/auth'
 
@@ -14,6 +17,10 @@ type AuthState =
   | { status: 'loading' }
   | { status: 'unauthenticated' }
   | { status: 'authenticated'; user: AuthUser }
+
+export type AuthenticationResult =
+  | { status: 'authenticated' }
+  | { status: 'verification-required'; email: string }
 
 export function useAuth() {
   const [state, setState] = useState<AuthState>({ status: 'loading' })
@@ -45,21 +52,28 @@ export function useAuth() {
   useEffect(() => setUnauthorizedHandler(expireSession), [expireSession])
 
   const authenticate = useCallback(
-    async (
-      mode: 'sign-in' | 'sign-up',
-      fields: {
-        name: string
-        email: string
-        password: string
-      },
-    ) => {
-      const user =
-        mode === 'sign-in'
-          ? await signIn(fields.email, fields.password)
-          : await signUp(fields.name, fields.email, fields.password)
+    async (mode: AuthMode, fields: AuthFields): Promise<AuthenticationResult> => {
+      const email = fields.email.trim()
+
+      if (mode === 'sign-up') {
+        await signUp(fields.name, email, fields.password)
+        setState({ status: 'unauthenticated' })
+        return { status: 'verification-required', email }
+      }
+
+      let user: AuthUser
+      try {
+        user = await signIn(email, fields.password)
+      } catch (error) {
+        if (error instanceof AuthError && error.code === 'EMAIL_NOT_VERIFIED') {
+          return { status: 'verification-required', email }
+        }
+        throw error
+      }
 
       resetUnauthorizedNotification()
       setState({ status: 'authenticated', user })
+      return { status: 'authenticated' }
     },
     [],
   )
@@ -72,6 +86,7 @@ export function useAuth() {
   return {
     state,
     authenticate,
+    expireSession,
     signOut: endSession,
   }
 }
