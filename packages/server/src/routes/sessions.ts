@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 
+import { sendApiError } from '../middleware/api-error.js'
 import type { ModelClient } from '../runtime/model-client/types.js'
 import { createChatService } from '../services/chat-service.js'
 import { createSessionService } from '../services/session-service.js'
@@ -53,14 +54,14 @@ export function createSessionsRouter({
       res.json({ sessions })
     } catch (error) {
       req.log.error({ err: error }, '获取会话列表失败')
-      res.status(500).json({ error: '获取会话列表失败' })
+      sendApiError(req, res, 500, 'SESSION_LIST_FAILED', '获取会话列表失败')
     }
   })
 
   router.post('/', async (req, res) => {
     const parsed = createSessionSchema.safeParse(req.body)
     if (!parsed.success) {
-      return res.status(400).json({ error: '会话参数无效' })
+      return sendApiError(req, res, 422, 'VALIDATION_ERROR', '会话参数无效')
     }
 
     try {
@@ -69,14 +70,14 @@ export function createSessionsRouter({
       res.status(201).json({ session })
     } catch (error) {
       req.log.error({ err: error }, '创建会话失败')
-      res.status(500).json({ error: '创建会话失败' })
+      sendApiError(req, res, 500, 'SESSION_CREATE_FAILED', '创建会话失败')
     }
   })
 
   router.patch('/:sessionId', async (req, res) => {
     const parsed = updateSessionSchema.safeParse(req.body)
     if (!parsed.success) {
-      return res.status(400).json({ error: '会话参数无效' })
+      return sendApiError(req, res, 422, 'VALIDATION_ERROR', '会话参数无效')
     }
 
     try {
@@ -87,13 +88,13 @@ export function createSessionsRouter({
       )
 
       if (!session) {
-        return res.status(404).json({ error: '会话不存在' })
+        return sendApiError(req, res, 404, 'SESSION_NOT_FOUND', '会话不存在')
       }
 
       res.json({ session })
     } catch (error) {
       req.log.error({ err: error }, '重命名会话失败')
-      res.status(500).json({ error: '重命名会话失败' })
+      sendApiError(req, res, 500, 'SESSION_RENAME_FAILED', '重命名会话失败')
     }
   })
 
@@ -105,13 +106,13 @@ export function createSessionsRouter({
       )
 
       if (!session) {
-        return res.status(404).json({ error: '会话不存在' })
+        return sendApiError(req, res, 404, 'SESSION_NOT_FOUND', '会话不存在')
       }
 
       res.json({ session })
     } catch (error) {
       req.log.error({ err: error }, '删除会话失败')
-      res.status(500).json({ error: '删除会话失败' })
+      sendApiError(req, res, 500, 'SESSION_DELETE_FAILED', '删除会话失败')
     }
   })
 
@@ -123,26 +124,26 @@ export function createSessionsRouter({
       )
 
       if (!messages) {
-        return res.status(404).json({ error: '会话不存在' })
+        return sendApiError(req, res, 404, 'SESSION_NOT_FOUND', '会话不存在')
       }
 
       res.json({ messages })
     } catch (error) {
       req.log.error({ err: error }, '获取消息失败')
-      res.status(500).json({ error: '获取消息失败' })
+      sendApiError(req, res, 500, 'MESSAGE_LIST_FAILED', '获取消息失败')
     }
   })
 
   router.post('/:sessionId/messages', async (req, res) => {
     const parsed = createMessageSchema.safeParse(req.body)
     if (!parsed.success) {
-      return res.status(400).json({ error: '消息内容无效' })
+      return sendApiError(req, res, 422, 'VALIDATION_ERROR', '消息内容无效')
     }
 
     const session = await sessionService.getActiveSession(req.auth.user.id, req.params.sessionId)
 
     if (!session) {
-      return res.status(404).json({ error: '会话不存在' })
+      return sendApiError(req, res, 404, 'SESSION_NOT_FOUND', '会话不存在')
     }
 
     prepareSse(res)
@@ -200,18 +201,18 @@ export function createSessionsRouter({
   router.post('/:sessionId/regenerate', async (req, res) => {
     const parsed = regenerateMessageSchema.safeParse(req.body ?? {})
     if (!parsed.success) {
-      return res.status(400).json({ error: '重新生成参数无效' })
+      return sendApiError(req, res, 422, 'VALIDATION_ERROR', '重新生成参数无效')
     }
 
     const session = await sessionService.getActiveSession(req.auth.user.id, req.params.sessionId)
 
     if (!session) {
-      return res.status(404).json({ error: '会话不存在' })
+      return sendApiError(req, res, 404, 'SESSION_NOT_FOUND', '会话不存在')
     }
 
     const target = await sessionService.getLatestRegenerationTarget(req.auth.user.id, session.id)
     if (!target) {
-      return res.status(409).json({ error: '没有可重新生成的回复' })
+      return sendApiError(req, res, 409, 'NO_REGENERATION_TARGET', '没有可重新生成的回复')
     }
 
     prepareSse(res)

@@ -2,6 +2,7 @@ import { fromNodeHeaders } from 'better-auth/node'
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
 
 import { auth } from '../auth.js'
+import { sendApiError } from './api-error.js'
 
 export type AuthenticatedSession = NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>
 
@@ -19,7 +20,7 @@ export function createRequireAuth({
       const session = await getSession(fromNodeHeaders(req.headers))
 
       if (!session) {
-        res.status(401).json({ error: 'Unauthorized' })
+        sendApiError(req, res, 401, 'AUTH_REQUIRED', 'Unauthorized')
         return
       }
 

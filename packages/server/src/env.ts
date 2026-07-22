@@ -1,5 +1,9 @@
 import { z } from 'zod'
 
+export const DEVELOPMENT_AUTH_SECRET = 'ai-agent-pro-development-only-auth-secret'
+
+const unsafeTrustProxyValues = new Set(['true', '*', '0', '0.0.0.0/0', '::/0'])
+
 const booleanEnv = z
   .enum(['true', 'false'])
   .default('false')
@@ -28,6 +32,17 @@ const envSchema = z
     CODE_SANDBOX_DOCKER_BINARY: z.string().trim().min(1).default('docker'),
     CODE_SANDBOX_JAVASCRIPT_IMAGE: z.string().trim().min(1).default('node:22-alpine'),
     CODE_SANDBOX_PYTHON_IMAGE: z.string().trim().min(1).default('python:3.13-alpine'),
+    API_MAX_BODY_BYTES: z.coerce.number().int().min(1_024).max(1_048_576).default(65_536),
+    API_MAX_URL_CHARS: z.coerce.number().int().min(512).max(16_384).default(4_096),
+    API_RATE_LIMIT_WINDOW_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .default(15 * 60 * 1_000),
+    API_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
+    AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
+    RUN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+    RUN_CONCURRENCY_MAX: z.coerce.number().int().min(1).max(10).default(2),
 
     // ---- 可选（无默认值） ----
     MODEL_BASE_URL: z.string().trim().min(1).optional(),
@@ -48,6 +63,17 @@ const envSchema = z
     AUTH_EMAIL_PROVIDER: z.enum(['console', 'resend']).default('console'),
     AUTH_EMAIL_FROM: z.string().trim().min(1).optional(),
     RESEND_API_KEY: z.string().trim().min(1).optional(),
+    TRUST_PROXY: z
+      .string()
+      .trim()
+      .min(1)
+      .refine((value) => {
+        const normalized = value.toLowerCase()
+        if (unsafeTrustProxyValues.has(normalized)) return false
+        if (/^\d+$/.test(normalized)) return Number(normalized) >= 1 && Number(normalized) <= 10
+        return true
+      }, 'TRUST_PROXY 不能信任任意来源，跳数必须在 1 到 10 之间')
+      .optional(),
   })
   .superRefine((value, context) => {
     if (value.NODE_ENV !== 'production') return
@@ -58,6 +84,12 @@ const envSchema = z
         path: ['BETTER_AUTH_SECRET'],
         message: '生产环境必须设置 BETTER_AUTH_SECRET',
       })
+    } else if (value.BETTER_AUTH_SECRET === DEVELOPMENT_AUTH_SECRET) {
+      context.addIssue({
+        code: 'custom',
+        path: ['BETTER_AUTH_SECRET'],
+        message: '生产环境不能使用开发默认密钥',
+      })
     }
 
     if (!value.BETTER_AUTH_URL) {
@@ -65,6 +97,14 @@ const envSchema = z
         code: 'custom',
         path: ['BETTER_AUTH_URL'],
         message: '生产环境必须设置 BETTER_AUTH_URL',
+      })
+    }
+
+    if (!value.TRUST_PROXY) {
+      context.addIssue({
+        code: 'custom',
+        path: ['TRUST_PROXY'],
+        message: '生产环境必须显式设置 TRUST_PROXY',
       })
     }
 
