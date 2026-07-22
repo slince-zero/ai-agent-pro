@@ -3,7 +3,7 @@ import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { APIError, createAuthMiddleware } from 'better-auth/api'
 
 import { prisma } from './db/client.js'
-import { env } from './env.js'
+import { DEVELOPMENT_AUTH_SECRET, env } from './env.js'
 import { logger } from './logger.js'
 import {
   createAccountSendRateLimiter,
@@ -26,7 +26,6 @@ import {
 
 export const AUTH_BASE_PATH = '/api/auth'
 
-const developmentSecret = 'ai-agent-pro-development-only-auth-secret'
 const EMAIL_VERIFICATION_EXPIRES_IN_SECONDS = 30 * 60
 const PASSWORD_RESET_EXPIRES_IN_SECONDS = 15 * 60
 
@@ -108,7 +107,7 @@ export function createAuth(options: CreateAuthOptions = {}) {
     appName: 'ai-agent-pro',
     baseURL,
     basePath: AUTH_BASE_PATH,
-    secret: options.secret ?? env.BETTER_AUTH_SECRET ?? developmentSecret,
+    secret: options.secret ?? env.BETTER_AUTH_SECRET ?? DEVELOPMENT_AUTH_SECRET,
     database:
       options.database ??
       prismaAdapter(prisma, {

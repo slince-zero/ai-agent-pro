@@ -81,7 +81,7 @@ test('returns 401 when an API request has no authenticated session', async () =>
   const response = await fetch(`${baseUrl}/api/protected`)
 
   assert.equal(response.status, 401)
-  assert.deepEqual(await response.json(), { error: 'Unauthorized' })
+  assert.deepEqual(await response.json(), { error: 'Unauthorized', code: 'AUTH_REQUIRED' })
 })
 
 test('attaches the authenticated user to the Express request', async () => {

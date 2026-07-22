@@ -274,6 +274,14 @@ docker run \
 | `BETTER_AUTH_URL`               | 生产 | `http://localhost:PORT`                                      | 应用对外根 URL，不包含 `/api/auth`。                      |
 | `AUTH_APP_URL`                  | 否   | 开发为 `http://localhost:5173`，生产回退到 `BETTER_AUTH_URL` | 邮件操作完成后用户返回的可信前端根 URL。                  |
 | `AUTH_TRUSTED_ORIGINS`          | 否   | 空                                                           | 额外可信前端 Origin，多个值用逗号分隔。                   |
+| `TRUST_PROXY`                   | 生产 | `false`                                                      | 可信代理跳数或明确 IP/子网；禁止全局信任。                |
+| `API_MAX_BODY_BYTES`            | 否   | `65536`                                                      | API 请求体硬上限（bytes）。                               |
+| `API_MAX_URL_CHARS`             | 否   | `4096`                                                       | API URL 字符数硬上限。                                    |
+| `API_RATE_LIMIT_WINDOW_MS`      | 否   | `900000`                                                     | API、认证和 run 限流窗口。                                |
+| `API_RATE_LIMIT_MAX`            | 否   | `300`                                                        | 每 IP、每窗口的业务 API 请求上限。                        |
+| `AUTH_RATE_LIMIT_MAX`           | 否   | `60`                                                         | 每 IP、每窗口的认证请求上限。                             |
+| `RUN_RATE_LIMIT_MAX`            | 否   | `10`                                                         | 每用户、每窗口的 agent run 创建上限。                     |
+| `RUN_CONCURRENCY_MAX`           | 否   | `2`                                                          | 每用户同时运行的 agent run 上限。                         |
 | `AUTH_EMAIL_PROVIDER`           | 生产 | 开发为 `console`                                             | 事务邮件 provider；生产环境必须为 `resend`。              |
 | `AUTH_EMAIL_FROM`               | 生产 | 空                                                           | Resend 已验证域名下的发件地址。                           |
 | `RESEND_API_KEY`                | 生产 | 空                                                           | Resend API Key。                                          |
@@ -296,6 +304,7 @@ docker run \
 - Docker 代码沙箱默认关闭；生产环境必须使用专用 daemon/VM，不能依赖共享宿主 socket 作为强隔离边界。
 - 多 Agent 需要 Planner、Executor、Critic 三个模型阶段，会增加首字延迟和 token 成本，默认不启用。
 - `web_fetch` 会拒绝私网地址并逐跳校验重定向；生产环境仍应配合网络出口策略。
+- 生产部署前请按 [生产 API 安全指南](docs/PRODUCTION_SECURITY.md) 配置反向代理、共享限流存储和请求体上限。
 
 ## 参与贡献
 

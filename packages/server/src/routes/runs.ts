@@ -8,6 +8,7 @@ import type {
   Session,
   ToolCall,
 } from '../generated/prisma/client.js'
+import { sendApiError } from '../middleware/api-error.js'
 
 const DEFAULT_RUN_LIMIT = 30
 const MAX_RUN_LIMIT = 100
@@ -265,7 +266,7 @@ export function createRunsRouter({ db = prisma as unknown as RunsDb }: RunsRoute
       res.json({ runs: runs.map(serializeRunSummary) })
     } catch (error) {
       req.log.error({ err: error }, '获取运行记录失败')
-      res.status(500).json({ error: '获取运行记录失败' })
+      sendApiError(req, res, 500, 'RUN_LIST_FAILED', '获取运行记录失败')
     }
   })
 
@@ -301,13 +302,13 @@ export function createRunsRouter({ db = prisma as unknown as RunsDb }: RunsRoute
       })
 
       if (!run) {
-        return res.status(404).json({ error: '运行记录不存在' })
+        return sendApiError(req, res, 404, 'RUN_NOT_FOUND', '运行记录不存在')
       }
 
       res.json({ run: serializeRun(run) })
     } catch (error) {
       req.log.error({ err: error }, '获取运行详情失败')
-      res.status(500).json({ error: '获取运行详情失败' })
+      sendApiError(req, res, 500, 'RUN_READ_FAILED', '获取运行详情失败')
     }
   })
 
