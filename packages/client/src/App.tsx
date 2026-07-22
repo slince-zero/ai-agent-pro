@@ -8,7 +8,10 @@ const PublicSite = lazy(() => import('@/components/public/public-site'))
 function RouteLoading() {
   return (
     <main className="flex min-h-svh items-center justify-center bg-[#f5f7f4] text-sm text-[#5d665f]">
-      <span className="route-loading-mark" aria-hidden="true" />
+      <span
+        className="size-[18px] animate-spin rounded-full border-2 border-[#bac2bc] border-t-[#07845d] motion-reduce:animate-none"
+        aria-hidden="true"
+      />
       <span className="sr-only">Loading</span>
     </main>
   )
