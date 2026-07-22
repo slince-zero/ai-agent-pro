@@ -9,7 +9,7 @@ import { Sidebar } from '@/components/chat/sidebar'
 import { WelcomePanel } from '@/components/chat/welcome-panel'
 import { RunsView } from '@/components/runs/runs-view'
 import { useAuth } from '@/hooks/use-auth'
-import type { AuthUser } from '@/lib/auth'
+import { getAuthAction, type AuthAction, type AuthUser } from '@/lib/auth'
 import { streamChatResponse, streamRegeneratedResponse } from '@/lib/chat-stream'
 import { promptPresets } from '@/lib/prompt-presets'
 import {
@@ -23,13 +23,27 @@ import type { ChatSession, Citation, Message, WorkflowMode, WorkflowStage } from
 
 export default function App() {
   const auth = useAuth()
+  const [authAction, setAuthAction] = useState<AuthAction | null>(() => getAuthAction())
+
+  if (authAction) {
+    return (
+      <AuthScreen
+        initialAction={authAction}
+        onAuthenticate={auth.authenticate}
+        onDismissAction={() => setAuthAction(null)}
+        onSessionInvalidated={auth.expireSession}
+      />
+    )
+  }
 
   if (auth.state.status === 'loading') {
     return <AuthLoading />
   }
 
   if (auth.state.status === 'unauthenticated') {
-    return <AuthScreen onAuthenticate={auth.authenticate} />
+    return (
+      <AuthScreen onAuthenticate={auth.authenticate} onSessionInvalidated={auth.expireSession} />
+    )
   }
 
   return <Workspace onSignOut={auth.signOut} user={auth.state.user} />
