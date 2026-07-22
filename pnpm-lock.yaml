@@ -118,6 +118,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
+      express-rate-limit:
+        specifier: 8.5.2
+        version: 8.5.2(express@5.2.1)
       openai:
         specifier: ^6.35.0
         version: 6.42.0(zod@4.4.3)

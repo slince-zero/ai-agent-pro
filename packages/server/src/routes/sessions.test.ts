@@ -213,14 +213,14 @@ test('hides cross-user sessions from read, modify, delete and chat operations', 
   const responses = await Promise.all(requests)
   for (const response of responses) {
     assert.equal(response.status, 404)
-    assert.deepEqual(await response.json(), { error: '会话不存在' })
+    assert.deepEqual(await response.json(), { error: '会话不存在', code: 'SESSION_NOT_FOUND' })
   }
 
   assert.deepEqual(chatCalls, { send: 0, regenerate: 0 })
 
   const missing = await sessionRequest('/missing/messages', 'user_1')
   assert.equal(missing.status, 404)
-  assert.deepEqual(await missing.json(), { error: '会话不存在' })
+  assert.deepEqual(await missing.json(), { error: '会话不存在', code: 'SESSION_NOT_FOUND' })
 })
 
 test('allows the owner to read session messages', async () => {
@@ -232,4 +232,14 @@ test('allows the owner to read session messages', async () => {
     body.messages.map((message) => message.id),
     ['message_1'],
   )
+})
+
+test('returns a stable 422 error for invalid request bodies', async () => {
+  const response = await sessionRequest('/session_1/messages', 'user_1', {
+    method: 'POST',
+    body: JSON.stringify({ content: '' }),
+  })
+
+  assert.equal(response.status, 422)
+  assert.deepEqual(await response.json(), { error: '消息内容无效', code: 'VALIDATION_ERROR' })
 })
