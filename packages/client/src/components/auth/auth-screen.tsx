@@ -195,12 +195,16 @@ export function AuthScreen({
   return (
     <main className="bg-background text-foreground grid min-h-svh lg:grid-cols-[minmax(280px,0.78fr)_minmax(440px,1.22fr)]">
       <section className="bg-foreground text-background flex min-h-44 flex-col justify-between px-6 py-6 sm:px-10 lg:min-h-svh lg:px-12 lg:py-10">
-        <div className="flex items-center gap-3">
+        <a
+          className="flex w-fit items-center gap-3 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
+          href="/"
+          aria-label="返回产品首页"
+        >
           <span className="bg-primary flex size-9 items-center justify-center rounded-lg">
             <span className="font-mono text-sm font-semibold text-white">AI</span>
           </span>
           <span className="text-sm font-semibold">AI Engineering Agent</span>
-        </div>
+        </a>
 
         <div className="max-w-md py-8 lg:py-0">
           <p className="text-background/60 font-mono text-xs">PERSONAL WORKSPACE</p>

@@ -227,7 +227,9 @@ pnpm --filter server db:reset -- --confirm-local-reset
 Docker 本地构建：
 
 ```bash
-docker build -t ai-pro-agent:local .
+docker build \
+  --build-arg VITE_PUBLIC_SUPPORT_EMAIL=support@example.com \
+  -t ai-pro-agent:local .
 docker run \
   --env-file .env \
   -e DATABASE_URL=postgresql://ai_agent:ai_agent@host.docker.internal:5432/ai_pro_agent \
@@ -261,40 +263,41 @@ docker run \
 
 本地开发时，后端读取 `packages/server/.env`；Docker Compose 解析配置时还需要根目录 `.env`。
 
-| 变量                            | 必填 | 默认值                                                       | 说明                                                      |
-| ------------------------------- | ---- | ------------------------------------------------------------ | --------------------------------------------------------- |
-| `OPENAI_API_KEY`                | 是   | 空                                                           | OpenAI-compatible API Key。                               |
-| `MODEL_PROVIDER`                | 否   | `openai-compatible`                                          | 模型供应商；`anthropic` 目前为预留入口。                  |
-| `MODEL_BASE_URL`                | 否   | 空                                                           | OpenAI-compatible base URL，优先于旧变量。                |
-| `MODEL_NAME`                    | 否   | 空                                                           | 后端请求的模型名，优先于旧变量。                          |
-| `DEEPSEEK_BASE_URL`             | 否   | `https://api.deepseek.com`                                   | 兼容旧配置的模型服务 base URL。                           |
-| `DEEPSEEK_MODEL`                | 否   | `deepseek-v4-pro`                                            | 兼容旧配置的模型名。                                      |
-| `DATABASE_URL`                  | 是   | `postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent` | Prisma/Postgres 连接串。                                  |
-| `BETTER_AUTH_SECRET`            | 生产 | 开发环境内置临时值                                           | Better Auth 密钥，生产环境至少 32 字符。                  |
-| `BETTER_AUTH_URL`               | 生产 | `http://localhost:PORT`                                      | 应用对外根 URL，不包含 `/api/auth`。                      |
-| `AUTH_APP_URL`                  | 否   | 开发为 `http://localhost:5173`，生产回退到 `BETTER_AUTH_URL` | 邮件操作完成后用户返回的可信前端根 URL。                  |
-| `AUTH_TRUSTED_ORIGINS`          | 否   | 空                                                           | 额外可信前端 Origin，多个值用逗号分隔。                   |
-| `TRUST_PROXY`                   | 生产 | `false`                                                      | 可信代理跳数或明确 IP/子网；禁止全局信任。                |
-| `API_MAX_BODY_BYTES`            | 否   | `65536`                                                      | API 请求体硬上限（bytes）。                               |
-| `API_MAX_URL_CHARS`             | 否   | `4096`                                                       | API URL 字符数硬上限。                                    |
-| `API_RATE_LIMIT_WINDOW_MS`      | 否   | `900000`                                                     | API、认证和 run 限流窗口。                                |
-| `API_RATE_LIMIT_MAX`            | 否   | `300`                                                        | 每 IP、每窗口的业务 API 请求上限。                        |
-| `AUTH_RATE_LIMIT_MAX`           | 否   | `60`                                                         | 每 IP、每窗口的认证请求上限。                             |
-| `RUN_RATE_LIMIT_MAX`            | 否   | `10`                                                         | 每用户、每窗口的 agent run 创建上限。                     |
-| `RUN_CONCURRENCY_MAX`           | 否   | `2`                                                          | 每用户同时运行的 agent run 上限。                         |
-| `AUTH_EMAIL_PROVIDER`           | 生产 | 开发为 `console`                                             | 事务邮件 provider；生产环境必须为 `resend`。              |
-| `AUTH_EMAIL_FROM`               | 生产 | 空                                                           | Resend 已验证域名下的发件地址。                           |
-| `RESEND_API_KEY`                | 生产 | 空                                                           | Resend API Key。                                          |
-| `GITHUB_TOKEN`                  | 否   | 空                                                           | GitHub 仓库查询工具的可选 token。                         |
-| `MCP_SERVERS_JSON`              | 否   | 空                                                           | 外部 MCP server 配置 JSON，支持 `mcpServers` 对象或数组。 |
-| `CODE_SANDBOX_ENABLED`          | 否   | `false`                                                      | 是否注册 Docker `code_execute` 工具。                     |
-| `CODE_SANDBOX_DOCKER_BINARY`    | 否   | `docker`                                                     | Docker CLI 路径或命令名。                                 |
-| `CODE_SANDBOX_JAVASCRIPT_IMAGE` | 否   | `node:22-alpine`                                             | JavaScript 沙箱固定镜像，推荐使用 digest。                |
-| `CODE_SANDBOX_PYTHON_IMAGE`     | 否   | `python:3.13-alpine`                                         | Python 沙箱固定镜像，推荐使用 digest。                    |
-| `DEFAULT_USER_EMAIL`            | 否   | `local@ai-pro-agent.dev`                                     | `db:seed` 创建示例数据时使用的用户邮箱。                  |
-| `DEFAULT_USER_PASSWORD`         | 否   | 空                                                           | `db:seed` 可选登录密码，至少 8 字符。                     |
-| `PORT`                          | 否   | `3003`                                                       | 后端监听端口。                                            |
-| `CLIENT_DIST_DIR`               | 否   | `public`                                                     | 生产模式下 Express 托管前端静态资源的位置。               |
+| 变量                            | 必填 | 默认值                                                                   | 说明                                                                     |
+| ------------------------------- | ---- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `OPENAI_API_KEY`                | 是   | 空                                                                       | OpenAI-compatible API Key。                                              |
+| `MODEL_PROVIDER`                | 否   | `openai-compatible`                                                      | 模型供应商；`anthropic` 目前为预留入口。                                 |
+| `MODEL_BASE_URL`                | 否   | 空                                                                       | OpenAI-compatible base URL，优先于旧变量。                               |
+| `MODEL_NAME`                    | 否   | 空                                                                       | 后端请求的模型名，优先于旧变量。                                         |
+| `DEEPSEEK_BASE_URL`             | 否   | `https://api.deepseek.com`                                               | 兼容旧配置的模型服务 base URL。                                          |
+| `DEEPSEEK_MODEL`                | 否   | `deepseek-v4-pro`                                                        | 兼容旧配置的模型名。                                                     |
+| `DATABASE_URL`                  | 是   | `postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent`             | Prisma/Postgres 连接串。                                                 |
+| `BETTER_AUTH_SECRET`            | 生产 | 开发环境内置临时值                                                       | Better Auth 密钥，生产环境至少 32 字符。                                 |
+| `BETTER_AUTH_URL`               | 生产 | `http://localhost:PORT`                                                  | 应用对外根 URL，不包含 `/api/auth`。                                     |
+| `AUTH_APP_URL`                  | 否   | 开发为 `http://localhost:5173/app`，生产为 `BETTER_AUTH_URL` 下的 `/app` | 邮件操作完成后用户返回的可信工作区 URL。                                 |
+| `VITE_PUBLIC_SUPPORT_EMAIL`     | 否   | GitHub Issues                                                            | 公开联系页和法律页展示的支持邮箱；Docker 构建时通过 `--build-arg` 注入。 |
+| `AUTH_TRUSTED_ORIGINS`          | 否   | 空                                                                       | 额外可信前端 Origin，多个值用逗号分隔。                                  |
+| `TRUST_PROXY`                   | 生产 | `false`                                                                  | 可信代理跳数或明确 IP/子网；禁止全局信任。                               |
+| `API_MAX_BODY_BYTES`            | 否   | `65536`                                                                  | API 请求体硬上限（bytes）。                                              |
+| `API_MAX_URL_CHARS`             | 否   | `4096`                                                                   | API URL 字符数硬上限。                                                   |
+| `API_RATE_LIMIT_WINDOW_MS`      | 否   | `900000`                                                                 | API、认证和 run 限流窗口。                                               |
+| `API_RATE_LIMIT_MAX`            | 否   | `300`                                                                    | 每 IP、每窗口的业务 API 请求上限。                                       |
+| `AUTH_RATE_LIMIT_MAX`           | 否   | `60`                                                                     | 每 IP、每窗口的认证请求上限。                                            |
+| `RUN_RATE_LIMIT_MAX`            | 否   | `10`                                                                     | 每用户、每窗口的 agent run 创建上限。                                    |
+| `RUN_CONCURRENCY_MAX`           | 否   | `2`                                                                      | 每用户同时运行的 agent run 上限。                                        |
+| `AUTH_EMAIL_PROVIDER`           | 生产 | 开发为 `console`                                                         | 事务邮件 provider；生产环境必须为 `resend`。                             |
+| `AUTH_EMAIL_FROM`               | 生产 | 空                                                                       | Resend 已验证域名下的发件地址。                                          |
+| `RESEND_API_KEY`                | 生产 | 空                                                                       | Resend API Key。                                                         |
+| `GITHUB_TOKEN`                  | 否   | 空                                                                       | GitHub 仓库查询工具的可选 token。                                        |
+| `MCP_SERVERS_JSON`              | 否   | 空                                                                       | 外部 MCP server 配置 JSON，支持 `mcpServers` 对象或数组。                |
+| `CODE_SANDBOX_ENABLED`          | 否   | `false`                                                                  | 是否注册 Docker `code_execute` 工具。                                    |
+| `CODE_SANDBOX_DOCKER_BINARY`    | 否   | `docker`                                                                 | Docker CLI 路径或命令名。                                                |
+| `CODE_SANDBOX_JAVASCRIPT_IMAGE` | 否   | `node:22-alpine`                                                         | JavaScript 沙箱固定镜像，推荐使用 digest。                               |
+| `CODE_SANDBOX_PYTHON_IMAGE`     | 否   | `python:3.13-alpine`                                                     | Python 沙箱固定镜像，推荐使用 digest。                                   |
+| `DEFAULT_USER_EMAIL`            | 否   | `local@ai-pro-agent.dev`                                                 | `db:seed` 创建示例数据时使用的用户邮箱。                                 |
+| `DEFAULT_USER_PASSWORD`         | 否   | 空                                                                       | `db:seed` 可选登录密码，至少 8 字符。                                    |
+| `PORT`                          | 否   | `3003`                                                                   | 后端监听端口。                                                           |
+| `CLIENT_DIST_DIR`               | 否   | `public`                                                                 | 生产模式下 Express 托管前端静态资源的位置。                              |
 
 ## 当前限制
 

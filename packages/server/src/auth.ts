@@ -58,10 +58,11 @@ export function parseTrustedOrigins(value: string | undefined): string[] {
 
 export function createAuth(options: CreateAuthOptions = {}) {
   const baseURL = options.baseURL ?? env.BETTER_AUTH_URL ?? `http://localhost:${env.PORT}`
-  const appURL =
-    options.appURL ??
-    env.AUTH_APP_URL ??
-    (env.NODE_ENV === 'development' ? 'http://localhost:5173' : baseURL)
+  const defaultAppURL = new URL(
+    '/app',
+    env.NODE_ENV === 'development' ? 'http://localhost:5173' : baseURL,
+  ).toString()
+  const appURL = options.appURL ?? env.AUTH_APP_URL ?? defaultAppURL
   const requireEmailVerification = options.requireEmailVerification ?? true
   const emailVerificationTokens =
     options.emailVerificationTokens ?? prismaEmailVerificationTokenStore

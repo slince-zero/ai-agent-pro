@@ -9,7 +9,7 @@ callback URL 不会进入邮件，避免开放重定向。
 
 ```env
 AUTH_EMAIL_PROVIDER=console
-AUTH_APP_URL=http://localhost:5173
+AUTH_APP_URL=http://localhost:5173/app
 ```
 
 注册、重发验证邮件或找回密码后，在 server 日志中查找 `development email captured`。
@@ -22,14 +22,14 @@ AUTH_APP_URL=http://localhost:5173
 ```env
 NODE_ENV=production
 BETTER_AUTH_URL=https://agent.example.com
-AUTH_APP_URL=https://agent.example.com
+AUTH_APP_URL=https://agent.example.com/app
 AUTH_EMAIL_PROVIDER=resend
 AUTH_EMAIL_FROM=AI Engineering Agent <auth@agent.example.com>
 RESEND_API_KEY=re_xxx
 ```
 
 部署前需要在 Resend 验证发件域名。`BETTER_AUTH_URL` 是外部可访问的服务端根 URL，
-`AUTH_APP_URL` 是邮件完成操作后返回的前端根 URL；两者必须使用受信任的 HTTPS 地址。
+`AUTH_APP_URL` 是邮件完成操作后返回的工作区 URL；存在公开站点时建议使用 `/app` 路径。两者必须使用受信任的 HTTPS 地址。
 前后端同域部署时可设为相同值。
 
 ## 安全行为
