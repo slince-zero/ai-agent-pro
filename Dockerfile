@@ -1,4 +1,8 @@
 FROM node:22-alpine AS build
+ARG VITE_PUBLIC_SUPPORT_EMAIL
+
+ENV VITE_PUBLIC_SUPPORT_EMAIL=$VITE_PUBLIC_SUPPORT_EMAIL
+
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
