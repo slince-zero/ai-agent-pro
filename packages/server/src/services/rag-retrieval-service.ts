@@ -198,6 +198,50 @@ async function searchByText(
   return rows.map(serializeRelevantChunk)
 }
 
+async function loadProjectOverview(
+  db: RagRetrievalDb,
+  input: {
+    limit: number
+    projectId: string
+    userId: string
+  },
+) {
+  const rows = await db.$queryRawUnsafe<RawRelevantChunk[]>(
+    `
+      SELECT
+        c."id" AS "chunkId",
+        c."documentId" AS "documentId",
+        c."chunkIndex" AS "chunkIndex",
+        c."content" AS "content",
+        c."sourceRef" AS "sourceRef",
+        c."metadata" AS "metadata",
+        d."title" AS "title",
+        d."uri" AS "uri",
+        d."projectId" AS "projectId",
+        0::float AS "score"
+      FROM "DocumentChunk" c
+      JOIN "Document" d ON d."id" = c."documentId"
+      WHERE d."userId" = $1
+        AND d."status" = 'active'::"DocumentStatus"
+        AND d."projectId" = $2
+      ORDER BY
+        CASE
+          WHEN LOWER(d."title") LIKE 'readme%' THEN 0
+          WHEN d."title" LIKE '%directory tree' THEN 1
+          WHEN LOWER(d."title") = 'package.json' THEN 2
+          ELSE 3
+        END,
+        c."chunkIndex" ASC
+      LIMIT $3
+    `,
+    input.userId,
+    input.projectId,
+    input.limit,
+  )
+
+  return rows.map(serializeRelevantChunk)
+}
+
 export function createOpenAICompatibleEmbeddingClient({
   model = EMBEDDING_MODEL,
   openai = createOpenAIEmbeddingClient(),
@@ -256,10 +300,17 @@ export function createRagRetrievalService({
         if (vectorResults.length > 0) return vectorResults
       }
 
-      return searchByText(db, {
+      const textResults = await searchByText(db, {
         userId: input.userId,
         projectId,
         query,
+        limit,
+      })
+      if (textResults.length > 0 || !projectId) return textResults
+
+      return loadProjectOverview(db, {
+        userId: input.userId,
+        projectId,
         limit,
       })
     },

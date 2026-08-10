@@ -19,6 +19,7 @@ const sessions = [
   {
     id: 'session_1',
     userId: 'user_1',
+    projectId: 'slince-zero/ai-agent-pro',
     title: 'User one session',
     status: SessionStatus.ACTIVE,
     createdAt: now,
@@ -27,6 +28,7 @@ const sessions = [
   {
     id: 'session_2',
     userId: 'user_2',
+    projectId: null,
     title: 'User two session',
     status: SessionStatus.ACTIVE,
     createdAt: now,
@@ -76,11 +78,12 @@ function createFakeSessionService() {
   return {
     listActiveSessions: async (userId: string) =>
       sessions.filter((session) => session.userId === userId).map((session) => ({ ...session })),
-    createSession: async (userId: string, title?: string) => ({
+    createSession: async (userId: string, title?: string, projectId?: string) => ({
       ...sessions[0],
       id: 'session_created',
       userId,
       title: title ?? '新对话',
+      projectId: projectId ?? null,
     }),
     renameActiveSession: async (userId: string, sessionId: string, title: string) => {
       const session = ownedSession(userId, sessionId)
@@ -232,6 +235,20 @@ test('allows the owner to read session messages', async () => {
     body.messages.map((message) => message.id),
     ['message_1'],
   )
+})
+
+test('creates a repository-scoped session', async () => {
+  const response = await sessionRequest('', 'user_1', {
+    method: 'POST',
+    body: JSON.stringify({
+      title: 'Repository chat',
+      projectId: 'slince-zero/ai-agent-pro',
+    }),
+  })
+  const body = (await response.json()) as { session: { projectId: string } }
+
+  assert.equal(response.status, 201)
+  assert.equal(body.session.projectId, 'slince-zero/ai-agent-pro')
 })
 
 test('returns a stable 422 error for invalid request bodies', async () => {

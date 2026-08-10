@@ -1,32 +1,26 @@
-import { Code2, GitBranch, Search, Sparkles, Wrench } from 'lucide-react'
+import { Boxes, Code2, Route, Search } from 'lucide-react'
 
 import type { PromptPreset } from '@/types/chat'
 
 export const promptPresets: PromptPreset[] = [
   {
-    label: '研究 GitHub 仓库',
-    prompt:
-      '分析这个 GitHub 仓库的定位、技术栈、活跃度和适合学习的切入点：https://github.com/facebook/react',
-    icon: GitBranch,
+    label: '项目概览',
+    prompt: '这个项目解决什么问题？请结合 README、依赖和入口文件说明技术栈与核心模块。',
+    icon: Boxes,
   },
   {
-    label: '理解项目结构',
-    prompt: '我会提供项目目录和关键文件，请帮我解释模块职责、数据流和优先阅读顺序。',
+    label: '阅读路线',
+    prompt: '如果我要系统学习这个项目，应该按什么顺序阅读哪些文件？请说明每一步的目标。',
     icon: Code2,
   },
   {
-    label: '排查报错日志',
-    prompt: '我会贴一段报错日志，请帮我定位可能原因、排查步骤和最小修复方案。',
+    label: '请求调用链',
+    prompt: '请找到应用入口，并跟踪一次典型请求从接收、业务逻辑到数据存储的调用链。',
+    icon: Route,
+  },
+  {
+    label: '实现定位',
+    prompt: '请评估这个项目中最值得深入理解的三个实现点，并引用相关源码文件。',
     icon: Search,
-  },
-  {
-    label: '优化用户体验',
-    prompt: '我会描述一个页面或交互流程，请帮我从信息层级、状态反馈、可访问性和边界状态上优化。',
-    icon: Wrench,
-  },
-  {
-    label: '制定重构方案',
-    prompt: '我会提供一段代码或模块现状，请帮我制定分阶段、低风险、可验证的重构方案。',
-    icon: Sparkles,
   },
 ]

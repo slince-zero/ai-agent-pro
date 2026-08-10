@@ -69,6 +69,7 @@ type GitHubRepositoryApiResponse = {
   default_branch?: unknown
   full_name?: unknown
   html_url?: unknown
+  private?: unknown
 }
 
 type GitHubTreeApiResponse = {
@@ -89,6 +90,7 @@ export type GitHubRepository = {
   defaultBranch: string
   fullName: string
   htmlUrl: string
+  isPrivate: boolean
 }
 
 export type GitHubTreeEntry = {
@@ -427,6 +429,7 @@ export function createGitHubRepoClient(): GitHubRepoClient {
         defaultBranch: toStringValue(data.default_branch, 'main'),
         fullName: toStringValue(data.full_name, `${owner}/${repo}`),
         htmlUrl: toStringValue(data.html_url, `https://github.com/${owner}/${repo}`),
+        isPrivate: data.private === true,
       }
     },
 
@@ -546,6 +549,9 @@ export function createGitHubRepoIndexer({
       assertNonEmpty(input.repo, 'repo')
 
       const repository = await githubClient.getRepository(input)
+      if (repository.isPrivate) {
+        throw new Error('Private GitHub repositories are not supported')
+      }
       const branch = input.branch?.trim() || repository.defaultBranch
       const projectId = input.projectId?.trim() || repository.fullName
       const treeEntries = await githubClient.getTree({ ...input, ref: branch })

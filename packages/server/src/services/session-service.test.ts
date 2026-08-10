@@ -13,6 +13,7 @@ const updatedAt = new Date('2026-06-17T07:01:00.000Z')
 const activeSession = {
   id: 'session_1',
   userId: 'user_1',
+  projectId: 'slince-zero/ai-agent-pro',
   title: 'Trace session',
   status: SessionStatus.ACTIVE,
   createdAt,
@@ -139,6 +140,7 @@ test('serializes active sessions and messages with completed usage', async () =>
   assert.deepEqual(sessions, [
     {
       id: 'session_1',
+      projectId: 'slince-zero/ai-agent-pro',
       title: 'Trace session',
       status: 'active',
       createdAt: createdAt.toISOString(),
@@ -225,6 +227,31 @@ test('builds recent client messages and updates new session titles', async () =>
     },
     data: {
       title: 'Please summarize this agent run in detai...',
+    },
+  })
+})
+
+test('creates a session scoped to a repository project', async () => {
+  const { db } = createFakeDb()
+  let createInput: unknown
+  db.session.create = async (args: unknown) => {
+    createInput = args
+    return { ...activeSession, id: 'session_created' }
+  }
+  const service = createSessionService({ db })
+
+  const created = await service.createSession(
+    'user_1',
+    'Repository chat',
+    'slince-zero/ai-agent-pro',
+  )
+
+  assert.equal(created.projectId, 'slince-zero/ai-agent-pro')
+  assert.deepEqual(createInput, {
+    data: {
+      userId: 'user_1',
+      title: 'Repository chat',
+      projectId: 'slince-zero/ai-agent-pro',
     },
   })
 })

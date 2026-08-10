@@ -142,6 +142,19 @@ test('surfaces tool-level network errors as tool results', async () => {
   assert.match(result.error, /network unavailable/)
 })
 
+test('does not expose private repository metadata through the server token', async () => {
+  mock.method(globalThis, 'fetch', async () =>
+    Response.json({ full_name: 'private/example', private: true }),
+  )
+
+  const { runTool } = await import('./index.js')
+  const result = JSON.parse(
+    await runTool('github_repository_lookup', { owner: 'private', repo: 'example' }),
+  ) as { error: string }
+
+  assert.match(result.error, /公开 GitHub 仓库/)
+})
+
 test('fails detailed tool execution after the configured timeout', async () => {
   const { runToolDetailed } = await import('./index.js')
   let receivedAbort = false

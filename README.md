@@ -1,12 +1,14 @@
-# ai-pro-agent
+# ai-agent-pro
 
-面向工程协作场景的 AI Agent 工作台。当前版本提供聊天式任务入口、SSE 流式输出、OpenAI-compatible 模型调用、工具调用、单/多 Agent 工作流、会话持久化和运行记录落库。
+一个用于检索和解释 GitHub 代码仓库的 Agent 项目。导入公开仓库后，Agent 会根据索引的目录、文档、配置和源码回答项目架构、调用链与实现细节，并保留文件和代码行引用。
 
 ![AI Engineering Agent welcome screen](docs/screenshots/ai-pro-agent-welcome.png)
 
 ## 功能概览
 
-- 工程任务聊天 UI：仓库研究、代码理解、Bug 排查、重构规划等预设入口。
+- 仓库导入：从公开 GitHub URL 索引目录树、README、manifest 和白名单源码。
+- 仓库问答：每个会话绑定一个仓库，检索不会混入其他已导入项目。
+- 证据引用：回答保留来源文件、代码行和 GitHub 链接。
 - 流式 Agent 回复：后端通过 SSE 推送文本、工具调用和工具结果。
 - 会话持久化：Postgres 保存用户、会话、消息、AgentRun、AgentStage、ToolCall。
 - 个人账户：邮箱注册、验证、登录、找回密码和旧会话吊销。
@@ -31,7 +33,11 @@
 ```mermaid
 flowchart LR
   user["User / Browser"] --> client["React + Vite client"]
-  client -->|"REST + SSE /api/sessions"| api["Express API"]
+  client -->|"REST + SSE"| api["Express API"]
+
+  client -->|"GitHub URL"| repositories["Repository index API"]
+  repositories --> githubApi["GitHub API"]
+  repositories --> documents["Documents + chunks"]
 
   api --> sessions["Session routes"]
   sessions --> mode{"Workflow mode"}
@@ -45,7 +51,10 @@ flowchart LR
   tools --> fetch["Web fetch"]
 
   sessions --> prisma["Prisma client"]
+  documents --> prisma
   prisma --> db[("PostgreSQL")]
+  db --> retrieval["Repository-scoped retrieval"]
+  retrieval --> runtime
 
   api -. "production static files" .-> static["client/dist"]
 ```
@@ -62,6 +71,8 @@ flowchart LR
 - pnpm
 - Docker Desktop 或本地 PostgreSQL
 - DeepSeek 或其他 OpenAI-compatible API Key
+
+当前仓库导入仅支持公开 GitHub 仓库。默认最多索引 80 个优先文件，并跳过生成目录、二进制文件和过大文件。
 
 ### 1. 启动数据库
 

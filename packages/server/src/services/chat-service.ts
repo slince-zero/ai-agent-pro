@@ -348,6 +348,7 @@ export function createChatService({
         sessionId: session.id,
         excludeMessageIds,
         userId: session.userId,
+        projectId: session.projectId ?? undefined,
         query: content,
         signal,
       })

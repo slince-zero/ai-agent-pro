@@ -27,6 +27,7 @@ const { createCitationService } = await import('./citation-service.js')
 const session = {
   id: 'session_1',
   userId: 'user_1',
+  projectId: 'slince-zero/ai-agent-pro',
   title: 'Trace session',
   status: SessionStatus.ACTIVE,
   createdAt: new Date('2026-06-17T07:00:00.000Z'),
@@ -345,12 +346,16 @@ test('emits run_id before streamed agent events', async () => {
     { userId: 'user_1', sessionId: 'session_1', take: 30, excludeMessageIds: [] },
   ])
   assert.deepEqual(memoryCalls.contextMemoryRequests, [
-    { userId: 'user_1', sessionId: 'session_1', projectId: undefined },
+    {
+      userId: 'user_1',
+      sessionId: 'session_1',
+      projectId: 'slince-zero/ai-agent-pro',
+    },
   ])
   assert.deepEqual(ragCalls.searchRequests, [
     {
       userId: 'user_1',
-      projectId: undefined,
+      projectId: 'slince-zero/ai-agent-pro',
       query: 'Hello',
       signal: (ragCalls.searchRequests[0] as { signal: AbortSignal }).signal,
     },

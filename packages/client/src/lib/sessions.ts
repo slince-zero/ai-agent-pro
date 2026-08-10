@@ -19,13 +19,16 @@ export async function fetchSessions() {
   return data.sessions
 }
 
-export async function createSession(title?: string) {
+export async function createSession(title?: string, projectId?: string) {
   const response = await apiFetch('/api/sessions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(title ? { title } : {}),
+    body: JSON.stringify({
+      ...(title ? { title } : {}),
+      ...(projectId ? { projectId } : {}),
+    }),
   })
   const data = await parseJsonResponse<SessionResponse>(response)
   return data.session

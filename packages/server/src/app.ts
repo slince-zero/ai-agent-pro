@@ -25,6 +25,7 @@ import {
   createRateLimiter,
   createRunConcurrencyLimit,
 } from './middleware/rate-limits.js'
+import { createRepositoriesRouter } from './routes/repositories.js'
 import { createRunsRouter } from './routes/runs.js'
 import { createSessionsRouter } from './routes/sessions.js'
 import { redactUrl } from './security/redaction.js'
@@ -119,6 +120,7 @@ export function createApp() {
   app.post('/api/sessions/:sessionId/regenerate', runRateLimiter, runConcurrencyLimit)
 
   app.use('/api/sessions', createSessionsRouter({ modelClient }))
+  app.use('/api/repositories', createRepositoriesRouter())
   app.use('/api/runs', createRunsRouter())
   app.use('/api', (req, res) => {
     sendApiError(req, res, 404, 'NOT_FOUND', 'API route not found')

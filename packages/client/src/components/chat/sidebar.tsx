@@ -45,8 +45,8 @@ export function Sidebar({
           <Bot className="size-5" aria-hidden="true" />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">AI Engineering Agent</p>
-          <p className="text-muted-foreground text-xs">工程工作台</p>
+          <p className="truncate text-sm font-semibold">Repository Agent</p>
+          <p className="text-muted-foreground text-xs">GitHub 仓库理解</p>
         </div>
       </div>
 
@@ -58,7 +58,7 @@ export function Sidebar({
           disabled={isSending || isLoadingMessages}
         >
           <Plus className="size-4" aria-hidden="true" />
-          新对话
+          新建仓库问答
         </Button>
         <Button
           className={cn(

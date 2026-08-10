@@ -26,6 +26,7 @@ type GitHubRepoApiResponse = {
   language?: unknown
   license?: { spdx_id?: unknown } | null
   open_issues_count?: unknown
+  private?: unknown
   pushed_at?: unknown
   stargazers_count?: unknown
   topics?: unknown
@@ -162,6 +163,9 @@ export const githubRepoTool = defineTool({
     }
 
     const data = (await response.json()) as GitHubRepoApiResponse
+    if (data.private === true) {
+      return JSON.stringify({ error: '当前仅支持公开 GitHub 仓库。' })
+    }
 
     return JSON.stringify(
       {

@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { getAuthAction, type AuthAction, type AuthUser } from '@/lib/auth'
 import { streamChatResponse, streamRegeneratedResponse } from '@/lib/chat-stream'
 import { promptPresets } from '@/lib/prompt-presets'
+import { indexGitHubRepository } from '@/lib/repositories'
 import {
   createSession,
   deleteSession,
@@ -26,7 +27,7 @@ export default function AgentApp() {
   const [authAction, setAuthAction] = useState<AuthAction | null>(() => getAuthAction())
 
   useEffect(() => {
-    document.title = 'Workspace | AI Engineering Agent'
+    document.title = 'Workspace | Repository Agent'
     document.documentElement.lang = 'zh-CN'
   }, [])
 
@@ -338,6 +339,21 @@ function Workspace({ onSignOut, user }: WorkspaceProps) {
     setSessions((prev) => [session, ...prev.filter((item) => item.id !== session.id)])
   }, [])
 
+  const importRepository = useCallback(
+    async (url: string) => {
+      const repository = await indexGitHubRepository(url)
+      const session = await createSession(repository.repository, repository.projectId)
+
+      setActiveView('chat')
+      setActiveSessionId(session.id)
+      setMessages([])
+      setInput('')
+      prependSession(session)
+      textareaRef.current?.focus()
+    },
+    [prependSession],
+  )
+
   const ensureActiveSession = useCallback(
     async (content: string) => {
       if (activeSessionId) return activeSessionId
@@ -572,6 +588,7 @@ function Workspace({ onSignOut, user }: WorkspaceProps) {
 
       <section className="grid h-svh min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]">
         <ChatHeader
+          activeRepository={activeSession?.projectId ?? undefined}
           activeSessionTitle={activeSession?.title}
           activeView={activeView}
           isSending={isSending}
@@ -593,7 +610,12 @@ function Workspace({ onSignOut, user }: WorkspaceProps) {
               正在加载会话
             </div>
           ) : !hasMessages ? (
-            <WelcomePanel presets={promptPresets} onSelectPrompt={fillSuggestedPrompt} />
+            <WelcomePanel
+              activeRepository={activeSession?.projectId ?? undefined}
+              presets={promptPresets}
+              onImportRepository={importRepository}
+              onSelectPrompt={fillSuggestedPrompt}
+            />
           ) : (
             <MessageList
               messages={messages}

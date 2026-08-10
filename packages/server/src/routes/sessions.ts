@@ -16,6 +16,7 @@ type SessionsRouterDeps = {
 const createSessionSchema = z
   .object({
     title: z.string().trim().min(1).max(120).optional(),
+    projectId: z.string().trim().min(3).max(200).optional(),
   })
   .strict()
 
@@ -65,7 +66,11 @@ export function createSessionsRouter({
     }
 
     try {
-      const session = await sessionService.createSession(req.auth.user.id, parsed.data.title)
+      const session = await sessionService.createSession(
+        req.auth.user.id,
+        parsed.data.title,
+        parsed.data.projectId,
+      )
 
       res.status(201).json({ session })
     } catch (error) {

@@ -75,6 +75,7 @@ export type PromptPreset = {
 
 export type ChatSession = {
   id: string
+  projectId: string | null
   title: string
   status: string
   createdAt: string

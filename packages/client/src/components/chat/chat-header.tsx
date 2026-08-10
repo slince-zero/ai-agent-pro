@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import type { AuthUser } from '@/lib/auth'
 
 type ChatHeaderProps = {
+  activeRepository?: string
   activeSessionTitle?: string
   activeView: 'chat' | 'runs'
   isSending: boolean
@@ -17,6 +18,7 @@ type ChatHeaderProps = {
 }
 
 export function ChatHeader({
+  activeRepository,
   activeSessionTitle,
   activeView,
   isSending,
@@ -33,9 +35,11 @@ export function ChatHeader({
           AI
         </span>
         <div className="hidden min-w-0 sm:block">
-          <p className="text-muted-foreground text-xs font-medium">AI Engineering Agent</p>
+          <p className="text-muted-foreground truncate text-xs font-medium">
+            {activeRepository ?? 'Repository Agent'}
+          </p>
           <h1 className="truncate text-base font-semibold">
-            {activeView === 'runs' ? 'Runs Trace' : (activeSessionTitle ?? '工程 Agent 工作台')}
+            {activeView === 'runs' ? 'Runs Trace' : (activeSessionTitle ?? '仓库理解工作台')}
           </h1>
         </div>
       </div>

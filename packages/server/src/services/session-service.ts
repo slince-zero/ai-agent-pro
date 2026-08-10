@@ -6,6 +6,7 @@ import { serializeCitation } from './citation-service.js'
 type SessionRecord = {
   id: string
   userId: string
+  projectId: string | null
   title: string
   status: SessionStatus
   createdAt: Date
@@ -88,6 +89,7 @@ function toClientRole(role: MessageRole): ClientMessage['role'] | null {
 export function serializeSession(session: SessionRecord) {
   return {
     id: session.id,
+    projectId: session.projectId,
     title: session.title,
     status: session.status.toLowerCase(),
     createdAt: session.createdAt.toISOString(),
@@ -154,11 +156,12 @@ export function createSessionService({
       return sessions.map(serializeSession)
     },
 
-    async createSession(userId: string, title?: string) {
+    async createSession(userId: string, title?: string, projectId?: string) {
       const session = await db.session.create({
         data: {
           userId,
           title: title ?? '新对话',
+          projectId: projectId?.trim() || null,
         },
       })
 

@@ -95,6 +95,29 @@ test('falls back to text search when embedding generation fails', async () => {
   assert.equal(results[0]?.score, 0)
 })
 
+test('loads repository overview sources when a scoped text search has no matches', async () => {
+  const queries: { sql: string; values: unknown[] }[] = []
+  const db = {
+    $queryRawUnsafe: async <T>(sql: string, ...values: unknown[]) => {
+      queries.push({ sql, values })
+      return (queries.length === 2 ? [createRawChunk({ score: 0 })] : []) as T
+    },
+  }
+  const service = createRagRetrievalService({ db, embeddingClient: null })
+
+  const results = await service.searchRelevantChunks({
+    userId: 'user_1',
+    projectId: 'slince-zero/ai-agent-pro',
+    query: '请介绍这个项目',
+  })
+
+  assert.equal(queries.length, 2)
+  assert.match(queries[1]!.sql, /d\."projectId" = \$2/)
+  assert.match(queries[1]!.sql, /directory tree/)
+  assert.deepEqual(queries[1]!.values, ['user_1', 'slince-zero/ai-agent-pro', 5])
+  assert.equal(results[0]?.title, 'README.md')
+})
+
 test('validates explicit query embeddings before vector search', async () => {
   const { db } = createFakeDb([])
   const service = createRagRetrievalService({

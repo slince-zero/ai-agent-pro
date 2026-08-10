@@ -43,6 +43,7 @@ function createFakeGitHubClient(): {
         defaultBranch: 'main',
         fullName: 'slince-zero/ai-agent-pro',
         htmlUrl: 'https://github.com/slince-zero/ai-agent-pro',
+        isPrivate: false,
       }
     },
     getTree: async (input) => {
@@ -241,4 +242,27 @@ test('records skipped files when GitHub content cannot be decoded', async () => 
     ),
     false,
   )
+})
+
+test('rejects private repositories before reading their tree', async () => {
+  const { calls, githubClient } = createFakeGitHubClient()
+  const { documentService } = createFakeDocumentService()
+  const indexer = createGitHubRepoIndexer({
+    documentService,
+    githubClient: {
+      ...githubClient,
+      getRepository: async () => ({
+        defaultBranch: 'main',
+        fullName: 'private/example',
+        htmlUrl: 'https://github.com/private/example',
+        isPrivate: true,
+      }),
+    },
+  })
+
+  await assert.rejects(
+    () => indexer.indexRepository({ userId: 'user_1', owner: 'private', repo: 'example' }),
+    /Private GitHub repositories are not supported/,
+  )
+  assert.equal(calls.trees.length, 0)
 })
