@@ -1,0 +1,8 @@
+{
+  "name": "tiny-service",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts"
+  }
+}

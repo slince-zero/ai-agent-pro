@@ -1,4 +1,0 @@
--- AlterTable
-ALTER TABLE "AgentRun" ADD COLUMN "inputTokens" INTEGER;
-ALTER TABLE "AgentRun" ADD COLUMN "outputTokens" INTEGER;
-ALTER TABLE "AgentRun" ADD COLUMN "cost" DOUBLE PRECISION;
