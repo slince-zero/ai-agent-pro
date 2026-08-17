@@ -1,1 +1,0 @@
-ALTER TABLE "ToolCall" ADD COLUMN "durationMs" INTEGER;
