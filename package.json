@@ -3,9 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "description": "A learning-first repository understanding agent built from first principles.",
-  "bin": {
-    "repo-agent": "./dist/cli.js"
-  },
   "type": "module",
   "scripts": {
     "dev": "tsx src/cli.ts",

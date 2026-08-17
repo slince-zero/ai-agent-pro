@@ -22,10 +22,9 @@
 ```bash
 pnpm install
 pnpm dev -- help
-pnpm dev -- doctor
 ```
 
-`doctor` 会明确展示还没有实现的学习步骤。当前没有 `.env`，也不需要 API Key。
+当前没有模型调用，因此也不需要 API Key。
 
 ## 学习顺序
 
