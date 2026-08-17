@@ -5,21 +5,5 @@
   "semi": false,
   "singleQuote": true,
   "trailingComma": "all",
-  "ignorePatterns": ["dist", "node_modules", ".git", "**/generated/**"],
-  "sortImports": {
-    "enabled": true
-  },
-  "sortTailwindcss": {
-    "enabled": true
-  },
-  "overrides": [
-    {
-      "files": ["packages/server/src/**/*.ts"],
-      "options": {
-        "sortTailwindcss": {
-          "enabled": false
-        }
-      }
-    }
-  ]
+  "ignorePatterns": ["dist", "node_modules", ".git", "fixtures"]
 }

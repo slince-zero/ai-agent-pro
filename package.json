@@ -1,30 +1,31 @@
 {
   "name": "ai-agent-pro",
+  "version": "0.0.0",
   "private": true,
+  "description": "A learning-first repository understanding agent built from first principles.",
+  "bin": {
+    "repo-agent": "./dist/cli.js"
+  },
+  "type": "module",
   "scripts": {
-    "predev": "pnpm --filter @ai-agent-pro/tool-sdk build",
-    "dev": "pnpm -r dev",
-    "build": "pnpm -r build",
-    "start": "pnpm -r start",
+    "dev": "tsx src/cli.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test $(find src -name '*.test.ts' -print)",
     "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
-    "fix": "pnpm fmt && pnpm lint:fix",
-    "lint:ci": "pnpm lint && pnpm fmt:check",
-    "pretypecheck": "pnpm --filter @ai-agent-pro/tool-sdk build",
-    "typecheck": "pnpm -r typecheck",
-    "pretest": "pnpm --filter @ai-agent-pro/tool-sdk build",
-    "test": "pnpm -r test",
-    "db:seed": "pnpm --filter server run db:seed",
-    "db:reset": "pnpm --filter server run db:reset",
-    "preeval": "pnpm --filter @ai-agent-pro/tool-sdk build",
-    "eval": "pnpm --filter server exec tsx src/evals/cli.ts",
-    "eval:smoke": "pnpm eval -- --suite smoke --provider mock"
+    "lint:ci": "pnpm lint && pnpm fmt:check"
   },
   "devDependencies": {
+    "@types/node": "^24.3.0",
     "oxfmt": "^0.54.0",
-    "oxlint": "^1.69.0"
+    "oxlint": "^1.69.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "packageManager": "pnpm@11.5.2"
 }

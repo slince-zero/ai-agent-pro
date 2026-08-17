@@ -1,319 +1,105 @@
-# ai-pro-agent
+# ai-agent-pro
 
-面向工程协作场景的 AI Agent 工作台。当前版本提供聊天式任务入口、SSE 流式输出、OpenAI-compatible 模型调用、工具调用、单/多 Agent 工作流、会话持久化和运行记录落库。
+一个从零实现的 GitHub 仓库理解 Agent 学习项目。
 
-![AI Engineering Agent welcome screen](docs/screenshots/ai-pro-agent-welcome.png)
+目标不是尽快做出一个功能很多的 AI 产品，而是亲手理解以下问题：
 
-## 功能概览
+- 模型的流式 API 如何工作？
+- 模型如何选择并调用工具？
+- Agent loop 与固定 workflow 有什么区别？
+- 如何安全地读取和搜索代码仓库？
+- 什么内容应该进入上下文？
+- 如何让答案带有可验证的文件和行号引用？
+- 如何证明一次修改真的提高了仓库问答质量？
 
-- 工程任务聊天 UI：仓库研究、代码理解、Bug 排查、重构规划等预设入口。
-- 流式 Agent 回复：后端通过 SSE 推送文本、工具调用和工具结果。
-- 会话持久化：Postgres 保存用户、会话、消息、AgentRun、AgentStage、ToolCall。
-- 个人账户：邮箱注册、验证、登录、找回密码和旧会话吊销。
-- 可选多 Agent：Planner 制定计划、Executor 使用工具执行、Critic 审查并输出最终答案。
-- 内置工具：公开 GitHub 仓库元数据查询、公开网页文本读取。
-- Tool SDK：统一 Zod schema、治理元数据、取消信号和 plugin 工具集合。
-- 可选代码沙箱：在无网络、只读、受资源限制的 Docker 容器中执行 JavaScript/Python。
-- 可容器化部署：Dockerfile 构建前端静态资源并打包后端服务。
+旧版产品代码保存在 Git tag [`v1-ai-generated`](https://github.com/slince-zero/ai-agent-pro/tree/v1-ai-generated)。
+新版本不会复制旧架构。
 
-## 技术栈
+## 当前状态
 
-| 层    | 技术                                                                 |
-| ----- | -------------------------------------------------------------------- |
-| 前端  | React 19, Vite 8, TypeScript, Tailwind CSS 4, Radix UI, lucide-react |
-| 后端  | Node.js 22, Express 5, TypeScript, OpenAI SDK                        |
-| Agent | Chat Completions streaming, function calling, SSE events             |
-| 数据  | PostgreSQL, Prisma 7, pgvector Docker image                          |
-| 部署  | Docker multi-stage build, docker-compose                             |
-
-## 架构图
-
-```mermaid
-flowchart LR
-  user["User / Browser"] --> client["React + Vite client"]
-  client -->|"REST + SSE /api/sessions"| api["Express API"]
-
-  api --> sessions["Session routes"]
-  sessions --> mode{"Workflow mode"}
-  mode -->|"single"| runtime["runAgent runtime"]
-  mode -->|"multi_agent"| multi["Planner -> Executor -> Critic"]
-  multi --> runtime
-  runtime --> model["OpenAI-compatible model\nDeepSeek by default"]
-  runtime --> tools["Tool registry"]
-
-  tools --> github["GitHub repo lookup"]
-  tools --> fetch["Web fetch"]
-
-  sessions --> prisma["Prisma client"]
-  prisma --> db[("PostgreSQL")]
-
-  api -. "production static files" .-> static["client/dist"]
-```
-
-更详细的请求时序和模块说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，多 Agent
-角色和协议见 [docs/MULTI_AGENT.md](docs/MULTI_AGENT.md)，生产邮件配置见
-[docs/AUTH_EMAIL.md](docs/AUTH_EMAIL.md)。
-
-## 快速启动
-
-前置条件：
-
-- Node.js 22+
-- pnpm
-- Docker Desktop 或本地 PostgreSQL
-- DeepSeek 或其他 OpenAI-compatible API Key
-
-### 1. 启动数据库
-
-Docker Compose 会解析 `docker-compose.yml` 里的所有服务配置；其中 `ai-pro-agent` 服务声明了
-`env_file: .env`。因此即使只启动 `postgres`，根目录也需要先有 `.env` 文件。
-
-```bash
-cp packages/server/.env.example .env
-```
-
-```bash
-docker compose up -d postgres
-```
-
-### 2. 配置环境变量
-
-本地后端开发脚本在 `packages/server` 目录下执行，所以还需要给 server 包准备一份 `.env`：
-
-```bash
-cp packages/server/.env.example packages/server/.env
-```
-
-至少填写 `packages/server/.env` 里的：
-
-```env
-OPENAI_API_KEY=your_api_key
-MODEL_PROVIDER=openai-compatible
-MODEL_BASE_URL=https://api.deepseek.com
-MODEL_NAME=deepseek-v4-pro
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-v4-pro
-DATABASE_URL=postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent
-```
-
-`MODEL_BASE_URL` / `MODEL_NAME` 优先级高于旧的 `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL`，可直接切到 OpenRouter 等 OpenAI-compatible 服务。
-
-`GITHUB_TOKEN` 可选；不配置时 GitHub API 会使用未认证额度。
-
-`MCP_SERVERS_JSON` 可选；配置后后端会在首次 Agent run 时连接外部 MCP server，发现 tools 并以
-`mcp_<server>_<tool>` 的命名空间暴露给模型。只在可信环境中配置会启动进程的 command，例如：
-
-```env
-MCP_SERVERS_JSON={"mcpServers":{"filesystem":{"command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","/tmp"]}}}
-```
-
-`CODE_SANDBOX_ENABLED` 默认是 `false`。启用 `code_execute` 前需要预先准备 Docker 和固定运行
-镜像，并阅读 [Docker 代码沙箱安全说明](docs/CODE_SANDBOX.md)。
-
-### 3. 安装依赖并启动
+目前只有一个可运行的 TypeScript CLI 骨架，没有模型调用、仓库工具或 Agent：
 
 ```bash
 pnpm install
-pnpm --filter server run generate
-pnpm --filter server run migrate:dev
-pnpm --filter server run db:seed
-pnpm dev
+pnpm dev -- help
+pnpm dev -- doctor
 ```
 
-后端默认运行在 `http://localhost:3003`，前端默认运行在 `http://localhost:5173`（Vite 会将 `/api` 代理到后端）。
+`doctor` 会明确展示还没有实现的学习步骤。当前没有 `.env`，也不需要 API Key。
 
-## 本地启动排错
+## 学习顺序
 
-### `pnpm start` 报 `Cannot find module .../packages/server/dist/index.js`
+### 1. Raw streaming model client
 
-`pnpm start` 会执行 server 的生产启动脚本 `node dist/index.js`。如果还没有运行过构建，
-`packages/server/dist` 不存在，就会报这个错。
+直接使用标准 `fetch` 调用一个 OpenAI-compatible API，亲手处理请求、SSE 流、错误、超时和
+Token usage。不要使用 Agent framework。
 
-本地开发请使用：
+### 2. Safe repository tools
 
-```bash
-pnpm dev
+实现并单独测试：
+
+- `list_files`
+- `read_file`
+- `search_code`
+- `find_symbol`
+
+工具必须限制在目标仓库内，并处理路径穿越、符号链接、二进制文件和超大文件。
+
+### 3. Minimal Agent loop
+
+让模型在最多 N 轮内选择工具、观察结果、继续检索或输出答案。工具失败也要作为观察结果返回
+模型，而不是由程序隐藏。
+
+### 4. Citations
+
+每个结论都应能够关联到具体文件和行号。证据不足时必须明确回答无法确认。
+
+### 5. Lexical retrieval baseline
+
+先使用文件名、代码标识符和 `rg`/FTS 做基线，再实验 Embedding、hybrid search 和 reranking。
+后者只有在 Eval 证明收益后才保留。
+
+### 6. Repository QA Eval
+
+使用 [`fixtures/tiny-service`](fixtures/tiny-service) 和
+[`evals/repository-qa.json`](evals/repository-qa.json) 比较正确率、引用准确率、Token、延迟和
+工具调用次数。
+
+## 项目边界
+
+当前明确不做：
+
+- React/Web UI
+- 登录注册与支付
+- PostgreSQL、Prisma、向量数据库
+- Memory 与长会话
+- MCP、插件 SDK、代码沙箱
+- Planner/Executor/Critic 多 Agent
+- 后台队列和分布式任务状态机
+
+这些能力只有在仓库问答 Eval 暴露真实需求后才能重新进入计划。
+
+## 目录
+
+```text
+src/                       CLI 和未来的 Agent 核心
+fixtures/tiny-service/     固定、可验证的微型仓库
+evals/repository-qa.json   第一批仓库理解问题与证据
+docs/                      学习约定和决策记录
 ```
 
-如果确实要用 `pnpm start`，需要先构建：
+## 开发命令
 
 ```bash
+pnpm fmt
+pnpm typecheck
+pnpm lint:ci
+pnpm test
 pnpm build
-pnpm start
 ```
 
-### `docker compose up -d postgres` 报 `.env not found`
+## AI 使用原则
 
-根因是 `docker-compose.yml` 中的 `ai-pro-agent` 服务配置了 `env_file: .env`，Compose
-在启动单个服务前也会解析整个文件。
-
-解决：
-
-```bash
-cp packages/server/.env.example .env
-docker compose up -d postgres
-```
-
-### `docker compose up -d postgres` 报容器名冲突
-
-如果之前已经创建过同名容器，可能会看到：
-
-```txt
-Conflict. The container name "/ai-pro-agent-postgres" is already in use
-```
-
-先确认旧容器是否还需要保留：
-
-```bash
-docker ps -a --filter name=ai-pro-agent-postgres
-```
-
-不需要的话删除旧容器后再启动：
-
-```bash
-docker rm ai-pro-agent-postgres
-docker compose up -d postgres
-```
-
-### 前端启动成功，但接口返回 500
-
-常见原因是 Postgres 已启动，但 Prisma migration 还没有应用，后端访问表时会失败。
-
-执行：
-
-```bash
-pnpm --filter server run migrate:dev
-```
-
-可用下面命令确认迁移状态：
-
-```bash
-pnpm --filter server exec prisma migrate status
-```
-
-### 需要重置本地开发数据
-
-如果本地库里的演示数据已经混乱，可以先 reset 再重新 seed：
-
-```bash
-pnpm --filter server run db:reset -- --confirm-local-reset
-pnpm --filter server run db:seed
-```
-
-`db:reset` 会删除当前 `DATABASE_URL` 指向数据库里的应用数据。脚本默认只允许
-`localhost`、`127.0.0.1` 或 `::1`，并且必须显式传入 `--confirm-local-reset`；`NODE_ENV=production`
-时会直接拒绝执行。
-
-## 常用脚本
-
-```bash
-# 同时启动前后端开发服务器
-pnpm dev
-
-# 构建所有包
-pnpm build
-
-# 单独运行某个包的命令
-pnpm --filter client dev
-pnpm --filter client build
-pnpm --filter server dev
-pnpm --filter server build
-pnpm --filter server generate
-pnpm --filter server migrate:dev
-pnpm --filter server db:seed
-pnpm --filter server db:reset -- --confirm-local-reset
-```
-
-Docker 本地构建：
-
-```bash
-docker build \
-  --build-arg VITE_PUBLIC_SUPPORT_EMAIL=support@example.com \
-  -t ai-pro-agent:local .
-docker run \
-  --env-file .env \
-  -e DATABASE_URL=postgresql://ai_agent:ai_agent@host.docker.internal:5432/ai_pro_agent \
-  -p 3003:3003 \
-  ai-pro-agent:local
-```
-
-## 目录结构
-
-```txt
-.
-├── packages/
-│   ├── client/             # React + Vite 前端
-│   ├── server/             # Express + Prisma 后端
-│   │   ├── prisma/         # Prisma schema 和 migrations
-│   │   └── src/
-│   │       ├── routes/     # chat/session API
-│   │       ├── services/   # OpenAI client、Agent runtime、用户服务
-│   │       ├── tools/      # Agent 工具定义和执行器
-│   │       └── sse/        # SSE event helpers
-│   └── tool-sdk/           # 公共 Tool/Plugin 类型和定义校验
-├── examples/
-│   └── simple-tool/        # 最小工具与 plugin 示例
-├── docs/                   # 架构、路线图、截图
-├── pnpm-workspace.yaml
-├── Dockerfile
-└── docker-compose.yml
-```
-
-## 环境变量
-
-本地开发时，后端读取 `packages/server/.env`；Docker Compose 解析配置时还需要根目录 `.env`。
-
-| 变量                            | 必填 | 默认值                                                                   | 说明                                                                     |
-| ------------------------------- | ---- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `OPENAI_API_KEY`                | 是   | 空                                                                       | OpenAI-compatible API Key。                                              |
-| `MODEL_PROVIDER`                | 否   | `openai-compatible`                                                      | 模型供应商；`anthropic` 目前为预留入口。                                 |
-| `MODEL_BASE_URL`                | 否   | 空                                                                       | OpenAI-compatible base URL，优先于旧变量。                               |
-| `MODEL_NAME`                    | 否   | 空                                                                       | 后端请求的模型名，优先于旧变量。                                         |
-| `DEEPSEEK_BASE_URL`             | 否   | `https://api.deepseek.com`                                               | 兼容旧配置的模型服务 base URL。                                          |
-| `DEEPSEEK_MODEL`                | 否   | `deepseek-v4-pro`                                                        | 兼容旧配置的模型名。                                                     |
-| `DATABASE_URL`                  | 是   | `postgresql://ai_agent:ai_agent@localhost:5432/ai_pro_agent`             | Prisma/Postgres 连接串。                                                 |
-| `BETTER_AUTH_SECRET`            | 生产 | 开发环境内置临时值                                                       | Better Auth 密钥，生产环境至少 32 字符。                                 |
-| `BETTER_AUTH_URL`               | 生产 | `http://localhost:PORT`                                                  | 应用对外根 URL，不包含 `/api/auth`。                                     |
-| `AUTH_APP_URL`                  | 否   | 开发为 `http://localhost:5173/app`，生产为 `BETTER_AUTH_URL` 下的 `/app` | 邮件操作完成后用户返回的可信工作区 URL。                                 |
-| `VITE_PUBLIC_SUPPORT_EMAIL`     | 否   | GitHub Issues                                                            | 公开联系页和法律页展示的支持邮箱；Docker 构建时通过 `--build-arg` 注入。 |
-| `AUTH_TRUSTED_ORIGINS`          | 否   | 空                                                                       | 额外可信前端 Origin，多个值用逗号分隔。                                  |
-| `TRUST_PROXY`                   | 生产 | `false`                                                                  | 可信代理跳数或明确 IP/子网；禁止全局信任。                               |
-| `API_MAX_BODY_BYTES`            | 否   | `65536`                                                                  | API 请求体硬上限（bytes）。                                              |
-| `API_MAX_URL_CHARS`             | 否   | `4096`                                                                   | API URL 字符数硬上限。                                                   |
-| `API_RATE_LIMIT_WINDOW_MS`      | 否   | `900000`                                                                 | API、认证和 run 限流窗口。                                               |
-| `API_RATE_LIMIT_MAX`            | 否   | `300`                                                                    | 每 IP、每窗口的业务 API 请求上限。                                       |
-| `AUTH_RATE_LIMIT_MAX`           | 否   | `60`                                                                     | 每 IP、每窗口的认证请求上限。                                            |
-| `RUN_RATE_LIMIT_MAX`            | 否   | `10`                                                                     | 每用户、每窗口的 agent run 创建上限。                                    |
-| `RUN_CONCURRENCY_MAX`           | 否   | `2`                                                                      | 每用户同时运行的 agent run 上限。                                        |
-| `AUTH_EMAIL_PROVIDER`           | 生产 | 开发为 `console`                                                         | 事务邮件 provider；生产环境必须为 `resend`。                             |
-| `AUTH_EMAIL_FROM`               | 生产 | 空                                                                       | Resend 已验证域名下的发件地址。                                          |
-| `RESEND_API_KEY`                | 生产 | 空                                                                       | Resend API Key。                                                         |
-| `GITHUB_TOKEN`                  | 否   | 空                                                                       | GitHub 仓库查询工具的可选 token。                                        |
-| `MCP_SERVERS_JSON`              | 否   | 空                                                                       | 外部 MCP server 配置 JSON，支持 `mcpServers` 对象或数组。                |
-| `CODE_SANDBOX_ENABLED`          | 否   | `false`                                                                  | 是否注册 Docker `code_execute` 工具。                                    |
-| `CODE_SANDBOX_DOCKER_BINARY`    | 否   | `docker`                                                                 | Docker CLI 路径或命令名。                                                |
-| `CODE_SANDBOX_JAVASCRIPT_IMAGE` | 否   | `node:22-alpine`                                                         | JavaScript 沙箱固定镜像，推荐使用 digest。                               |
-| `CODE_SANDBOX_PYTHON_IMAGE`     | 否   | `python:3.13-alpine`                                                     | Python 沙箱固定镜像，推荐使用 digest。                                   |
-| `DEFAULT_USER_EMAIL`            | 否   | `local@ai-pro-agent.dev`                                                 | `db:seed` 创建示例数据时使用的用户邮箱。                                 |
-| `DEFAULT_USER_PASSWORD`         | 否   | 空                                                                       | `db:seed` 可选登录密码，至少 8 字符。                                    |
-| `PORT`                          | 否   | `3003`                                                                   | 后端监听端口。                                                           |
-| `CLIENT_DIST_DIR`               | 否   | `public`                                                                 | 生产模式下 Express 托管前端静态资源的位置。                              |
-
-## 当前限制
-
-- 认证邮件当前支持开发日志捕获和 Resend；其他事务邮件 provider 尚未实现。
-- 账户维度的邮件限流存储在单个 Node.js 进程内；多实例部署前需要迁移到 Redis 等共享存储。
-- 聊天链路为 `/api/sessions/:sessionId/messages`，支持会话持久化。
-- Docker 代码沙箱默认关闭；生产环境必须使用专用 daemon/VM，不能依赖共享宿主 socket 作为强隔离边界。
-- 多 Agent 需要 Planner、Executor、Critic 三个模型阶段，会增加首字延迟和 token 成本，默认不启用。
-- `web_fetch` 会拒绝私网地址并逐跳校验重定向；生产环境仍应配合网络出口策略。
-- 生产部署前请按 [生产 API 安全指南](docs/PRODUCTION_SECURITY.md) 配置反向代理、共享限流存储和请求体上限。
-
-## 参与贡献
-
-- 新增工具先阅读 [Tool SDK 开发指南](docs/TOOLS.md)，并从
-  [`examples/simple-tool`](examples/simple-tool) 开始。
-- 每个 PR 聚焦一个明确目标。
-- 修改行为时优先补测试或最小化验证步骤。
-- 分支命名建议使用 `fix/`、`feat/`、`chore/` 等前缀。
-- PR 描述写清楚：改了什么、为什么改、怎么验证。涉及数据库或 API 行为变更时说明迁移和兼容性影响。
+AI 默认负责拆解、提示、解释文档、review 和补充测试。核心模块由项目所有者先写第一版；无法
+逐行解释的代码不合并。详细规则见 [AGENTS.md](AGENTS.md) 和
+[学习约定](docs/learning-contract.md)。
