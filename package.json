@@ -13,6 +13,9 @@
     "fmt:check": "oxfmt --check",
     "lint:ci": "pnpm lint && pnpm fmt:check"
   },
+  "dependencies": {
+    "openai": "^7.4.0"
+  },
   "devDependencies": {
     "@types/node": "^24.3.0",
     "oxfmt": "^0.54.0",
