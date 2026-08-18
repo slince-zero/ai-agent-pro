@@ -16,6 +16,3 @@ const response = await client.chat.completions.create({
     },
   ],
 })
-
-console.log('dee:', response.choices[0]?.message.content)
-

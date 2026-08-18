@@ -21,5 +21,6 @@ repository tools.
 
 - The new `main` temporarily has no Agent functionality.
 - Product and deployment work is intentionally discarded.
-- Each future capability requires a learning question, a small implementation, and an eval result.
+- Each future capability requires a learning question, a small implementation, and a verification
+  result.
 - The old implementation remains available for comparison but is not a source to copy from.

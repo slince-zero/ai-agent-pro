@@ -5,7 +5,7 @@
 1. 我想理解什么？
 2. 当前最小假设是什么？
 3. 我能先写出的最小实现是什么？
-4. 如何用测试或 Eval 证明它工作？
+4. 如何用测试证明它工作？
 5. 哪些复杂度明确不加入？
 
 每个能力完成后记录：
@@ -14,9 +14,9 @@
 2. 最难调试的失败是什么？
 3. AI 提供了哪些帮助？
 4. 哪些代码是我无法独立解释的？
-5. 指标相对 baseline 如何变化？
+5. 测试结果是否符合预期？
 
-只有第 4 项为空，且第 5 项有数据时，能力才算完成。
+只有第 4 项为空，且第 5 项有明确结果时，能力才算完成。
 
 ## AI 协作等级
 
@@ -28,5 +28,5 @@
 | 3    | 补边界测试或局部修复          | 已理解问题后             |
 | 4    | 实现完整模块                  | 非核心基础设施或明确授权 |
 
-model client、search/page-reading tools、Agent loop、context、evidence、retrieval 和 eval 默认最高
+model client、search/page-reading tools、Agent loop、context、evidence 和 retrieval 默认最高
 使用等级 2。

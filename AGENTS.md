@@ -8,11 +8,11 @@ context-centered retrieval agent from first principles.
 - Start with questions, decomposition, hints, documentation pointers, and review.
 - Do not implement a complete core learning step before the owner has written a first attempt.
 - Core learning steps are the model client, search and page-reading tools, Agent loop, context
-  selection, evidence handling, retrieval, and evaluation logic.
+  selection, evidence handling, and retrieval logic.
 - The owner may explicitly request implementation. Keep it to one issue and one learning concept.
 - Never add an Agent framework to avoid implementing the raw protocol and loop.
 - Do not add a web UI, authentication, a database, queues, payment, MCP, plugins, Memory, or
-  multi-Agent behavior unless an eval result establishes a concrete need.
+  multi-Agent behavior unless a concrete product need is established.
 
 ## Pull requests
 
