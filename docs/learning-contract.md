@@ -28,4 +28,5 @@
 | 3    | 补边界测试或局部修复          | 已理解问题后             |
 | 4    | 实现完整模块                  | 非核心基础设施或明确授权 |
 
-model client、repository tools、Agent loop、context、retrieval 和 eval 默认最高使用等级 2。
+model client、search/page-reading tools、Agent loop、context、evidence、retrieval 和 eval 默认最高
+使用等级 2。
