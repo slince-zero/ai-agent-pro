@@ -8,8 +8,7 @@
     "moduleResolution": "Bundler",
     "noEmit": true,
     "skipLibCheck": true,
-    "strict": true,
-    "types": ["vitest/globals", "@testing-library/jest-dom"]
+    "strict": true
   },
   "include": ["src", "vite.config.mjs"]
 }

@@ -26,7 +26,7 @@ export function App() {
   const [status, setStatus] = useState('idle')
   const [reply, setReply] = useState('')
 
-  async function handleSubmit(event) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const trimmedQuestion = question.trim()
     if (!trimmedQuestion || status === 'loading') return
