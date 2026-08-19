@@ -11,5 +11,19 @@
   },
   "rules": {
     "no-console": "error"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["src/index.ts"],
+      "rules": {
+        "no-unused-vars": "off"
+      }
+    },
+    {
+      "files": ["packages/server/src/index.ts"],
+      "rules": {
+        "no-console": "off"
+      }
+    }
+  ]
 }
