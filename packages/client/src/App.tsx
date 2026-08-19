@@ -9,6 +9,8 @@ import {
   IconStar,
   IconUserCircle,
 } from '@tabler/icons-react'
+import axios from 'axios'
+import { ModelResult, TokenUsage } from '../../shared/type'
 
 const examplePrompts = [
   { label: '找一篇 TypeScript 入门教程', icon: IconSearch },
@@ -25,6 +27,7 @@ export function App() {
   const [attachment, setAttachment] = useState('')
   const [status, setStatus] = useState('idle')
   const [reply, setReply] = useState('')
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>()
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -35,14 +38,12 @@ export function App() {
     setReply('')
 
     try {
-      const response = await fetch('/api/questions', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question: trimmedQuestion }),
+      const response = await axios.post<ModelResult>('/api/questions', {
+        question: trimmedQuestion,
       })
-      if (!response.ok) throw new Error('Request failed')
-      const body = await response.json()
-      setReply(body.message)
+
+      setReply(response.data.message)
+      setTokenUsage(response.data.usage)
       setStatus('success')
     } catch {
       setReply('问题已经保留在页面中；服务占位接口暂时不可用。')
@@ -179,6 +180,9 @@ export function App() {
             <div>
               <h2 className="m-0 text-lg font-bold text-[#1f1f1f]">问题已收到</h2>
               <p className="mt-1.5 mb-0 leading-[1.55]">{reply}</p>
+              <span>inputTokens:{tokenUsage?.inputTokens}</span>
+              <span>outputTokens:{tokenUsage?.outputTokens}</span>
+              <span>totalTokens:{tokenUsage?.totalTokens}</span>
             </div>
           </section>
         ) : null}

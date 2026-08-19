@@ -16,10 +16,11 @@ export function createApp() {
       return
     }
     try {
-      const answer = await askAgent(question.trim())
-      console.log('eee', answer)
+      const res = await askAgent(question.trim())
+
       response.json({
-        message: answer,
+        message: res.message,
+        usage: res.usage,
       })
     } catch (error) {
       response.status(502).json({
