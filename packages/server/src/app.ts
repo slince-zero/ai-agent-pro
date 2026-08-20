@@ -1,5 +1,6 @@
 import express from 'express'
 import { askAgent } from './agent.js'
+import { reportErrorLog } from './util.js'
 
 export function createApp() {
   const app = express()
@@ -22,7 +23,8 @@ export function createApp() {
         message: res.message,
         usage: res.usage,
       })
-    } catch (error) {
+    } catch (error: unknown) {
+      reportErrorLog(error)
       response.status(502).json({
         error: '模型服务暂时不可用',
       })

@@ -10,7 +10,8 @@
     "es2023": true
   },
   "rules": {
-    "no-console": "error"
+    "no-console": "error",
+    "oxc/no-async-endpoint-handlers": "off"
   },
   "overrides": [
     {
