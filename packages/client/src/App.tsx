@@ -12,6 +12,21 @@ import {
 import axios from 'axios'
 import { ModelResult, TokenUsage } from '../../shared/type'
 
+type ChatMessage = {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+  usage?: TokenUsage
+}
+
+type UIStatus = 'idle' | 'loading' | 'success' | 'error'
+
+const initialMessages: ChatMessage[] = [
+  {
+    role: 'system',
+    content: '你是一个负责检索问题搜索回答的 AI 助手',
+  },
+]
+
 const examplePrompts = [
   { label: '找一篇 TypeScript 入门教程', icon: IconSearch },
   { label: '比较三个 Agent 方案', icon: IconScale },
@@ -25,28 +40,36 @@ export function App() {
   const fileInputId = useId()
   const [question, setQuestion] = useState('')
   const [attachment, setAttachment] = useState('')
-  const [status, setStatus] = useState('idle')
-  const [reply, setReply] = useState('')
-  const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>()
+  const [status, setStatus] = useState<UIStatus>('idle')
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const trimmedQuestion = question.trim()
     if (!trimmedQuestion || status === 'loading') return
 
     setStatus('loading')
-    setReply('')
 
+    const nextMessages: ChatMessage[] = [
+      ...messages,
+      {
+        role: 'user',
+        content: trimmedQuestion,
+      },
+    ]
+    setMessages(nextMessages)
     try {
       const response = await axios.post<ModelResult>('/api/questions', {
-        question: trimmedQuestion,
+        messages: nextMessages,
       })
 
-      setReply(response.data.message)
-      setTokenUsage(response.data.usage)
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: response.data.message, usage: response.data.usage },
+      ])
+
       setStatus('success')
     } catch {
-      setReply('问题已经保留在页面中；服务占位接口暂时不可用。')
       setStatus('error')
     }
   }
@@ -171,21 +194,25 @@ export function App() {
           ))}
         </div>
 
-        {reply ? (
-          <section
-            className={`relative z-10 mx-auto mt-11 flex max-w-[760px] gap-4 border-t border-[#deddd7] px-6 py-[22px] ${status === 'error' ? 'text-[#8b4d39]' : 'text-[#477b55]'}`}
-            aria-live="polite"
-          >
-            <IconShieldCheck className="size-7 shrink-0 stroke-[1.7]" aria-hidden="true" />
-            <div>
-              <h2 className="m-0 text-lg font-bold text-[#1f1f1f]">问题已收到</h2>
-              <p className="mt-1.5 mb-0 leading-[1.55]">{reply}</p>
-              <span>inputTokens:{tokenUsage?.inputTokens}</span>
-              <span>outputTokens:{tokenUsage?.outputTokens}</span>
-              <span>totalTokens:{tokenUsage?.totalTokens}</span>
-            </div>
-          </section>
-        ) : null}
+        {messages.length > 0 &&
+          messages
+            .filter((item) => item.role === 'assistant')
+            .map((item, index) => (
+              <section
+                key={index}
+                className={`relative z-10 mx-auto mt-11 flex max-w-[760px] gap-4 border-t border-[#deddd7] px-6 py-[22px] ${status === 'error' ? 'text-[#8b4d39]' : 'text-[#477b55]'}`}
+                aria-live="polite"
+              >
+                <IconShieldCheck className="size-7 shrink-0 stroke-[1.7]" aria-hidden="true" />
+                <div>
+                  <h2 className="m-0 text-lg font-bold text-[#1f1f1f]">问题已收到</h2>
+                  <p className="mt-1.5 mb-0 leading-[1.55]">{item.content}</p>
+                  <span>inputTokens:{item.usage?.inputTokens}</span>
+                  <span className="mx-2">outputTokens:{item.usage?.outputTokens}</span>
+                  <span>totalTokens:{item.usage?.totalTokens}</span>
+                </div>
+              </section>
+            ))}
       </main>
     </div>
   )

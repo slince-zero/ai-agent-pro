@@ -1,7 +1,12 @@
 import OpenAI from 'openai'
 import type { ModelResult } from '@ai-agent-pro/shared/type.js'
 
-type ModelRequest = (question: string) => Promise<ModelResult>
+type ChatMessage = {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+type ModelRequest = (messages: ChatMessage[]) => Promise<ModelResult>
 
 function createClient() {
   return new OpenAI({
@@ -11,15 +16,10 @@ function createClient() {
   })
 }
 
-export async function requestDeepSeek(question: string): Promise<ModelResult> {
+export async function requestDeepSeek(messages: ChatMessage[]): Promise<ModelResult> {
   const response = await createClient().chat.completions.create({
     model: 'deepseek-v4-flash',
-    messages: [
-      {
-        role: 'user',
-        content: question,
-      },
-    ],
+    messages,
   })
 
   const content = response.choices[0]?.message.content
@@ -39,10 +39,10 @@ export async function requestDeepSeek(question: string): Promise<ModelResult> {
 }
 
 export async function askAgent(
-  question: string,
+  messages: ChatMessage[],
   requestModel: ModelRequest = requestDeepSeek,
 ): Promise<ModelResult> {
-  const res = await requestModel(question)
+  const res = await requestModel(messages)
 
   if (!res.message.trim()) {
     throw new Error('Model returned an empty answer')
