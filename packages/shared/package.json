@@ -1,0 +1,18 @@
+{
+  "name": "@ai-agent-pro/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "types": "./type.ts",
+  "exports": {
+    "./type.js": "./type.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^6.0.3"
+  }
+}

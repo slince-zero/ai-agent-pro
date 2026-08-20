@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import type { ModelResult } from '../../shared/type.js'
+import type { ModelResult } from '@ai-agent-pro/shared/type.js'
 
 type ModelRequest = (question: string) => Promise<ModelResult>
 
