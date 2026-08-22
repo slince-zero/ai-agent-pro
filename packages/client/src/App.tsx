@@ -11,6 +11,7 @@ import {
   IconSearch,
   IconSparkles,
   IconUserCircle,
+  IconCancel,
 } from '@tabler/icons-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -19,8 +20,17 @@ import { consumeNDJSON } from './util'
 
 type ChatMessage = RequestMessage & {
   usage?: TokenUsage
+  cancelled?: boolean
 }
 
+/**
+ * 问答界面的交互状态
+ * - idle：初始空闲状态，等待用户输入
+ * - loading：请求已发出，等待服务端响应首字节
+ * - streaming：正在接收流式数据，逐字渲染中
+ * - success：流式接收完成，问答结束
+ * - error：请求失败，展示错误提示
+ */
 type UIStatus = 'idle' | 'loading' | 'streaming' | 'success' | 'error'
 
 const initialMessages: ChatMessage[] = [
@@ -51,6 +61,7 @@ function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
 export function App() {
   const fileInputId = useId()
   const messageEndRef = useRef<HTMLDivElement>(null)
+  const requestControllerRef = useRef<AbortController | null>(null)
   const [question, setQuestion] = useState('')
   const [attachment, setAttachment] = useState('')
   const [status, setStatus] = useState<UIStatus>('idle')
@@ -73,10 +84,43 @@ export function App() {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages, status])
 
+  function cancelSubmit() {
+    const cancelController = requestControllerRef.current
+
+    if (!cancelController) return
+
+    cancelController.abort()
+    setStatus('idle')
+
+    setMessages((prev) => {
+      const lastMessage = prev.at(-1)
+
+      if (lastMessage?.role !== 'assistant') {
+        return prev
+      }
+
+      if (!lastMessage.content) {
+        return prev.slice(0, -1)
+      }
+
+      const nextMessages = [...prev]
+      nextMessages[nextMessages.length - 1] = {
+        ...lastMessage,
+        cancelled: true,
+      }
+
+      return nextMessages
+    })
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+
     const trimmedQuestion = question.trim()
     if (!trimmedQuestion || isBusy) return
+
+    const controller = new AbortController()
+    requestControllerRef.current = controller
 
     const nextMessages: ChatMessage[] = [
       ...messages,
@@ -99,12 +143,15 @@ export function App() {
     setQuestion('')
 
     try {
-      const requestMessages: RequestMessage[] = nextMessages.map(({ role, content }) => ({
-        role,
-        content,
-      }))
+      const requestMessages: RequestMessage[] = nextMessages
+        .filter((message) => !message.cancelled)
+        .map(({ role, content }) => ({
+          role,
+          content,
+        }))
       const response = await fetch('/api/questions/stream', {
         method: 'post',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -114,6 +161,8 @@ export function App() {
       })
 
       await consumeNDJSON(response, (e) => {
+        if (controller.signal.aborted) return
+
         if (e.type === 'text_delta') {
           setStatus('streaming')
           setMessages((previousMessages) => {
@@ -151,7 +200,13 @@ export function App() {
         }
       })
     } catch {
-      setStatus('error')
+      if (!controller.signal.aborted) {
+        setStatus('error')
+      }
+    } finally {
+      if (requestControllerRef.current === controller) {
+        requestControllerRef.current = null
+      }
     }
   }
 
@@ -218,9 +273,12 @@ export function App() {
                       <IconSparkles className="size-[19px] stroke-[1.8]" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 pt-1">
-                      <div className="text-[16px] leading-7 text-[#292824] [&_a]:text-[#d94b20] [&_a]:underline [&_a]:underline-offset-2 [&_code]:rounded-md [&_code]:bg-[#eeeae2] [&_code]:px-1.5 [&_code]:py-0.5 [&_h1]:mt-6 [&_h1]:mb-3 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mt-6 [&_h2]:mb-3 [&_h2]:text-lg [&_h2]:font-bold [&_li]:my-1 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-4 [&_p:last-child]:mb-0 [&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:bg-[#292824] [&_pre]:p-4 [&_pre]:text-[#faf9f5] [&_strong]:font-bold [&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-6">
+                      <div className="text-[16px] leading-7 text-[#292824] [&_a]:text-[#d94b20] [&_a]:underline [&_a]:underline-offset-2 [&_code]:rounded-md [&_code]:bg-[#eeeae2] [&_code]:px-1.5 [&_code]:py-0.5 [&_h1]:mt-6 [&_h1]:mb-3 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mt-6 [&_h2]:mb-3 [&_h2]:text-lg [&_h2]:font-bold [&_li]:my-1 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-4 [&_p:last-child]:mb-0 [&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:bg-[#292824] [&_pre]:p-4 [&_pre]:text-[#faf9f5] [&_pre_code]:block [&_pre_code]:rounded-none [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:leading-6 [&_pre_code]:text-inherit [&_strong]:font-bold [&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-6">
                         <Markdown remarkPlugins={markdownPlugins}>{message.content}</Markdown>
                       </div>
+                      {message.cancelled ? (
+                        <p className="mt-3 mb-0 text-xs leading-5 text-[#8a8881]">已停止生成</p>
+                      ) : null}
                       {message.usage ? (
                         <p className="mt-3 mb-0 text-xs leading-5 text-[#8a8881]">
                           输入 {message.usage.inputTokens} · 输出 {message.usage.outputTokens} · 共{' '}
@@ -332,18 +390,13 @@ export function App() {
 
               <button
                 className={`${focusRing} grid size-10 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-[#1f1f1f] p-0 text-white shadow-[0_4px_10px_rgba(31,31,31,0.18)] transition-colors hover:not-disabled:bg-[#f05a2a] disabled:cursor-not-allowed disabled:bg-[#d8d6d0] disabled:text-[#8f8c85] disabled:shadow-none`}
-                type="submit"
-                disabled={!question.trim() || isBusy}
-                aria-label={
-                  status === 'loading'
-                    ? '正在等待回答'
-                    : status === 'streaming'
-                      ? '正在生成回答'
-                      : '发送消息'
-                }
+                type={isBusy ? 'button' : 'submit'}
+                disabled={!question.trim() && !isBusy}
+                aria-label={isBusy ? '停止生成' : '发送消息'}
+                onClick={isBusy ? () => cancelSubmit() : undefined}
               >
                 {isBusy ? (
-                  <IconLoader2 className="size-5 animate-spin stroke-2" aria-hidden="true" />
+                  <IconCancel className="size-5 stroke-2" aria-hidden="true" />
                 ) : (
                   <IconArrowUp className="size-5 stroke-2" aria-hidden="true" />
                 )}
