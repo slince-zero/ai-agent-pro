@@ -39,6 +39,13 @@ export function createApp() {
       return
     }
 
+    const controller = new AbortController()
+    response.once('close', () => {
+      if (!response.writableEnded) {
+        controller.abort()
+      }
+    })
+
     response.status(200)
     response.set({
       'Content-Type': 'application/x-ndjson; charset=utf-8',
@@ -52,10 +59,18 @@ export function createApp() {
     }
 
     try {
-      for await (const event of askAgentStream(messages)) {
+      for await (const event of askAgentStream(messages, {
+        signal: controller.signal,
+      })) {
+        if (controller.signal.aborted) {
+          return
+        }
         writeEvent(event)
       }
     } catch (error: unknown) {
+      if (controller.signal.aborted) {
+        return
+      }
       reportErrorLog(error)
 
       // 流已经开始后，不能再把 HTTP 状态改成 502。
@@ -64,7 +79,9 @@ export function createApp() {
         message: '模型服务暂时不可用',
       })
     } finally {
-      response.end()
+      if (!response.writableEnded && !response.destroyed) {
+        response.end()
+      }
     }
   })
 

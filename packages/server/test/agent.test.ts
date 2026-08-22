@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { AgentStreamEvent, ChatMessage, TokenUsage } from '@ai-agent-pro/shared/type.js'
 import { askAgentStream } from '../src/agent.js'
+import type { AgentRunContext } from '../src/agent.js'
 
 const messages: ChatMessage[] = [{ role: 'user', content: 'What is an agent?' }]
 const usage: TokenUsage = { inputTokens: 10, outputTokens: 12, totalTokens: 22 }
@@ -22,14 +23,19 @@ async function* failingRequestModel(): AsyncGenerator<never> {
 }
 
 test('streams model events and appends done', async () => {
-  async function* requestModel(receivedMessages: ChatMessage[]) {
+  const controller = new AbortController()
+
+  async function* requestModel(receivedMessages: ChatMessage[], context: AgentRunContext) {
     assert.deepEqual(receivedMessages, messages)
+    assert.equal(context.signal, controller.signal)
     yield { type: 'text_delta', delta: 'An agent can ' } as const
     yield { type: 'text_delta', delta: 'use tools.' } as const
     yield { type: 'usage', usage } as const
   }
 
-  const result = await collectEvents(askAgentStream(messages, requestModel))
+  const result = await collectEvents(
+    askAgentStream(messages, { signal: controller.signal }, requestModel),
+  )
 
   assert.deepEqual(result, [
     { type: 'text_delta', delta: 'An agent can ' },
@@ -40,20 +46,55 @@ test('streams model events and appends done', async () => {
 })
 
 test('rejects an empty model answer', async () => {
+  const controller = new AbortController()
+
   async function* requestModel() {
     yield { type: 'text_delta', delta: '   ' } as const
     yield { type: 'usage', usage } as const
   }
 
   await assert.rejects(
-    collectEvents(askAgentStream(messages, requestModel)),
+    collectEvents(askAgentStream(messages, { signal: controller.signal }, requestModel)),
     /Model returned an empty answer/,
   )
 })
 
 test('passes model request failures to the caller', async () => {
+  const controller = new AbortController()
+
   await assert.rejects(
-    collectEvents(askAgentStream(messages, failingRequestModel)),
+    collectEvents(askAgentStream(messages, { signal: controller.signal }, failingRequestModel)),
     /network failed/,
   )
+})
+
+test('forwards cancellation to the model stream without appending done', async () => {
+  const controller = new AbortController()
+
+  async function* requestModel(_messages: ChatMessage[], context: AgentRunContext) {
+    assert.equal(context.signal, controller.signal)
+    yield { type: 'text_delta', delta: 'partial answer' } as const
+
+    await new Promise<never>((_resolve, reject) => {
+      const rejectAbort = () => reject(new Error('aborted'))
+
+      if (context.signal.aborted) {
+        rejectAbort()
+        return
+      }
+
+      context.signal.addEventListener('abort', rejectAbort, { once: true })
+    })
+  }
+
+  const stream = askAgentStream(messages, { signal: controller.signal }, requestModel)
+
+  assert.deepEqual(await stream.next(), {
+    value: { type: 'text_delta', delta: 'partial answer' },
+    done: false,
+  })
+
+  controller.abort()
+
+  await assert.rejects(stream.next(), /aborted/)
 })
