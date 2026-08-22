@@ -1,12 +1,22 @@
 import OpenAI from 'openai'
-import type { ModelResult } from '@ai-agent-pro/shared/type.js'
+import type { ModelResult, TokenUsage } from '@ai-agent-pro/shared/type.js'
 
 type ChatMessage = {
   role: 'system' | 'user' | 'assistant'
   content: string
 }
 
-type ModelRequest = (messages: ChatMessage[]) => Promise<ModelResult>
+type ModelStreamChunk =
+  | {
+      type: 'text_delta'
+      delta: string
+    }
+  | {
+      type: 'usage'
+      usage: TokenUsage
+    }
+
+type ModelRequest = (messages: ChatMessage[]) => AsyncIterable<ModelStreamChunk>
 
 function createClient() {
   return new OpenAI({
@@ -16,37 +26,90 @@ function createClient() {
   })
 }
 
-export async function requestDeepSeek(messages: ChatMessage[]): Promise<ModelResult> {
-  const response = await createClient().chat.completions.create({
+// async function requestDeepSeek(messages: ChatMessage[]): Promise<ModelResult> {
+//   const response = await createClient().chat.completions.create({
+//     model: 'deepseek-v4-flash',
+//     messages,
+//   })
+
+//   const content = response.choices[0]?.message.content
+
+//   if (!content) {
+//     throw new Error('Model returned an empty answer')
+//   }
+
+//   return {
+//     message: content,
+//     usage: {
+//       inputTokens: response.usage?.prompt_tokens ?? 0,
+//       outputTokens: response.usage?.completion_tokens ?? 0,
+//       totalTokens: response.usage?.total_tokens ?? 0,
+//     },
+//   }
+// }
+
+async function* requestDeepSeekStream(messages: ChatMessage[]): AsyncGenerator<ModelStreamChunk> {
+  const stream = await createClient().chat.completions.create({
     model: 'deepseek-v4-flash',
     messages,
+    stream: true,
+    stream_options: {
+      include_usage: true,
+    },
   })
 
-  const content = response.choices[0]?.message.content
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta.content
 
-  if (!content) {
-    throw new Error('Model returned an empty answer')
-  }
+    if (delta) {
+      yield {
+        type: 'text_delta',
+        delta,
+      }
+    }
 
-  return {
-    message: content,
-    usage: {
-      inputTokens: response.usage?.prompt_tokens ?? 0,
-      outputTokens: response.usage?.completion_tokens ?? 0,
-      totalTokens: response.usage?.total_tokens ?? 0,
-    },
+    if (chunk.usage) {
+      yield {
+        type: 'usage',
+        usage: {
+          inputTokens: chunk.usage.prompt_tokens,
+          outputTokens: chunk.usage.completion_tokens,
+          totalTokens: chunk.usage.total_tokens,
+        },
+      }
+    }
   }
 }
 
-export async function askAgent(
+export async function* askAgentStream(
   messages: ChatMessage[],
-  requestModel: ModelRequest = requestDeepSeek,
-): Promise<ModelResult> {
-  const res = await requestModel(messages)
+  requestModel: ModelRequest = requestDeepSeekStream,
+) {
+  let completeAnswer = ''
 
-  if (!res.message.trim()) {
+  for await (const event of requestModel(messages)) {
+    if (event.type === 'text_delta') {
+      completeAnswer += event.delta
+    }
+    yield event
+  }
+
+  if (!completeAnswer.trim()) {
     throw new Error('Model returned an empty answer')
   }
 
-  return res
+  yield { type: 'done' } as const
 }
+
+// export async function askAgent(
+//   messages: ChatMessage[],
+//   requestModel: ModelRequest = requestDeepSeek,
+// ): Promise<ModelResult> {
+//   const res = await requestModel(messages)
+
+//   if (!res.message.trim()) {
+//     throw new Error('Model returned an empty answer')
+//   }
+
+//   return res
+// }

@@ -12,10 +12,10 @@ import {
   IconSparkles,
   IconUserCircle,
 } from '@tabler/icons-react'
-import axios from 'axios'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { ModelResult, TokenUsage } from '@ai-agent-pro/shared/type.js'
+import type { TokenUsage } from '@ai-agent-pro/shared/type.js'
+import { consumeNDJSON } from './util'
 
 type ChatMessage = {
   role: 'system' | 'user' | 'assistant'
@@ -23,7 +23,7 @@ type ChatMessage = {
   usage?: TokenUsage
 }
 
-type UIStatus = 'idle' | 'loading' | 'success' | 'error'
+type UIStatus = 'idle' | 'loading' | 'streaming' | 'success' | 'error'
 
 const initialMessages: ChatMessage[] = [
   {
@@ -59,7 +59,17 @@ export function App() {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
 
   const conversation = messages.filter((message) => message.role !== 'system')
+  const visibleConversation = conversation.filter(
+    (message, index) =>
+      !(
+        status === 'loading' &&
+        index === conversation.length - 1 &&
+        message.role === 'assistant' &&
+        !message.content
+      ),
+  )
   const hasConversation = conversation.length > 0
+  const isBusy = status === 'loading' || status === 'streaming'
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -68,7 +78,7 @@ export function App() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const trimmedQuestion = question.trim()
-    if (!trimmedQuestion || status === 'loading') return
+    if (!trimmedQuestion || isBusy) return
 
     const nextMessages: ChatMessage[] = [
       ...messages,
@@ -78,30 +88,76 @@ export function App() {
       },
     ]
 
+    setMessages([
+      ...nextMessages,
+      {
+        role: 'assistant',
+        content: '',
+      },
+    ])
+
     setStatus('loading')
-    setMessages(nextMessages)
+
     setQuestion('')
 
     try {
-      const response = await axios.post<ModelResult>('/api/questions', {
-        messages: nextMessages,
+      // const response = await axios.post<ModelResult>('/api/questions', {
+      //   messages: nextMessages,
+      // })
+      const response = await fetch('/api/questions/stream', {
+        method: 'post',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: nextMessages,
+        }),
       })
 
-      setMessages((previousMessages) => [
-        ...previousMessages,
-        { role: 'assistant', content: response.data.message, usage: response.data.usage },
-      ])
-      setStatus('success')
+      await consumeNDJSON(response, (e) => {
+        if (e.type === 'text_delta') {
+          setStatus('streaming')
+          setMessages((previousMessages) => {
+            const newMessages = [...previousMessages]
+            const lastIndex = newMessages.length - 1
+            const lastMessage = newMessages[lastIndex]
+
+            newMessages[lastIndex] = {
+              ...lastMessage,
+              content: lastMessage.content + e.delta,
+            }
+            return newMessages
+          })
+        }
+        if (e.type === 'usage') {
+          setMessages((previousMessages) => {
+            const newMessages = [...previousMessages]
+            const lastIndex = newMessages.length - 1
+
+            newMessages[lastIndex] = {
+              ...newMessages[lastIndex],
+              usage: e.usage,
+            }
+
+            return newMessages
+          })
+        }
+
+        if (e.type === 'done') {
+          setStatus('success')
+        }
+
+        if (e.type === 'error') {
+          setStatus('error')
+        }
+      })
+      // setMessages((previousMessages) => [
+      //   ...previousMessages,
+      //   { role: 'assistant', content: response.data.message, usage: response.data.usage },
+      // ])
     } catch {
       setStatus('error')
     }
-  }
-
-  function startNewConversation() {
-    setMessages(initialMessages)
-    setQuestion('')
-    setAttachment('')
-    setStatus('idle')
   }
 
   return (
@@ -119,7 +175,6 @@ export function App() {
           <button
             type="button"
             className={`${focusRing} inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border-0 bg-transparent px-3 text-sm font-semibold text-[#34332f] transition-colors hover:bg-[#f0ede6] hover:text-[#f05a2a]`}
-            onClick={startNewConversation}
             aria-label="新对话"
           >
             <IconPlus className="size-[19px] stroke-[1.8]" aria-hidden="true" />
@@ -152,7 +207,7 @@ export function App() {
               aria-label="对话内容"
               aria-live="polite"
             >
-              {conversation.map((message, index) =>
+              {visibleConversation.map((message, index) =>
                 message.role === 'user' ? (
                   <article className="flex justify-end" key={`${message.role}-${index}`}>
                     <div className="max-w-[78%] rounded-[22px_22px_7px_22px] bg-[#eeeae2] px-5 py-3.5 text-[16px] leading-7 text-[#292824] max-[640px]:max-w-[88%] max-[640px]:px-4 max-[640px]:py-3">
@@ -283,10 +338,16 @@ export function App() {
               <button
                 className={`${focusRing} grid size-10 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-[#1f1f1f] p-0 text-white shadow-[0_4px_10px_rgba(31,31,31,0.18)] transition-colors hover:not-disabled:bg-[#f05a2a] disabled:cursor-not-allowed disabled:bg-[#d8d6d0] disabled:text-[#8f8c85] disabled:shadow-none`}
                 type="submit"
-                disabled={!question.trim() || status === 'loading'}
-                aria-label={status === 'loading' ? '正在发送' : '发送消息'}
+                disabled={!question.trim() || isBusy}
+                aria-label={
+                  status === 'loading'
+                    ? '正在等待回答'
+                    : status === 'streaming'
+                      ? '正在生成回答'
+                      : '发送消息'
+                }
               >
-                {status === 'loading' ? (
+                {isBusy ? (
                   <IconLoader2 className="size-5 animate-spin stroke-2" aria-hidden="true" />
                 ) : (
                   <IconArrowUp className="size-5 stroke-2" aria-hidden="true" />
