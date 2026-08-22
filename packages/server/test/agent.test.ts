@@ -1,36 +1,59 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { askAgent } from '../src/agent.js'
+import type { AgentStreamEvent, ChatMessage, TokenUsage } from '@ai-agent-pro/shared/type.js'
+import { askAgentStream } from '../src/agent.js'
 
-const messages = [{ role: 'user' as const, content: 'What is an agent?' }]
-const usage = { inputTokens: 10, outputTokens: 12, totalTokens: 22 }
+const messages: ChatMessage[] = [{ role: 'user', content: 'What is an agent?' }]
+const usage: TokenUsage = { inputTokens: 10, outputTokens: 12, totalTokens: 22 }
 
-test('returns the model answer', async () => {
-  const expected = {
-    message: 'An agent can use a model and tools to complete a task.',
-    usage,
+async function collectEvents(events: AsyncIterable<AgentStreamEvent>) {
+  const result: AgentStreamEvent[] = []
+
+  for await (const event of events) {
+    result.push(event)
   }
 
-  const result = await askAgent(messages, async (receivedMessages) => {
-    assert.deepEqual(receivedMessages, messages)
-    return expected
-  })
+  return result
+}
 
-  assert.deepEqual(result, expected)
+async function* failingRequestModel(): AsyncGenerator<never> {
+  yield* []
+  throw new Error('network failed')
+}
+
+test('streams model events and appends done', async () => {
+  async function* requestModel(receivedMessages: ChatMessage[]) {
+    assert.deepEqual(receivedMessages, messages)
+    yield { type: 'text_delta', delta: 'An agent can ' } as const
+    yield { type: 'text_delta', delta: 'use tools.' } as const
+    yield { type: 'usage', usage } as const
+  }
+
+  const result = await collectEvents(askAgentStream(messages, requestModel))
+
+  assert.deepEqual(result, [
+    { type: 'text_delta', delta: 'An agent can ' },
+    { type: 'text_delta', delta: 'use tools.' },
+    { type: 'usage', usage },
+    { type: 'done' },
+  ])
 })
 
 test('rejects an empty model answer', async () => {
+  async function* requestModel() {
+    yield { type: 'text_delta', delta: '   ' } as const
+    yield { type: 'usage', usage } as const
+  }
+
   await assert.rejects(
-    askAgent(messages, async () => ({ message: '   ', usage })),
+    collectEvents(askAgentStream(messages, requestModel)),
     /Model returned an empty answer/,
   )
 })
 
 test('passes model request failures to the caller', async () => {
   await assert.rejects(
-    askAgent(messages, async () => {
-      throw new Error('network failed')
-    }),
+    collectEvents(askAgentStream(messages, failingRequestModel)),
     /network failed/,
   )
 })

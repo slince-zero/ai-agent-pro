@@ -1,40 +1,38 @@
 import express from 'express'
+import type { ChatMessage, MessageStreamEvent } from '@ai-agent-pro/shared/type.js'
 import { askAgentStream } from './agent.js'
 import { reportErrorLog } from './util.js'
+
+function isChatMessageRole(value: unknown): value is ChatMessage['role'] {
+  return value === 'system' || value === 'user' || value === 'assistant'
+}
+
+function parseChatMessages(value: unknown): ChatMessage[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined
+
+  const messages: ChatMessage[] = []
+
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) return undefined
+
+    const message = item as Record<string, unknown>
+    if (!isChatMessageRole(message.role) || typeof message.content !== 'string') return undefined
+
+    messages.push({ role: message.role, content: message.content })
+  }
+
+  return messages
+}
 
 export function createApp() {
   const app = express()
 
   app.use(express.json({ limit: '16kb' }))
 
-  // app.post('/api/questions', async (request, response) => {
-  //   const { messages } = request.body
-
-  //   if (!Array.isArray(messages) || messages.length === 0) {
-  //     response.status(400).json({
-  //       error: 'messages must be a non-empty array',
-  //     })
-  //     return
-  //   }
-  //   try {
-  //     const res = await askAgent(messages)
-
-  //     response.json({
-  //       message: res.message,
-  //       usage: res.usage,
-  //     })
-  //   } catch (error: unknown) {
-  //     reportErrorLog(error)
-  //     response.status(502).json({
-  //       error: '模型服务暂时不可用',
-  //     })
-  //   }
-  // })
-
   app.post('/api/questions/stream', async (request, response) => {
-    const { messages } = request.body
+    const messages = parseChatMessages(request.body?.messages)
 
-    if (!Array.isArray(messages) || messages.length === 0) {
+    if (!messages) {
       response.status(400).json({
         error: 'messages must be a non-empty array',
       })
@@ -49,20 +47,22 @@ export function createApp() {
     })
     response.flushHeaders() // 立即发送给客户端
 
+    const writeEvent = (event: MessageStreamEvent) => {
+      response.write(`${JSON.stringify(event)}\n`)
+    }
+
     try {
       for await (const event of askAgentStream(messages)) {
-        response.write(`${JSON.stringify(event)}\n`)
+        writeEvent(event)
       }
     } catch (error: unknown) {
       reportErrorLog(error)
 
       // 流已经开始后，不能再把 HTTP 状态改成 502。
-      response.write(
-        `${JSON.stringify({
-          type: 'error',
-          message: '模型服务暂时不可用',
-        })}\n`,
-      )
+      writeEvent({
+        type: 'error',
+        message: '模型服务暂时不可用',
+      })
     } finally {
       response.end()
     }

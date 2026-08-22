@@ -14,12 +14,10 @@ import {
 } from '@tabler/icons-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { TokenUsage } from '@ai-agent-pro/shared/type.js'
+import type { ChatMessage as RequestMessage, TokenUsage } from '@ai-agent-pro/shared/type.js'
 import { consumeNDJSON } from './util'
 
-type ChatMessage = {
-  role: 'system' | 'user' | 'assistant'
-  content: string
+type ChatMessage = RequestMessage & {
   usage?: TokenUsage
 }
 
@@ -101,16 +99,17 @@ export function App() {
     setQuestion('')
 
     try {
-      // const response = await axios.post<ModelResult>('/api/questions', {
-      //   messages: nextMessages,
-      // })
+      const requestMessages: RequestMessage[] = nextMessages.map(({ role, content }) => ({
+        role,
+        content,
+      }))
       const response = await fetch('/api/questions/stream', {
         method: 'post',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: nextMessages,
+          messages: requestMessages,
         }),
       })
 
@@ -151,10 +150,6 @@ export function App() {
           setStatus('error')
         }
       })
-      // setMessages((previousMessages) => [
-      //   ...previousMessages,
-      //   { role: 'assistant', content: response.data.message, usage: response.data.usage },
-      // ])
     } catch {
       setStatus('error')
     }

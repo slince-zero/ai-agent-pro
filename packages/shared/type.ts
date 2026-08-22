@@ -4,13 +4,12 @@ export type TokenUsage = {
   totalTokens: number
 }
 
-export type ModelResult = {
-  message: string
-  usage: TokenUsage
+export type ChatMessage = {
+  role: 'system' | 'user' | 'assistant'
+  content: string
 }
 
-// 后面加入工具时，可以继续扩展
-export type MessageStreamEvent =
+export type AgentStreamEvent =
   | {
       type: 'text_delta'
       delta: string
@@ -22,7 +21,10 @@ export type MessageStreamEvent =
   | {
       type: 'done'
     }
+
+export type MessageStreamEvent =
+  | AgentStreamEvent
   | {
       type: 'error'
-      error: string
+      message: string
     }
