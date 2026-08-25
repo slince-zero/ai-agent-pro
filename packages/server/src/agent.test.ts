@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { AgentStreamEvent, ChatMessage, TokenUsage } from '@ai-agent-pro/shared/type.js'
-import { askAgentStream } from '../src/agent.js'
-import type { AgentRunContext } from '../src/agent.js'
+import { askAgentStream } from './agent.js'
+import type { AgentRunContext } from './agent.js'
 
 const messages: ChatMessage[] = [{ role: 'user', content: 'What is an agent?' }]
 const usage: TokenUsage = { inputTokens: 10, outputTokens: 12, totalTokens: 22 }

@@ -25,12 +25,5 @@ export const searchTool = {
 
 export async function search(input: SearchInput, signal: AbortSignal): Promise<SearchResult[]> {
   signal.throwIfAborted()
-
-  return [
-    {
-      title: `${input.query} 入门教程`,
-      url: 'https://example.com/tutorial',
-      snippet: `这是一条关于“${input.query}”的模拟搜索结果。`,
-    },
-  ]
+  throw new Error(`Search is not implemented: ${input.query}`)
 }

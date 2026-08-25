@@ -1,6 +1,6 @@
 import { z } from 'zod'
+import type { ChatCompletionMessageFunctionToolCall } from 'openai/resources/index.mjs'
 import { search, searchInputSchema } from './search.js'
-import { ChatCompletionMessageFunctionToolCall } from 'openai/resources/index.mjs'
 
 function parseJson(value: string): unknown {
   try {
