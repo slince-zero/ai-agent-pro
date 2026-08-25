@@ -13,7 +13,8 @@
   "dependencies": {
     "@ai-agent-pro/shared": "workspace:*",
     "express": "^5.1.0",
-    "openai": "^7.5.0"
+    "openai": "^7.5.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",

@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import type { AgentStreamEvent, ChatMessage } from '@ai-agent-pro/shared/type.js'
+import { searchTool } from './tools/search.js'
 
 export type AgentRunContext = {
   signal: AbortSignal
@@ -28,7 +29,9 @@ async function* requestDeepSeekStream(
     {
       model: 'deepseek-v4-flash',
       messages,
+      tools: [searchTool],
       stream: true,
+      parallel_tool_calls: false, // 禁用工具并行调用
       stream_options: {
         include_usage: true,
       },
