@@ -1,5 +1,5 @@
-import OpenAI from 'openai'
 import type { AgentStreamEvent, ChatMessage } from '@ai-agent-pro/shared/type.js'
+import { createDeepSeekClient } from './deepseek-client.js'
 
 export type AgentRunContext = {
   signal: AbortSignal
@@ -12,19 +12,11 @@ type ModelRequest = (
   context: AgentRunContext,
 ) => AsyncIterable<ModelStreamChunk>
 
-function createClient() {
-  return new OpenAI({
-    // 如果不做处理的话，这里读不到环境变量，因为 process.env 读的是当前 node 进程中的环境变量
-    apiKey: process.env.OPENAI_API_KEY,
-    baseURL: 'https://api.deepseek.com',
-  })
-}
-
 async function* requestDeepSeekStream(
   messages: ChatMessage[],
   context: AgentRunContext,
 ): AsyncGenerator<ModelStreamChunk> {
-  const stream = await createClient().chat.completions.create(
+  const stream = await createDeepSeekClient().chat.completions.create(
     {
       model: 'deepseek-v4-flash',
       messages,

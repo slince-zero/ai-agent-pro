@@ -25,6 +25,10 @@ test('extracts and validates a retrieval intent', async () => {
     assert.equal(messages.length, 2)
     assert.equal(messages[0]?.role, 'system')
     assert.match(messages[0]?.content ?? '', /JSON/i)
+    assert.match(messages[0]?.content ?? '', /hardConstraints/)
+    assert.match(messages[0]?.content ?? '', /exclusions/)
+    assert.match(messages[0]?.content ?? '', /preferences/)
+    assert.match(messages[0]?.content ?? '', /ambiguities/)
     assert.deepEqual(messages[1], {
       role: 'user',
       content: input,
@@ -38,6 +42,20 @@ test('extracts and validates a retrieval intent', async () => {
   assert.deepEqual(intent, modelOutput)
   assert.deepEqual(intent.preferences, ['使用 TypeScript'])
   assert.equal(intent.hardConstraints.includes('使用 TypeScript'), false)
+})
+
+test('rejects an empty input before requesting the model', async () => {
+  let requested = false
+
+  await assert.rejects(
+    extractRetrievalIntent('   ', new AbortController().signal, async () => {
+      requested = true
+      return JSON.stringify(modelOutput)
+    }),
+    /Retrieval input must not be empty/,
+  )
+
+  assert.equal(requested, false)
 })
 
 test('rejects an empty model response', async () => {
