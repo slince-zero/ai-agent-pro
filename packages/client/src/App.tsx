@@ -1,21 +1,23 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
-import {
-  IconArrowUp,
-  IconCircleCheck,
-  IconHistory,
-  IconLoader2,
-  IconPaperclip,
-  IconPlus,
-  IconScale,
-  IconSearch,
-  IconSparkles,
-  IconUserCircle,
-  IconCancel,
-} from '@tabler/icons-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { ChatMessage as RequestMessage, TokenUsage } from '@ai-agent-pro/shared/type.js'
+import {
+  AccountIcon,
+  AttachIcon,
+  ConfirmedIcon,
+  ContextAvatar,
+  ContextLogo,
+  HistoryIcon,
+  NewChatIcon,
+  QueryIcon,
+  RerankIcon,
+  SendIcon,
+  SparkIcon,
+  StopIcon,
+  ThinkingIcon,
+} from './icons'
 import { consumeNDJSON } from './util'
 
 type ChatMessage = RequestMessage & {
@@ -41,9 +43,9 @@ const initialMessages: ChatMessage[] = [
 ]
 
 const examplePrompts = [
-  { label: '找一篇 TypeScript 入门教程', icon: IconSearch },
-  { label: '比较三个 Agent 方案', icon: IconScale },
-  { label: '介绍下自己', icon: IconCircleCheck },
+  { label: '找一篇 TypeScript 入门教程', icon: QueryIcon },
+  { label: '比较三个 Agent 方案', icon: RerankIcon },
+  { label: '介绍下自己', icon: ConfirmedIcon },
 ]
 
 const focusRing =
@@ -214,11 +216,11 @@ export function App() {
     <div className="flex h-svh min-w-[320px] flex-col overflow-hidden bg-[#faf9f5] bg-[url('/assets/grid-paper.png')] bg-[length:1440px_auto] bg-[position:center_top] font-sans text-[#1f1f1f] antialiased">
       <header className="relative z-30 flex h-16 shrink-0 items-center justify-between border-b border-[#deddd7] bg-[#faf9f5]/95 px-6 backdrop-blur-sm max-[640px]:px-4">
         <a
-          className={`${focusRing} text-[25px] font-extrabold tracking-[-1px] text-[#1f1f1f] no-underline`}
+          className={`${focusRing} rounded-lg text-[#1f1f1f] no-underline`}
           href="#main-content"
           aria-label="Context 首页"
         >
-          Context
+          <ContextLogo size={26} />
         </a>
 
         <nav className="flex items-center gap-1.5" aria-label="会话操作">
@@ -227,7 +229,7 @@ export function App() {
             className={`${focusRing} inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border-0 bg-transparent px-3 text-sm font-semibold text-[#34332f] transition-colors hover:bg-[#f0ede6] hover:text-[#f05a2a]`}
             aria-label="新对话"
           >
-            <IconPlus className="size-[19px] stroke-[1.8]" aria-hidden="true" />
+            <NewChatIcon size={19} />
             <span className="max-[520px]:hidden">新对话</span>
           </button>
           <button
@@ -236,7 +238,7 @@ export function App() {
             title="历史记录（占位）"
             aria-label="历史记录（占位）"
           >
-            <IconHistory className="size-[19px] stroke-[1.8]" aria-hidden="true" />
+            <HistoryIcon size={19} />
             <span className="max-[640px]:hidden">历史记录</span>
           </button>
           <button
@@ -244,7 +246,7 @@ export function App() {
             className={`${focusRing} grid size-10 cursor-pointer place-items-center rounded-xl border-0 bg-transparent p-0 text-[#34332f] transition-colors hover:bg-[#f0ede6] hover:text-[#f05a2a]`}
             aria-label="账户（占位）"
           >
-            <IconUserCircle className="size-6 stroke-[1.7]" aria-hidden="true" />
+            <AccountIcon size={23} />
           </button>
         </nav>
       </header>
@@ -270,7 +272,7 @@ export function App() {
                     key={`${message.role}-${index}`}
                   >
                     <div className="grid size-9 place-items-center rounded-xl border border-[#f05a2a]/25 bg-[#fff7f2] text-[#e34f22] max-[640px]:size-8">
-                      <IconSparkles className="size-[19px] stroke-[1.8]" aria-hidden="true" />
+                      <ContextAvatar size={20} />
                     </div>
                     <div className="min-w-0 pt-1">
                       <div className="text-[16px] leading-7 text-[#292824] [&_a]:text-[#d94b20] [&_a]:underline [&_a]:underline-offset-2 [&_code]:rounded-md [&_code]:bg-[#eeeae2] [&_code]:px-1.5 [&_code]:py-0.5 [&_h1]:mt-6 [&_h1]:mb-3 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mt-6 [&_h2]:mb-3 [&_h2]:text-lg [&_h2]:font-bold [&_li]:my-1 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-4 [&_p:last-child]:mb-0 [&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:bg-[#292824] [&_pre]:p-4 [&_pre]:text-[#faf9f5] [&_pre_code]:block [&_pre_code]:rounded-none [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:leading-6 [&_pre_code]:text-inherit [&_strong]:font-bold [&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-6">
@@ -293,10 +295,7 @@ export function App() {
               {status === 'loading' ? (
                 <div className="grid grid-cols-[36px_minmax(0,1fr)] items-center gap-4 text-sm text-[#77746d] max-[640px]:grid-cols-[32px_minmax(0,1fr)] max-[640px]:gap-3">
                   <div className="grid size-9 place-items-center rounded-xl border border-[#f05a2a]/20 bg-[#fff7f2] text-[#e34f22] max-[640px]:size-8">
-                    <IconLoader2
-                      className="size-[19px] animate-spin stroke-[1.8]"
-                      aria-hidden="true"
-                    />
+                    <ThinkingIcon size={20} />
                   </div>
                   <span>正在整理答案…</span>
                 </div>
@@ -313,7 +312,7 @@ export function App() {
               />
               <div className="relative z-10">
                 <div className="mx-auto mb-5 grid size-11 place-items-center rounded-2xl border border-[#f05a2a]/25 bg-[#fff7f2] text-[#e34f22] shadow-[0_10px_28px_rgba(77,58,47,0.08)]">
-                  <IconSparkles className="size-6 stroke-[1.8]" aria-hidden="true" />
+                  <SparkIcon size={24} play="once" />
                 </div>
                 <h1 className="m-0 text-[clamp(42px,5vw,64px)] leading-[1.08] font-black tracking-[-3px] text-[#1f1f1f] max-[640px]:text-[clamp(36px,10.8vw,44px)] max-[640px]:tracking-[-1.8px]">
                   今天想探索什么？
@@ -334,7 +333,7 @@ export function App() {
                     type="button"
                     onClick={() => setQuestion(label)}
                   >
-                    <PromptIcon className="size-[18px] stroke-[1.8]" aria-hidden="true" />
+                    <PromptIcon size={18} />
                     <span>{label}</span>
                   </button>
                 ))}
@@ -374,7 +373,7 @@ export function App() {
                   htmlFor={fileInputId}
                   title="附加文件"
                 >
-                  <IconPaperclip className="size-5 stroke-[1.8]" aria-hidden="true" />
+                  <AttachIcon size={20} />
                   <span className="sr-only">附加文件</span>
                 </label>
                 {attachment ? (
@@ -396,9 +395,9 @@ export function App() {
                 onClick={isBusy ? () => cancelSubmit() : undefined}
               >
                 {isBusy ? (
-                  <IconCancel className="size-5 stroke-2" aria-hidden="true" />
+                  <StopIcon size={20} play="once" strokeWidth={2} />
                 ) : (
-                  <IconArrowUp className="size-5 stroke-2" aria-hidden="true" />
+                  <SendIcon size={20} strokeWidth={2} />
                 )}
               </button>
             </div>

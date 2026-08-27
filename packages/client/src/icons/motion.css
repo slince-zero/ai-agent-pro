@@ -1,0 +1,409 @@
+/**
+ * Context 图标动画系统
+ *
+ * 约定：
+ * - 每个图标是 24x24 网格、1.8 描边、currentColor 的 SVG；
+ * - 需要动画的元素带 data-a="<动画名>"，CSS 通过 --a 把它映射到 keyframes；
+ * - 触发方式由 svg 上的 data-play 决定：hover / loop / once / none；
+ * - --i 控制同一图标内的出场顺序，--ctx-dur 控制时长。
+ *
+ * 只用 CSS keyframes，不依赖任何动画库。
+ */
+
+.ctx-icon {
+  --ctx-dur: 700ms;
+  --ctx-stagger: 80ms;
+  display: inline-block;
+  flex: none;
+  overflow: visible;
+}
+
+.ctx-icon [data-a] {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-duration: var(--ctx-dur);
+  animation-delay: calc(var(--i, 0) * var(--ctx-stagger));
+  animation-timing-function: cubic-bezier(0.34, 1.26, 0.64, 1);
+  animation-fill-mode: both;
+}
+
+/* 绕整个画布中心旋转，而不是绕自身包围盒；--ctx-origin 供非 24 网格的图形覆盖 */
+.ctx-icon [data-origin='view'] {
+  transform-box: view-box;
+  transform-origin: var(--ctx-origin, 12px 12px);
+}
+
+.ctx-icon [data-origin='left'] {
+  transform-origin: left center;
+}
+
+.ctx-icon [data-origin='bottom'] {
+  transform-origin: center bottom;
+}
+
+/* data-a -> keyframes 映射 */
+.ctx-icon [data-a='draw'] {
+  --a: ctx-draw;
+}
+.ctx-icon [data-a='trace'] {
+  --a: ctx-trace;
+  stroke-dasharray: 0.32 0.68;
+}
+.ctx-icon [data-a='pop'] {
+  --a: ctx-pop;
+}
+.ctx-icon [data-a='twinkle'] {
+  --a: ctx-twinkle;
+}
+.ctx-icon [data-a='spin'] {
+  --a: ctx-spin;
+}
+.ctx-icon [data-a='orbit'] {
+  --a: ctx-orbit;
+}
+.ctx-icon [data-a='pulse'] {
+  --a: ctx-pulse;
+}
+.ctx-icon [data-a='ripple'] {
+  --a: ctx-ripple;
+}
+.ctx-icon [data-a='scan'] {
+  --a: ctx-scan;
+}
+.ctx-icon [data-a='send'] {
+  --a: ctx-send;
+}
+.ctx-icon [data-a='rise'] {
+  --a: ctx-rise;
+}
+.ctx-icon [data-a='drop'] {
+  --a: ctx-drop;
+}
+.ctx-icon [data-a='wiggle'] {
+  --a: ctx-wiggle;
+}
+.ctx-icon [data-a='shake'] {
+  --a: ctx-shake;
+}
+.ctx-icon [data-a='fill'] {
+  --a: ctx-fill;
+}
+.ctx-icon [data-a='grow'] {
+  --a: ctx-grow;
+}
+.ctx-icon [data-a='swap-up'] {
+  --a: ctx-swap-up;
+}
+.ctx-icon [data-a='swap-down'] {
+  --a: ctx-swap-down;
+}
+.ctx-icon [data-a='blink'] {
+  --a: ctx-blink;
+}
+.ctx-icon [data-a='bounce'] {
+  --a: ctx-bounce;
+}
+.ctx-icon [data-a='slide-x'] {
+  --a: ctx-slide-x;
+}
+.ctx-icon [data-a='fade'] {
+  --a: ctx-fade;
+}
+.ctx-icon [data-a='tilt'] {
+  --a: ctx-tilt;
+}
+
+/* 匀速类动画不需要弹性曲线 */
+.ctx-icon [data-a='spin'],
+.ctx-icon [data-a='orbit'],
+.ctx-icon [data-a='trace'],
+.ctx-icon [data-a='ripple'],
+.ctx-icon [data-a='blink'] {
+  animation-timing-function: linear;
+}
+
+/**
+ * 触发规则：只有命中下列选择器时才把 animation-name 设为 var(--a)，
+ * 因此静止状态是图标的"完成态"，不会出现半绘制的残留。
+ *
+ * hover 支持三种宿主：图标自身、图标的直接父元素（按钮）、
+ * 以及带 .group / .ctx-trigger 的祖先；data-active 用于受控播放。
+ */
+.ctx-icon[data-play='loop'] [data-a],
+.ctx-icon[data-play='once'] [data-a],
+.ctx-icon[data-play='hover']:hover [data-a],
+.ctx-icon[data-play='hover']:focus-visible [data-a],
+:hover > .ctx-icon[data-play='hover'] [data-a],
+:focus-visible > .ctx-icon[data-play='hover'] [data-a],
+.group:hover .ctx-icon[data-play='hover'] [data-a],
+.group:focus-visible .ctx-icon[data-play='hover'] [data-a],
+.ctx-trigger:hover .ctx-icon[data-play='hover'] [data-a],
+.ctx-trigger:focus-visible .ctx-icon[data-play='hover'] [data-a],
+.ctx-icon[data-active='true'] [data-a] {
+  animation-name: var(--a);
+}
+
+.ctx-icon[data-play='loop'] [data-a],
+.ctx-icon [data-a][data-repeat] {
+  animation-iteration-count: infinite;
+}
+
+/* 无障碍：用户要求减少动效时只保留静态图标 */
+@media (prefers-reduced-motion: reduce) {
+  .ctx-icon [data-a] {
+    animation: none !important;
+  }
+}
+
+/* 描线：配合 pathLength="1" + stroke-dasharray="1"，与真实路径长度无关 */
+@keyframes ctx-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* 一段短虚线沿路径循环流动，用于"循环 / 链路"类图标 */
+@keyframes ctx-trace {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes ctx-pop {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.14);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes ctx-twinkle {
+  0%,
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+  40% {
+    transform: scale(0.55) rotate(-25deg);
+    opacity: 0.35;
+  }
+  70% {
+    transform: scale(1.2) rotate(12deg);
+    opacity: 1;
+  }
+}
+
+@keyframes ctx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ctx-orbit {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes ctx-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.16);
+    opacity: 0.55;
+  }
+}
+
+@keyframes ctx-ripple {
+  0% {
+    transform: scale(0.35);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+@keyframes ctx-scan {
+  0%,
+  100% {
+    transform: translateY(-2.6px);
+  }
+  50% {
+    transform: translateY(2.6px);
+  }
+}
+
+/* 发送：飞出画布后从下方回到原位 */
+@keyframes ctx-send {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  45% {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+  55% {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes ctx-rise {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2.6px);
+  }
+}
+
+@keyframes ctx-drop {
+  0% {
+    transform: translateY(-5px);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  78% {
+    transform: translateY(-1.2px);
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes ctx-wiggle {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(-11deg);
+  }
+  60% {
+    transform: rotate(9deg);
+  }
+}
+
+@keyframes ctx-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-2px);
+  }
+  50% {
+    transform: translateX(2px);
+  }
+  80% {
+    transform: translateX(-1px);
+  }
+}
+
+@keyframes ctx-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes ctx-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* 重排：--sd 控制两条结果条互换的距离 */
+@keyframes ctx-swap-up {
+  50% {
+    transform: translateY(calc(-1 * var(--sd, 5px)));
+  }
+}
+
+@keyframes ctx-swap-down {
+  50% {
+    transform: translateY(var(--sd, 5px));
+  }
+}
+
+@keyframes ctx-blink {
+  0%,
+  100% {
+    opacity: 0.22;
+  }
+  45% {
+    opacity: 1;
+  }
+}
+
+@keyframes ctx-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(-3px);
+  }
+  70% {
+    transform: translateY(1px);
+  }
+}
+
+/* 位移方向由 --sx 决定，用于两半图形相向靠拢 */
+@keyframes ctx-slide-x {
+  50% {
+    transform: translateX(var(--sx, 2.4px));
+  }
+}
+
+@keyframes ctx-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ctx-tilt {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  45% {
+    transform: rotate(-14deg);
+  }
+}

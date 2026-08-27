@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>Context</title>
+  <g fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
+    <path d="M25.33 6.67A13.2 13.2 0 1 0 25.33 25.33" />
+    <path d="M22.51 9.5A9.2 9.2 0 1 0 22.51 22.51" />
+    <path d="M19.39 12.61A4.8 4.8 0 1 0 19.39 19.39" />
+  </g>
+  <circle cx="16" cy="16" r="2.1" fill="#f05a2a" />
+</svg>
