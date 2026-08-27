@@ -425,50 +425,58 @@ export function App() {
 
   return (
     <div className="paper-grid flex h-svh min-w-[320px] flex-col overflow-hidden font-sans text-[#1f1f1f] antialiased">
-      <header className="relative z-30 flex h-16 shrink-0 items-center justify-between border-b border-[#deddd7] bg-[#faf9f5]/95 px-6 backdrop-blur-sm max-[640px]:px-4">
-        <a
-          className={`${focusRing} rounded-lg text-[#1f1f1f] no-underline`}
-          href="#main-content"
-          aria-label="Context 首页"
-        >
-          <ContextLogo size={26} />
-        </a>
+      <header className="relative z-30 shrink-0 border-b border-[#deddd7] bg-[#faf9f5]/95 backdrop-blur-sm">
+        {/* 880 - 2×20 的内距正好是 840：让 logo 和右侧动作跟输入框、消息列同一根竖线 */}
+        <div className="mx-auto flex h-16 w-full max-w-[880px] items-center justify-between px-5 max-[640px]:px-4">
+          <a
+            className={`${focusRing} rounded-lg text-[#1f1f1f] no-underline`}
+            href="/"
+            aria-label="回到 Context 首页"
+          >
+            <ContextLogo size={26} />
+          </a>
 
-        <nav className="flex items-center gap-1.5" aria-label="会话操作">
-          <button
-            type="button"
-            className={`${focusRing} inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border-0 bg-transparent px-3 text-sm font-semibold text-[#34332f] transition-colors hover:bg-[#f0ede6] hover:text-[#f05a2a]`}
-            aria-label="新对话"
-            onClick={startNewChat}
-          >
-            <NewChatIcon size={19} />
-            <span className="max-[520px]:hidden">新对话</span>
-          </button>
-          <button
-            type="button"
-            className={`${focusRing} inline-flex h-10 items-center gap-2 rounded-xl border-0 bg-transparent px-3 text-sm font-semibold text-[#a8a59e] disabled:cursor-not-allowed`}
-            disabled
-            title="历史记录即将支持"
-            aria-label="历史记录（即将支持）"
-          >
-            <HistoryIcon size={19} play="none" />
-            <span className="max-[640px]:hidden">历史记录</span>
-          </button>
-          <button
-            type="button"
-            className={`${focusRing} grid size-10 place-items-center rounded-xl border-0 bg-transparent p-0 text-[#a8a59e] disabled:cursor-not-allowed`}
-            disabled
-            title="账户即将支持"
-            aria-label="账户（即将支持）"
-          >
-            <AccountIcon size={23} play="none" />
-          </button>
-        </nav>
+          <nav className="flex items-center gap-1.5" aria-label="会话操作">
+            <button
+              type="button"
+              className={`${focusRing} inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border-0 bg-transparent px-3 text-sm font-semibold text-[#34332f] transition-colors hover:bg-[#f0ede6] hover:text-[#f05a2a]`}
+              aria-label="新对话"
+              onClick={startNewChat}
+            >
+              <NewChatIcon size={19} />
+              <span className="max-[520px]:hidden">新对话</span>
+            </button>
+            <button
+              type="button"
+              className={`${focusRing} inline-flex h-10 items-center gap-2 rounded-xl border-0 bg-transparent px-3 text-sm font-semibold text-[#a8a59e] disabled:cursor-not-allowed`}
+              disabled
+              title="历史记录即将支持"
+              aria-label="历史记录（即将支持）"
+            >
+              <HistoryIcon size={19} play="none" />
+              <span className="max-[640px]:hidden">历史记录</span>
+            </button>
+            <button
+              type="button"
+              className={`${focusRing} grid size-10 place-items-center rounded-xl border-0 bg-transparent p-0 text-[#a8a59e] disabled:cursor-not-allowed`}
+              disabled
+              title="账户即将支持"
+              aria-label="账户（即将支持）"
+            >
+              <AccountIcon size={23} play="none" />
+            </button>
+          </nav>
+        </div>
       </header>
 
       <main className="relative flex min-h-0 flex-1 flex-col" id="main-content">
+        {/*
+          滚到底的正文靠遮罩淡出，而不是在输入框那一层压一块底色。
+          底色会把纸纹网格一起盖掉，输入框左右两侧于是空出一段没有格子的白；
+          遮罩只吃内容自己的透明度，网格由背后的根节点绘制，因此一路通到底边。
+        */}
         <div
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain [mask-image:linear-gradient(to_bottom,#000_calc(100%_-_40px),transparent)] [-webkit-mask-image:linear-gradient(to_bottom,#000_calc(100%_-_40px),transparent)]"
           onScroll={handleConversationScroll}
         >
           {hasConversation ? (
@@ -594,12 +602,12 @@ export function App() {
           )}
         </div>
 
-        <section className="relative z-20 shrink-0 border-t border-[#e3e1db] bg-[#faf9f5]/95 px-5 pt-3 pb-4 backdrop-blur-sm max-[640px]:px-3 max-[640px]:pb-3">
+        <section className="relative z-20 shrink-0 px-5 pt-3 pb-4 max-[640px]:px-3 max-[640px]:pb-3">
           <div className="mx-auto max-w-[840px]">
             <PetCompanion busy={isBusy} />
 
             <form
-              className="overflow-hidden rounded-[26px] border border-[#b9b8b3] bg-white/85 shadow-[0_12px_36px_rgba(58,50,43,0.1)] transition-[border-color,box-shadow] duration-150 focus-within:border-[#8f8e89] focus-within:shadow-[0_12px_38px_rgba(58,50,43,0.13),0_0_0_4px_rgba(240,90,42,0.07)]"
+              className="group overflow-hidden rounded-[26px] border border-[#b9b8b3] bg-white/85 shadow-[0_12px_36px_rgba(58,50,43,0.1)] transition-[border-color,box-shadow] duration-150 focus-within:border-[#8f8e89] focus-within:shadow-[0_12px_38px_rgba(58,50,43,0.13),0_0_0_4px_rgba(240,90,42,0.07)]"
               onSubmit={handleSubmit}
             >
               <label className="sr-only" htmlFor="question">
@@ -637,7 +645,9 @@ export function App() {
                       {attachment}
                     </span>
                   ) : (
-                    <span className="text-xs text-[#8a8881] max-[520px]:hidden">
+                    // 用过一次就不用再看了：只在输入框获得焦点时淡入。
+                    // 用 opacity 而不是 display，隐藏时照样占位，出现的瞬间不会推动旁边的图标。
+                    <span className="text-xs text-[#8a8881] opacity-0 transition-opacity duration-200 group-focus-within:opacity-100 max-[520px]:hidden">
                       Enter 发送 · Shift + Enter 换行
                     </span>
                   )}

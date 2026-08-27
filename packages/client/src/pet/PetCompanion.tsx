@@ -25,6 +25,9 @@ const SCALE = 3
 /** 转身时离两端留出的余量 */
 const EDGE_INSET = 6
 
+/** 右端还要让开那颗爪子按钮，不然宠物会走到它身上 */
+const PICKER_RESERVE = 30
+
 const FRAME_MS: Record<PetBehavior, number> = { walk: 155, idle: 640, sleep: 1500 }
 
 /** 每种行为持续多久（毫秒）就换下一个 */
@@ -125,7 +128,7 @@ function PetActor({ petId, busy }: PetActorProps) {
     const state = motion.current
     let width = track.clientWidth
 
-    const maxX = () => Math.max(0, width - actor.offsetWidth - EDGE_INSET)
+    const maxX = () => Math.max(0, width - actor.offsetWidth - EDGE_INSET - PICKER_RESERVE)
 
     // 第一次出现在偏右的位置，正好在发送按钮上方
     if (state.x < 0) state.x = maxX() * 0.72
