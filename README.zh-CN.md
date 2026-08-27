@@ -34,7 +34,6 @@ Context 希望逐步完成这条链路：理解需求、生成查询、获取候
 
 ![Context 对话界面](docs/assets/chat.png)
 
-
 **检索能力的地基**
 
 - `retrievalIntentSchema`：目标、硬条件、排除条件、软偏好与待澄清项的严格 zod schema；
@@ -151,4 +150,3 @@ docs/
 ## License
 
 [MIT](LICENSE)
-

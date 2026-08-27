@@ -5,7 +5,7 @@
 
 A context-centered retrieval agent, built from scratch without an agent framework.
 
-It tries to turn vague asks like *"find me things that match these conditions"* into a retrieval
+It tries to turn vague asks like _"find me things that match these conditions"_ into a retrieval
 process that is executable, traceable, and verifiable. The point of the project is to understand
 model protocols, tool calling, the agent loop, context selection, and evidence handling in real
 code — not to wire up a library that hides them.
@@ -37,8 +37,6 @@ user request
 ## What works today
 
 ![Context chat view](docs/assets/chat.png)
-
-
 
 **Retrieval groundwork**
 
@@ -166,4 +164,3 @@ version does not copy that architecture.
 ## License
 
 [MIT](LICENSE)
-
