@@ -1,66 +1,87 @@
 # Context
 
-一个从零实现的、以上下文为中心的智能检索 Agent。
+[![English](https://img.shields.io/badge/README-English-2f6f4e?style=for-the-badge)](README.md)
+[![简体中文](https://img.shields.io/badge/README-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-lightgrey?style=for-the-badge)](README.zh-CN.md)
 
-它尝试把“帮我找一些符合这些条件的内容”这类模糊需求，转换为可执行、可追踪、可验证的检索过程。
-项目不依赖 Agent framework，目标是在真实代码中理解模型协议、工具调用、Agent loop、上下文选择与证据处理。
+A context-centered retrieval agent, built from scratch without an agent framework.
 
-![Context 首页](docs/assets/homepage.png)
+It tries to turn vague asks like *"find me things that match these conditions"* into a retrieval
+process that is executable, traceable, and verifiable. The point of the project is to understand
+model protocols, tool calling, the agent loop, context selection, and evidence handling in real
+code — not to wire up a library that hides them.
 
-## 为什么做这个项目
+![Context landing page](docs/assets/landing.png)
 
-普通搜索擅长匹配关键词，但用户真正想表达的往往是一个由多种条件组成的目标：
+## Why this project
 
-> 我想找某类内容，它必须具有这些特征，不能包含那些特征，最好还满足另外一些偏好。
+Keyword search matches strings. What people actually mean is usually a goal made of several
+conditions at once:
 
-Context 希望逐步完成这条链路：理解需求、生成查询、获取候选结果、检查约束、根据证据重排，
-最后解释每个结果为什么匹配，以及哪些信息仍然无法确认。
+> I want something of this kind, it must have these properties, it must not have those,
+> and ideally it also satisfies a few preferences.
+
+Context works toward that whole chain: understand the request, generate queries, fetch candidates,
+check constraints, re-rank on evidence, and finally explain why each result matches — and which
+parts still cannot be confirmed.
 
 ```text
-用户需求
-  → 解析目标、硬条件、排除条件与软偏好
-  → 生成和调整搜索查询
-  → 搜索并读取公开网页
-  → 标准化、过滤和重排候选结果
-  → 构建有限的证据上下文
-  → 返回结果、匹配理由、来源与不确定项
+user request
+  → parse goal, hard constraints, exclusions, soft preferences
+  → generate and refine search queries
+  → search and read public web pages
+  → normalize, filter, and re-rank candidates
+  → build a bounded evidence context
+  → return results, match reasons, sources, and open questions
 ```
 
-## 当前进度
+## What works today
 
-项目已经完成一条可运行的 DeepSeek 对话链路，为后续接入搜索和页面读取工具打下基础：
+![Context chat view](docs/assets/chat.png)
 
-- React 19 + Vite 8 + Tailwind CSS 4 对话界面；
-- Express 5 服务端与 OpenAI-compatible DeepSeek 客户端；
-- 基于 NDJSON 的流式响应；
-- 多轮消息上下文传递；
-- Markdown / GFM 内容渲染；
-- 输入、输出和总 Token 用量展示；
-- 请求校验、流式错误事件与 Agent 核心测试。
 
-目前它还是“对话模型原型”，**尚未实现真正的互联网检索**。搜索工具、页面读取、约束解析、
-候选过滤、证据上下文和完整 Agent loop 会在接下来的小步迭代中逐个加入。
 
-## 上下文设计
+**Retrieval groundwork**
 
-Context 不把上下文简单理解为无限增长的聊天记录，而是计划维护四类有边界的状态：
+- `retrievalIntentSchema`: a strict zod schema for goal, hard constraints, exclusions, soft
+  preferences, and ambiguities.
+- `extractRetrievalIntent()`: a real DeepSeek call in JSON mode whose output is validated against
+  that schema. The model client is injectable, so the tests run without a network call.
+- A tool contract for search (`zod` → JSON Schema) plus a dispatcher that validates arguments
+  before calling a tool.
 
-- **需求上下文**：用户正在寻找什么，以及当前任务目标；
-- **约束上下文**：必须满足、必须排除、偏好满足和仍需澄清的条件；
-- **检索上下文**：已经使用的查询、找到的候选项和排除原因；
-- **证据上下文**：支持候选项属性和最终结论的来源片段。
+## What does not work yet
 
-模型生成的描述不自动成为事实。无法从来源确认的属性必须标记为未知，不能为了满足条件而猜测。
+Be clear about the gap: **there is still no real internet retrieval.**
 
-## 快速开始
+- `search()` deliberately throws `Search is not implemented` — only the contract exists.
+- Intent extraction is a tested module, not yet wired into the chat route.
+- No page reading, no agent loop, no candidate filtering, no evidence context.
 
-### 环境要求
+Those land one small step at a time, each with its own tests.
+
+## Context design
+
+Context does not treat context as an ever-growing chat log. It maintains four bounded kinds of
+state instead:
+
+- **Request context** — what the user is looking for, and the current task goal.
+- **Constraint context** — what must hold, what must be excluded, what is merely preferred, and
+  what still needs clarifying.
+- **Retrieval context** — queries already used, candidates found, and why some were dropped.
+- **Evidence context** — the source snippets backing candidate properties and final conclusions.
+
+A description the model wrote is not a fact. Any property that cannot be confirmed from a source
+must be marked unknown; guessing to satisfy a constraint is not allowed.
+
+## Quick start
+
+### Requirements
 
 - Node.js 22+
 - pnpm 11+
-- DeepSeek API Key
+- A DeepSeek API key
 
-### 本地运行
+### Run locally
 
 ```bash
 git clone https://github.com/slince-zero/ai-agent-pro.git
@@ -68,63 +89,81 @@ cd ai-agent-pro
 pnpm install
 cp packages/server/.env.example packages/server/.env
 
-# 编辑 packages/server/.env，填入你的 DeepSeek API Key
+# edit packages/server/.env and paste your DeepSeek API key
 
 pnpm dev
 ```
 
-启动后访问 [http://localhost:5173](http://localhost:5173)。前端开发服务器会把 `/api` 请求代理到
-`http://127.0.0.1:3001`。
+Then open [http://localhost:5173](http://localhost:5173). The dev server proxies `/api` to
+`http://127.0.0.1:3001`. Set `PORT` to run the client on a different port.
 
-> 环境变量沿用 OpenAI SDK 的 `OPENAI_API_KEY` 命名，但当前请求会发送到 DeepSeek API。
+> The env var keeps the OpenAI SDK name `OPENAI_API_KEY`, but requests go to the DeepSeek API.
 
-## 常用命令
+## Commands
 
 ```bash
-pnpm dev        # 同时启动前端和服务端
-pnpm test       # 运行测试
-pnpm typecheck  # TypeScript 类型检查
-pnpm lint:ci    # 代码检查与格式检查
-pnpm build      # 构建所有 workspace package
+pnpm dev        # start client and server together
+pnpm test       # run tests
+pnpm typecheck  # TypeScript type check
+pnpm lint:ci    # lint + format check
+pnpm build      # build every workspace package
 ```
 
-## 项目结构
+## Project structure
 
 ```text
 packages/
-  client/       React 对话界面、流式事件消费与状态展示
-  server/       Express API、DeepSeek 调用与 Agent 核心
-  shared/       前后端共享的消息和流式事件类型
+  client/
+    src/App.tsx              chat view: streaming, paced reveal, usage, stop/retry
+    src/landing/             landing page sections
+    src/markdown.tsx         Markdown pipeline: GFM, sanitized raw HTML, image fallback
+    src/mermaid-diagram.tsx  lazily loaded mermaid renderer with an error boundary
+    src/streaming-markdown.ts closes half-written syntax while streaming
+    src/icons/               hand-drawn icon set (gallery at /?icons)
+    src/util.ts              NDJSON stream consumer
+  server/
+    src/app.ts               Express routes and request validation
+    src/agent.ts             DeepSeek streaming agent core
+    src/retrieval/           retrieval-intent schema and extraction
+    src/tools/               tool contracts and the dispatcher
+  shared/
+    type.ts                  message and stream-event types shared by both sides
 docs/
-  product-plan.md       产品范围、实施顺序与验收标准
-  learning-contract.md  Learning-first 协作约定
-  decisions/            架构决策记录
+  product-plan.md            scope, order of work, acceptance criteria
+  learning-contract.md       the learning-first working agreement
+  decisions/                 architecture decision records
 ```
 
-## 接下来要做
+## Roadmap
 
-- [ ] 搜索工具与统一结果类型
-- [ ] 页面读取和正文提取
-- [ ] 原始工具调用协议与 Agent loop
-- [ ] 目标、硬条件、排除条件和软偏好的结构化表达
-- [ ] 候选过滤、证据选择与可解释重排
-- [ ] 基于后续对话增加、修改或撤销检索条件
+- [x] Streaming chat pipeline with token accounting
+- [x] Markdown, mermaid, and sanitized raw HTML rendering
+- [x] Structured retrieval intent: goal, hard constraints, exclusions, soft preferences
+- [ ] Search tool with a unified result type
+- [ ] Page fetching and main-content extraction
+- [ ] Raw tool-call protocol and the agent loop
+- [ ] Candidate filtering, evidence selection, explainable re-ranking
+- [ ] Adding, changing, or revoking constraints across turns
 
-完整计划与阶段验收标准见 [产品与工程计划](docs/product-plan.md)。
+Full plan and per-stage acceptance criteria: [product plan](docs/product-plan.md).
 
-## 开发原则
+## Development principles
 
-- 从原始协议和循环开始，不使用 Agent framework 隐藏关键数据流；
-- 每次只解决一个清晰的学习问题，并用测试验证；
-- 先使用关键词和确定性过滤，再根据真实问题决定是否引入更复杂的检索技术；
-- 结论必须尽可能由来源支撑，未知就是未知；
-- 一个 Issue 对应一个 PR，每个能力都记录假设、边界、测试、观察到的失败和结果。
+- Start from raw protocols and loops; no agent framework hiding the data flow.
+- Solve one clear learning question at a time, and verify it with a test.
+- Keywords and deterministic filters first; reach for heavier retrieval techniques only when a
+  real problem demands them.
+- Conclusions must be backed by sources wherever possible. Unknown stays unknown.
+- One issue, one PR, and every capability records its assumptions, limits, tests, observed
+  failures, and results.
 
-详细协作要求见 [AGENTS.md](AGENTS.md) 和 [学习约定](docs/learning-contract.md)。
+Details: [AGENTS.md](AGENTS.md) and the [learning contract](docs/learning-contract.md).
 
-旧版生成式产品代码保存在 Git tag
-[`v1-ai-generated`](https://github.com/slince-zero/ai-agent-pro/tree/v1-ai-generated)，当前版本不会复制旧架构。
+The earlier AI-generated product code is kept at the Git tag
+[`v1-ai-generated`](https://github.com/slince-zero/ai-agent-pro/tree/v1-ai-generated); the current
+version does not copy that architecture.
 
 ## License
 
 [MIT](LICENSE)
+
