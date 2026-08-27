@@ -1,1 +1,282 @@
 @import 'tailwindcss';
+
+/**
+ * 纸感网格背景
+ *
+ * 原来这层是一张 875 KB 的 grid-paper.png 全屏平铺，
+ * 但它画的只是等距网格线，用两条 linear-gradient 就能等效表达，
+ * 首屏因此少下载 875 KB，缩放时也不会再出现位图接缝。
+ */
+.paper-grid {
+  background-color: #faf9f5;
+  background-image:
+    radial-gradient(125% 85% at 50% -10%, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0) 62%),
+    linear-gradient(to right, rgb(31 31 31 / 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(31 31 31 / 0.045) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    28px 28px,
+    28px 28px;
+  background-position: center top;
+}
+
+/**
+ * 助手回答的 Markdown 排版
+ *
+ * Tailwind 的 preflight 会把标题的字号、字重和所有 margin 归零，
+ * 所以这里必须把每一种元素都显式写回来——漏掉哪个，那个元素就和正文长得一模一样。
+ * 之前只补了 h1/h2，模型最常用的 `###` 因此和普通段落无法区分；
+ * remark-gfm 开着表格支持，但没有 CSS 的表格会挤成没有边框的一小坨。
+ */
+.assistant-prose {
+  font-size: 16px;
+  line-height: 1.75;
+  color: #292824;
+}
+
+/* 首元素的 margin 会折叠到容器外面，把整段回答顶下去、和左边的头像错开 */
+.assistant-prose > :first-child {
+  margin-top: 0;
+}
+
+.assistant-prose > :last-child {
+  margin-bottom: 0;
+}
+
+.assistant-prose h1,
+.assistant-prose h2,
+.assistant-prose h3,
+.assistant-prose h4 {
+  font-weight: 700;
+  line-height: 1.4;
+  color: #1f1f1f;
+}
+
+.assistant-prose h1 {
+  margin: 24px 0 12px;
+  font-size: 20px;
+}
+
+.assistant-prose h2 {
+  margin: 24px 0 12px;
+  font-size: 18px;
+}
+
+.assistant-prose h3 {
+  margin: 20px 0 8px;
+  font-size: 16px;
+}
+
+.assistant-prose h4 {
+  margin: 16px 0 8px;
+  font-size: 15px;
+  color: #34332f;
+}
+
+.assistant-prose p {
+  margin: 0 0 16px;
+}
+
+.assistant-prose ul,
+.assistant-prose ol {
+  margin: 16px 0;
+  padding-left: 24px;
+}
+
+.assistant-prose ul {
+  list-style: disc;
+}
+
+.assistant-prose ol {
+  list-style: decimal;
+}
+
+.assistant-prose li {
+  margin: 4px 0;
+}
+
+/* 嵌套列表贴紧父项，否则每层都会多出 16px 的空行；换个符号让层级一眼看出来 */
+.assistant-prose li > ul,
+.assistant-prose li > ol {
+  margin: 4px 0;
+}
+
+.assistant-prose li > ul {
+  list-style: circle;
+}
+
+.assistant-prose a {
+  color: #d94b20;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.assistant-prose strong {
+  font-weight: 700;
+}
+
+.assistant-prose em {
+  font-style: italic;
+}
+
+.assistant-prose del {
+  color: #8a8881;
+}
+
+.assistant-prose blockquote {
+  margin: 16px 0;
+  border-left: 3px solid #e0d6cb;
+  padding: 2px 0 2px 16px;
+  color: #5c5a54;
+}
+
+.assistant-prose hr {
+  margin: 24px 0;
+  border: 0;
+  border-top: 1px solid #e3e1db;
+}
+
+/**
+ * 表格用 display: block + overflow-x: auto 才能在窄屏里自己横向滚动，
+ * 不然一张宽表会把整个对话列撑破。浏览器会为行分组生成匿名表格盒，
+ * 单元格仍然按列对齐。
+ */
+.assistant-prose table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin: 16px 0;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.assistant-prose th,
+.assistant-prose td {
+  /* 不给下限的话，窄屏里"方面"这种短表头会被挤成每行一个字 */
+  min-width: 4.5em;
+  border: 1px solid #e3e1db;
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.assistant-prose th {
+  background-color: #f2efe8;
+  font-weight: 600;
+  color: #34332f;
+}
+
+.assistant-prose code {
+  border-radius: 6px;
+  background-color: #eeeae2;
+  padding: 2px 6px;
+  font-size: 0.92em;
+}
+
+.assistant-prose pre {
+  margin: 16px 0;
+  overflow-x: auto;
+  border-radius: 12px;
+  background-color: #292824;
+  padding: 16px;
+  color: #faf9f5;
+}
+
+.assistant-prose pre code {
+  display: block;
+  border-radius: 0;
+  background-color: transparent;
+  padding: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: inherit;
+}
+
+.assistant-prose img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  /* 白底图片直接摊在纸色背景上会分不清边界；这层底色顺便当加载中的占位 */
+  border: 1px solid #e3e1db;
+  border-radius: 12px;
+  background-color: #f2efe8;
+}
+
+/**
+ * 图片加载失败时的兜底
+ *
+ * 必须能待在 <p> 里，所以整块用 span + inline-flex，不能用 div。
+ */
+.image-fallback {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  border: 1px dashed #ded8ce;
+  border-radius: 10px;
+  background-color: #f7f4ee;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #77746d;
+}
+
+.image-fallback-title {
+  font-weight: 600;
+  color: #5c5a54;
+}
+
+/**
+ * Mermaid 图表
+ *
+ * 代码块的深色外壳已经在 MarkdownPre 里摘掉了，这里换一张浅色卡片。
+ * 宽图自己横向滚动，不然一张长流程图会把整个对话列撑破。
+ */
+.mermaid-figure {
+  margin: 16px 0;
+  overflow-x: auto;
+  border: 1px solid #e3e1db;
+  border-radius: 12px;
+  background-color: #fdfcf9;
+  padding: 16px;
+  text-align: center;
+}
+
+.mermaid-figure svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/**
+ * 流式光标
+ *
+ * 原来是 steps(2) 的硬闪，每秒一次生硬地开关，和逐字出现的文字凑在一起更显毛躁。
+ * 换成 ease-in-out 的呼吸，节奏慢一点、边界软一点。
+ */
+.stream-caret > :last-child::after {
+  content: '';
+  display: inline-block;
+  width: 0.38em;
+  height: 1.02em;
+  margin-left: 0.14em;
+  vertical-align: -0.16em;
+  border-radius: 2px;
+  background-color: #e34f22;
+  animation: caret-pulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes caret-pulse {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0.22;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stream-caret > :last-child::after {
+    animation: none;
+  }
+}

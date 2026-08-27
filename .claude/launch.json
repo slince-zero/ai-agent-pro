@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "client",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@ai-agent-pro/client", "dev"],
+      "port": 5173,
+      "autoPort": true
+    }
+  ]
+}

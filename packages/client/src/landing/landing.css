@@ -1,0 +1,104 @@
+/**
+ * Landing 专用样式
+ *
+ * 只做三件事：入场揭示、纸感底纹、以及首屏之外的渲染延迟。
+ * 动画一律只改 opacity / transform，避免触发布局与重绘。
+ */
+
+/**
+ * 揭示动画的基线实现：IntersectionObserver 命中后翻转 data-shown。
+ * 用 transition 而不是 keyframes，元素不在视口时浏览器不必维护动画状态。
+ */
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+  transition:
+    opacity 640ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 640ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition-delay: calc(var(--r, 0) * 90ms);
+  will-change: opacity, transform;
+}
+
+.reveal[data-shown='true'] {
+  opacity: 1;
+  transform: none;
+  will-change: auto;
+}
+
+/**
+ * 渐进增强：支持滚动驱动动画的浏览器（Chrome / Safari 系）直接交给合成线程，
+ * 不再需要 JS 观察器。Firefox 尚未支持 view()，仍走上面的 transition 版本。
+ * 注意 animation-timeline 必须写在 animation 简写之后，否则会被重置。
+ */
+@supports (animation-timeline: view()) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    animation: landing-reveal 1s linear both;
+    animation-timeline: view();
+    animation-range: entry 6% cover 24%;
+  }
+}
+
+@keyframes landing-reveal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/** 首屏之外的分节：滚动到附近才排版，缩短首帧时间 */
+.landing-defer {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 720px;
+}
+
+/** 首屏背景光：一层白色柔光 + 与 App 同款的 28px 网格 */
+.landing-glow {
+  background-color: #faf9f5;
+  background-image:
+    radial-gradient(120% 78% at 50% -12%, rgb(255 255 255 / 0.9), rgb(255 255 255 / 0) 58%),
+    radial-gradient(58% 46% at 50% 4%, rgb(240 90 42 / 0.07), rgb(240 90 42 / 0) 70%),
+    linear-gradient(to right, rgb(31 31 31 / 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(31 31 31 / 0.04) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    100% 100%,
+    28px 28px,
+    28px 28px;
+  background-position: center top;
+}
+
+/** 链路示意里连接两段的竖线：随所在分节一起长出来 */
+.landing-link {
+  transform-origin: center top;
+  animation: landing-grow 520ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation-delay: calc(var(--r, 0) * 90ms + 160ms);
+}
+
+@keyframes landing-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    animation: none;
+  }
+
+  .landing-link {
+    animation: none;
+  }
+}

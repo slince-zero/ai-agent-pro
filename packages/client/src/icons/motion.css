@@ -45,6 +45,9 @@
 .ctx-icon [data-a='draw'] {
   --a: ctx-draw;
 }
+.ctx-icon [data-a='flow'] {
+  --a: ctx-flow;
+}
 .ctx-icon [data-a='trace'] {
   --a: ctx-trace;
   stroke-dasharray: 0.32 0.68;
@@ -162,6 +165,21 @@
   }
   to {
     stroke-dashoffset: 0;
+  }
+}
+
+/* 保留虚线样式的"扫过"效果：虚线沿路径推进到位，用于装饰性长曲线 */
+@keyframes ctx-flow {
+  from {
+    stroke-dashoffset: var(--fd, 48);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
   }
 }
 

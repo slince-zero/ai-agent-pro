@@ -1,6 +1,7 @@
 export { IconBase, drawn, solid, step, vars } from './Icon'
 export type { IconPlay, IconProps } from './Icon'
 export { ContextAvatar, ContextLogo, ContextMark, ContextPulse } from './brand'
+export { ConnectorArt } from './decor'
 export {
   AccountIcon,
   AttachIcon,

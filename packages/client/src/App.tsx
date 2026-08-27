@@ -1,14 +1,14 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import type { FormEvent, KeyboardEvent } from 'react'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import type { FormEvent, KeyboardEvent, UIEvent } from 'react'
 import type { ChatMessage as RequestMessage, TokenUsage } from '@ai-agent-pro/shared/type.js'
 import {
   AccountIcon,
   AttachIcon,
   ConfirmedIcon,
+  ConnectorArt,
   ContextAvatar,
   ContextLogo,
+  CopyIcon,
   HistoryIcon,
   NewChatIcon,
   QueryIcon,
@@ -17,7 +17,10 @@ import {
   SparkIcon,
   StopIcon,
   ThinkingIcon,
+  TokensIcon,
+  UnmetIcon,
 } from './icons'
+import { AssistantMarkdown } from './markdown'
 import { consumeNDJSON } from './util'
 
 type ChatMessage = RequestMessage & {
@@ -51,7 +54,27 @@ const examplePrompts = [
 const focusRing =
   'focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-[#f05a2a]/30 focus-visible:outline-offset-[3px]'
 
-const markdownPlugins = [remarkGfm]
+/**
+ * 流式文字的显示节奏
+ *
+ * 一次给多少字完全由模型和网络决定：安静三百毫秒，然后甩过来四十个字。
+ * 照原样渲染，屏幕上就是一段一段地跳。
+ * 所以收到的文字先进积压区，再由 revealFrame 每帧匀速吐出来——
+ * 网络的抖动被这层缓冲吸收掉，眼睛看到的是一条连续的字流。
+ */
+/** 目标：用这么长时间把当前积压吐完。太短会跟着网络一起抖，太长则明显落后于模型 */
+const REVEAL_WINDOW_MS = 260
+/** 切到别的标签页再回来时，rAF 会隔很久才给一帧；钳住时间差，否则会一次糊上来一大段 */
+const MAX_FRAME_GAP_MS = 100
+
+/** UTF-16 代理对的前一半（0xD800–0xDBFF），后面必须再跟一个才是一个完整字符 */
+function isHighSurrogate(code: number) {
+  return code >= 0xd800 && code <= 0xdbff
+}
+
+/** 消息下方的操作按钮：常显但压到最低对比度，hover 才变成品牌色 */
+const messageAction =
+  'inline-flex cursor-pointer items-center gap-1.5 rounded-lg border-0 bg-transparent px-1.5 py-1 text-xs text-[#a8a59e] transition-colors hover:text-[#d4491f]'
 
 function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
   if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
@@ -63,28 +86,172 @@ function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
 export function App() {
   const fileInputId = useId()
   const messageEndRef = useRef<HTMLDivElement>(null)
+  const composerRef = useRef<HTMLTextAreaElement>(null)
   const requestControllerRef = useRef<AbortController | null>(null)
+  /** 用户是否贴在对话底部，决定新内容是否要自动滚动跟随 */
+  const pinnedToBottomRef = useRef(true)
+  /** 已经收到、但还没显示出来的文字；由 revealFrame 匀速吐给界面 */
+  const pendingTextRef = useRef('')
+  const revealFrameRef = useRef<number | null>(null)
+  const lastRevealAtRef = useRef(0)
+  /** 流已经结束、积压还没吐完时的收尾动作 */
+  const afterDrainRef = useRef<(() => void) | null>(null)
   const [question, setQuestion] = useState('')
   const [attachment, setAttachment] = useState('')
   const [status, setStatus] = useState<UIStatus>('idle')
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
 
   const conversation = messages.filter((message) => message.role !== 'system')
+  /**
+   * 没有内容的助手消息不渲染，否则只会留下一个孤零零的头像。
+   * 它有两个来源：请求刚发出时的占位，以及请求失败后留下的空壳。
+   * 失败的空壳不一定在末尾（用户可以接着发下一条），所以不能只判断末位。
+   */
   const visibleConversation = conversation.filter(
-    (message, index) =>
-      !(
-        status === 'loading' &&
-        index === conversation.length - 1 &&
-        message.role === 'assistant' &&
-        !message.content
-      ),
+    (message) => message.role !== 'assistant' || message.content,
   )
   const hasConversation = conversation.length > 0
   const isBusy = status === 'loading' || status === 'streaming'
 
+  /**
+   * 只在用户本来就贴着底部时跟随滚动。
+   * 否则流式输出期间，用户每次往上翻历史都会被新 token 拽回底部。
+   * 生成中用 auto 而不是 smooth：一秒几十次平滑滚动既卡顿也晕。
+   */
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    if (!pinnedToBottomRef.current) return
+
+    messageEndRef.current?.scrollIntoView({
+      behavior: status === 'streaming' ? 'auto' : 'smooth',
+      block: 'end',
+    })
   }, [messages, status])
+
+  /** 输入框跟随内容长高，超过 max-height 后才内部滚动 */
+  useEffect(() => {
+    const composer = composerRef.current
+
+    if (!composer) return
+
+    composer.style.height = 'auto'
+    composer.style.height = `${composer.scrollHeight}px`
+  }, [question])
+
+  useEffect(() => () => cancelReveal(), [])
+
+  function handleConversationScroll(event: UIEvent<HTMLDivElement>) {
+    const area = event.currentTarget
+
+    pinnedToBottomRef.current = area.scrollHeight - area.scrollTop - area.clientHeight < 80
+  }
+
+  /**
+   * 把一段文字追加到最后一条助手消息上。
+   * 服务端每个 token 一个 NDJSON 事件，逐个 setState 会让 Markdown 每秒重新解析几十次，
+   * 所以调用它的只有 revealFrame（每帧最多一次）和收尾时的 flushPendingText。
+   */
+  function appendToLastMessage(chunk: string) {
+    setMessages((previousMessages) => {
+      const newMessages = [...previousMessages]
+      const lastIndex = newMessages.length - 1
+      const lastMessage = newMessages[lastIndex]
+
+      if (lastMessage?.role !== 'assistant') return previousMessages
+
+      newMessages[lastIndex] = {
+        ...lastMessage,
+        content: lastMessage.content + chunk,
+      }
+
+      return newMessages
+    })
+  }
+
+  function cancelReveal() {
+    if (revealFrameRef.current === null) return
+
+    cancelAnimationFrame(revealFrameRef.current)
+    revealFrameRef.current = null
+  }
+
+  /** 积压吐干了，才轮到流结束时预约的收尾 */
+  function runAfterDrain() {
+    const afterDrain = afterDrainRef.current
+
+    afterDrainRef.current = null
+    afterDrain?.()
+  }
+
+  /**
+   * 一帧吐一小段：吐多少由积压量和这一帧的时长决定。
+   * 积压越多吐得越快，所以模型突然加速时屏幕不会越拖越远；
+   * 积压见底就停下来等下一批，不空转 rAF。
+   */
+  function revealFrame(timestamp: number) {
+    revealFrameRef.current = null
+
+    const frameGap = Math.min(timestamp - lastRevealAtRef.current, MAX_FRAME_GAP_MS)
+    lastRevealAtRef.current = timestamp
+
+    const pending = pendingTextRef.current
+
+    if (!pending) {
+      runAfterDrain()
+      return
+    }
+
+    let count = Math.max(1, Math.round((pending.length / REVEAL_WINDOW_MS) * frameGap))
+
+    // emoji 这类字符由两个 code unit 组成，劈在中间会闪一帧乱码
+    if (count < pending.length && isHighSurrogate(pending.charCodeAt(count - 1))) {
+      count += 1
+    }
+
+    pendingTextRef.current = pending.slice(count)
+    appendToLastMessage(pending.slice(0, count))
+
+    if (pendingTextRef.current) {
+      revealFrameRef.current = requestAnimationFrame(revealFrame)
+      return
+    }
+
+    runAfterDrain()
+  }
+
+  function queuePendingText(delta: string) {
+    pendingTextRef.current += delta
+
+    if (revealFrameRef.current !== null) return
+
+    // 新一轮开始时把计时基准挪到当下，否则上一轮结束到现在的空档会被算成一帧
+    lastRevealAtRef.current = performance.now()
+    revealFrameRef.current = requestAnimationFrame(revealFrame)
+  }
+
+  /** 不再讲节奏，把积压一次性显示出来：出错时该立刻看到已经写出来的部分 */
+  function flushPendingText() {
+    cancelReveal()
+
+    const pending = pendingTextRef.current
+
+    pendingTextRef.current = ''
+    afterDrainRef.current = null
+
+    if (pending) {
+      appendToLastMessage(pending)
+    }
+  }
+
+  /** 流结束后等屏幕上的字追上来再收尾，否则光标会在文字还在出的时候就消失 */
+  function settleAfterDrain(settle: () => void) {
+    if (!pendingTextRef.current) {
+      settle()
+      return
+    }
+
+    afterDrainRef.current = settle
+  }
 
   function cancelSubmit() {
     const cancelController = requestControllerRef.current
@@ -93,6 +260,10 @@ export function App() {
 
     cancelController.abort()
     setStatus('idle')
+
+    cancelReveal()
+    pendingTextRef.current = ''
+    afterDrainRef.current = null
 
     setMessages((prev) => {
       const lastMessage = prev.at(-1)
@@ -115,22 +286,67 @@ export function App() {
     })
   }
 
+  /** 新对话：中断进行中的请求，回到初始空状态 */
+  function startNewChat() {
+    requestControllerRef.current?.abort()
+    requestControllerRef.current = null
+
+    cancelReveal()
+    pendingTextRef.current = ''
+    afterDrainRef.current = null
+    pinnedToBottomRef.current = true
+
+    setMessages(initialMessages)
+    setQuestion('')
+    setAttachment('')
+    setStatus('idle')
+    setCopiedIndex(null)
+    // 新对话之后光标就该在输入框里，省掉一次多余的点击
+    composerRef.current?.focus()
+  }
+
+  async function copyMessage(content: string, index: number) {
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopiedIndex(index)
+      window.setTimeout(
+        () => setCopiedIndex((current) => (current === index ? null : current)),
+        1600,
+      )
+    } catch {
+      /* 剪贴板被浏览器拒绝时保持静默，不打断阅读 */
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     const trimmedQuestion = question.trim()
     if (!trimmedQuestion || isBusy) return
 
+    setQuestion('')
+    await runRequest([...messages, { role: 'user', content: trimmedQuestion }])
+  }
+
+  /** 重试：丢掉失败的那条回答，用同样的上下文再问一次 */
+  async function retryLast() {
+    if (isBusy) return
+
+    const history = messages.at(-1)?.role === 'assistant' ? messages.slice(0, -1) : messages
+
+    if (history.at(-1)?.role !== 'user') return
+
+    await runRequest(history)
+  }
+
+  async function runRequest(nextMessages: ChatMessage[]) {
     const controller = new AbortController()
     requestControllerRef.current = controller
 
-    const nextMessages: ChatMessage[] = [
-      ...messages,
-      {
-        role: 'user',
-        content: trimmedQuestion,
-      },
-    ]
+    pinnedToBottomRef.current = true
+    cancelReveal()
+    pendingTextRef.current = ''
+    afterDrainRef.current = null
 
     setMessages([
       ...nextMessages,
@@ -142,11 +358,13 @@ export function App() {
 
     setStatus('loading')
 
-    setQuestion('')
-
     try {
+      /**
+       * 只把真正说过话的消息发给模型：
+       * 被停止的那条内容不完整，失败留下的空壳则连角色都对不上（连续两个 user 会让模型困惑）。
+       */
       const requestMessages: RequestMessage[] = nextMessages
-        .filter((message) => !message.cancelled)
+        .filter((message) => !message.cancelled && message.content)
         .map(({ role, content }) => ({
           role,
           content,
@@ -167,17 +385,7 @@ export function App() {
 
         if (e.type === 'text_delta') {
           setStatus('streaming')
-          setMessages((previousMessages) => {
-            const newMessages = [...previousMessages]
-            const lastIndex = newMessages.length - 1
-            const lastMessage = newMessages[lastIndex]
-
-            newMessages[lastIndex] = {
-              ...lastMessage,
-              content: lastMessage.content + e.delta,
-            }
-            return newMessages
-          })
+          queuePendingText(e.delta)
         }
         if (e.type === 'usage') {
           setMessages((previousMessages) => {
@@ -194,15 +402,17 @@ export function App() {
         }
 
         if (e.type === 'done') {
-          setStatus('success')
+          settleAfterDrain(() => setStatus('success'))
         }
 
         if (e.type === 'error') {
+          flushPendingText()
           setStatus('error')
         }
       })
     } catch {
       if (!controller.signal.aborted) {
+        flushPendingText()
         setStatus('error')
       }
     } finally {
@@ -213,7 +423,7 @@ export function App() {
   }
 
   return (
-    <div className="flex h-svh min-w-[320px] flex-col overflow-hidden bg-[#faf9f5] bg-[url('/assets/grid-paper.png')] bg-[length:1440px_auto] bg-[position:center_top] font-sans text-[#1f1f1f] antialiased">
+    <div className="paper-grid flex h-svh min-w-[320px] flex-col overflow-hidden font-sans text-[#1f1f1f] antialiased">
       <header className="relative z-30 flex h-16 shrink-0 items-center justify-between border-b border-[#deddd7] bg-[#faf9f5]/95 px-6 backdrop-blur-sm max-[640px]:px-4">
         <a
           className={`${focusRing} rounded-lg text-[#1f1f1f] no-underline`}
@@ -228,45 +438,58 @@ export function App() {
             type="button"
             className={`${focusRing} inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border-0 bg-transparent px-3 text-sm font-semibold text-[#34332f] transition-colors hover:bg-[#f0ede6] hover:text-[#f05a2a]`}
             aria-label="新对话"
+            onClick={startNewChat}
           >
             <NewChatIcon size={19} />
             <span className="max-[520px]:hidden">新对话</span>
           </button>
           <button
             type="button"
-            className={`${focusRing} inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border-0 bg-transparent px-3 text-sm font-semibold text-[#34332f] transition-colors hover:bg-[#f0ede6] hover:text-[#f05a2a]`}
-            title="历史记录（占位）"
-            aria-label="历史记录（占位）"
+            className={`${focusRing} inline-flex h-10 items-center gap-2 rounded-xl border-0 bg-transparent px-3 text-sm font-semibold text-[#a8a59e] disabled:cursor-not-allowed`}
+            disabled
+            title="历史记录即将支持"
+            aria-label="历史记录（即将支持）"
           >
-            <HistoryIcon size={19} />
+            <HistoryIcon size={19} play="none" />
             <span className="max-[640px]:hidden">历史记录</span>
           </button>
           <button
             type="button"
-            className={`${focusRing} grid size-10 cursor-pointer place-items-center rounded-xl border-0 bg-transparent p-0 text-[#34332f] transition-colors hover:bg-[#f0ede6] hover:text-[#f05a2a]`}
-            aria-label="账户（占位）"
+            className={`${focusRing} grid size-10 place-items-center rounded-xl border-0 bg-transparent p-0 text-[#a8a59e] disabled:cursor-not-allowed`}
+            disabled
+            title="账户即将支持"
+            aria-label="账户（即将支持）"
           >
-            <AccountIcon size={23} />
+            <AccountIcon size={23} play="none" />
           </button>
         </nav>
       </header>
 
       <main className="relative flex min-h-0 flex-1 flex-col" id="main-content">
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          onScroll={handleConversationScroll}
+        >
           {hasConversation ? (
             <section
               className="mx-auto flex w-[calc(100%_-_40px)] max-w-[840px] flex-col gap-8 py-9 max-[640px]:w-[calc(100%_-_28px)] max-[640px]:gap-7 max-[640px]:py-6"
               aria-label="对话内容"
-              aria-live="polite"
             >
-              {visibleConversation.map((message, index) =>
-                message.role === 'user' ? (
-                  <article className="flex justify-end" key={`${message.role}-${index}`}>
-                    <div className="max-w-[78%] rounded-[22px_22px_7px_22px] bg-[#eeeae2] px-5 py-3.5 text-[16px] leading-7 text-[#292824] max-[640px]:max-w-[88%] max-[640px]:px-4 max-[640px]:py-3">
-                      {message.content}
-                    </div>
-                  </article>
-                ) : (
+              {visibleConversation.map((message, index) => {
+                if (message.role === 'user') {
+                  return (
+                    <article className="flex justify-end" key={`${message.role}-${index}`}>
+                      <div className="max-w-[78%] rounded-[22px_22px_7px_22px] bg-[#eeeae2] px-5 py-3.5 text-[16px] leading-7 text-[#292824] max-[640px]:max-w-[88%] max-[640px]:px-4 max-[640px]:py-3">
+                        {message.content}
+                      </div>
+                    </article>
+                  )
+                }
+
+                const isStreamingMessage =
+                  status === 'streaming' && index === visibleConversation.length - 1
+
+                return (
                   <article
                     className="grid grid-cols-[36px_minmax(0,1fr)] items-start gap-4 max-[640px]:grid-cols-[32px_minmax(0,1fr)] max-[640px]:gap-3"
                     key={`${message.role}-${index}`}
@@ -275,25 +498,54 @@ export function App() {
                       <ContextAvatar size={20} />
                     </div>
                     <div className="min-w-0 pt-1">
-                      <div className="text-[16px] leading-7 text-[#292824] [&_a]:text-[#d94b20] [&_a]:underline [&_a]:underline-offset-2 [&_code]:rounded-md [&_code]:bg-[#eeeae2] [&_code]:px-1.5 [&_code]:py-0.5 [&_h1]:mt-6 [&_h1]:mb-3 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mt-6 [&_h2]:mb-3 [&_h2]:text-lg [&_h2]:font-bold [&_li]:my-1 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-4 [&_p:last-child]:mb-0 [&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:bg-[#292824] [&_pre]:p-4 [&_pre]:text-[#faf9f5] [&_pre_code]:block [&_pre_code]:rounded-none [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:leading-6 [&_pre_code]:text-inherit [&_strong]:font-bold [&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-6">
-                        <Markdown remarkPlugins={markdownPlugins}>{message.content}</Markdown>
+                      <div
+                        className={
+                          isStreamingMessage ? 'assistant-prose stream-caret' : 'assistant-prose'
+                        }
+                      >
+                        <AssistantMarkdown
+                          content={message.content}
+                          streaming={isStreamingMessage}
+                        />
                       </div>
                       {message.cancelled ? (
                         <p className="mt-3 mb-0 text-xs leading-5 text-[#8a8881]">已停止生成</p>
                       ) : null}
-                      {message.usage ? (
-                        <p className="mt-3 mb-0 text-xs leading-5 text-[#8a8881]">
-                          输入 {message.usage.inputTokens} · 输出 {message.usage.outputTokens} · 共{' '}
-                          {message.usage.totalTokens} tokens
-                        </p>
+                      {message.content && !isBusy ? (
+                        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                          <button
+                            type="button"
+                            className={`${focusRing} ${messageAction}`}
+                            onClick={() => copyMessage(message.content, index)}
+                            aria-label={copiedIndex === index ? '已复制回答' : '复制回答'}
+                          >
+                            {copiedIndex === index ? (
+                              <ConfirmedIcon size={15} play="once" />
+                            ) : (
+                              <CopyIcon size={15} />
+                            )}
+                            <span>{copiedIndex === index ? '已复制' : '复制'}</span>
+                          </button>
+                          {message.usage ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs leading-5 text-[#8a8881]">
+                              <TokensIcon size={15} />
+                              输入 {message.usage.inputTokens} · 输出 {message.usage.outputTokens} ·
+                              共 {message.usage.totalTokens} tokens
+                            </span>
+                          ) : null}
+                        </div>
                       ) : null}
                     </div>
                   </article>
-                ),
-              )}
+                )
+              })}
 
               {status === 'loading' ? (
-                <div className="grid grid-cols-[36px_minmax(0,1fr)] items-center gap-4 text-sm text-[#77746d] max-[640px]:grid-cols-[32px_minmax(0,1fr)] max-[640px]:gap-3">
+                <div
+                  className="grid grid-cols-[36px_minmax(0,1fr)] items-center gap-4 text-sm text-[#77746d] max-[640px]:grid-cols-[32px_minmax(0,1fr)] max-[640px]:gap-3"
+                  role="status"
+                  aria-live="polite"
+                >
                   <div className="grid size-9 place-items-center rounded-xl border border-[#f05a2a]/20 bg-[#fff7f2] text-[#e34f22] max-[640px]:size-8">
                     <ThinkingIcon size={20} />
                   </div>
@@ -304,17 +556,12 @@ export function App() {
             </section>
           ) : (
             <section className="relative mx-auto flex min-h-full w-full max-w-[980px] flex-col items-center justify-center overflow-hidden px-6 py-14 text-center max-[640px]:justify-start max-[640px]:px-5 max-[640px]:pt-[16vh]">
-              <img
-                className="pointer-events-none absolute top-[62.5%] left-1/2 z-0 w-[min(1120px,118vw)] max-w-none -translate-x-1/2 -translate-y-[46%] select-none opacity-70 max-[640px]:top-[43%] max-[640px]:w-[170vw] max-[640px]:opacity-50"
-                src="/assets/orange-connectors.png"
-                alt=""
-                aria-hidden="true"
-              />
+              <ConnectorArt className="pointer-events-none absolute top-[62.5%] left-1/2 z-0 w-[min(1120px,118vw)] max-w-none -translate-x-1/2 -translate-y-[46%] select-none opacity-70 max-[640px]:top-[43%] max-[640px]:w-[170vw] max-[640px]:opacity-50" />
               <div className="relative z-10">
                 <div className="mx-auto mb-5 grid size-11 place-items-center rounded-2xl border border-[#f05a2a]/25 bg-[#fff7f2] text-[#e34f22] shadow-[0_10px_28px_rgba(77,58,47,0.08)]">
                   <SparkIcon size={24} play="once" />
                 </div>
-                <h1 className="m-0 text-[clamp(42px,5vw,64px)] leading-[1.08] font-black tracking-[-3px] text-[#1f1f1f] max-[640px]:text-[clamp(36px,10.8vw,44px)] max-[640px]:tracking-[-1.8px]">
+                <h1 className="m-0 text-[clamp(42px,5vw,64px)] leading-[1.08] font-black tracking-[-1.2px] text-[#1f1f1f] max-[640px]:text-[clamp(36px,10.8vw,44px)] max-[640px]:tracking-[-0.8px]">
                   今天想探索什么？
                 </h1>
                 <p className="mx-auto mt-5 mb-0 max-w-[560px] text-[17px] leading-7 text-[#5c5a54] max-[640px]:mt-4 max-[640px]:text-[15px]">
@@ -331,7 +578,11 @@ export function App() {
                     className={`${focusRing} inline-flex cursor-pointer items-center gap-2 border-0 bg-transparent px-5 py-2.5 text-sm font-medium text-[#dd4f24] transition-colors hover:text-[#a93412] max-[700px]:w-full max-[700px]:justify-center`}
                     key={label}
                     type="button"
-                    onClick={() => setQuestion(label)}
+                    onClick={() => {
+                      setQuestion(label)
+                      // 只填进输入框不给焦点的话，用户点完示例还得自己再点一次输入框
+                      composerRef.current?.focus()
+                    }}
                   >
                     <PromptIcon size={18} />
                     <span>{label}</span>
@@ -353,6 +604,7 @@ export function App() {
             <textarea
               className="block max-h-40 min-h-[58px] w-full resize-none border-0 bg-transparent px-5 pt-4 pb-2 text-[16px] leading-6 text-[#22211e] outline-none placeholder:text-[#96938c] max-[640px]:px-4"
               id="question"
+              ref={composerRef}
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
               onKeyDown={handleComposerKeyDown}
@@ -404,12 +656,20 @@ export function App() {
           </form>
 
           {status === 'error' ? (
-            <p
-              className="mx-auto mt-2 mb-0 max-w-[840px] px-3 text-center text-xs text-[#9a442d]"
+            <div
+              className="mx-auto mt-2 flex max-w-[840px] flex-wrap items-center justify-center gap-x-2 gap-y-1 px-3 text-xs text-[#9a442d]"
               role="alert"
             >
-              暂时无法获取回答，请检查服务后重试。
-            </p>
+              <UnmetIcon size={15} play="once" />
+              <span>暂时无法获取回答，请检查服务后重试。</span>
+              <button
+                type="button"
+                className={`${focusRing} cursor-pointer rounded-md border-0 bg-transparent px-1 font-semibold text-[#d4491f] underline underline-offset-2 transition-colors hover:text-[#a93412]`}
+                onClick={retryLast}
+              >
+                重试
+              </button>
+            </div>
           ) : null}
         </section>
       </main>
