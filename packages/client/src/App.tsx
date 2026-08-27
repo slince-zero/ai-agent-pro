@@ -21,6 +21,7 @@ import {
   UnmetIcon,
 } from './icons'
 import { AssistantMarkdown } from './markdown'
+import { PetCompanion } from './pet'
 import { consumeNDJSON } from './util'
 
 type ChatMessage = RequestMessage & {
@@ -594,66 +595,70 @@ export function App() {
         </div>
 
         <section className="relative z-20 shrink-0 border-t border-[#e3e1db] bg-[#faf9f5]/95 px-5 pt-3 pb-4 backdrop-blur-sm max-[640px]:px-3 max-[640px]:pb-3">
-          <form
-            className="mx-auto max-w-[840px] overflow-hidden rounded-[26px] border border-[#b9b8b3] bg-white/85 shadow-[0_12px_36px_rgba(58,50,43,0.1)] transition-[border-color,box-shadow] duration-150 focus-within:border-[#8f8e89] focus-within:shadow-[0_12px_38px_rgba(58,50,43,0.13),0_0_0_4px_rgba(240,90,42,0.07)]"
-            onSubmit={handleSubmit}
-          >
-            <label className="sr-only" htmlFor="question">
-              输入消息
-            </label>
-            <textarea
-              className="block max-h-40 min-h-[58px] w-full resize-none border-0 bg-transparent px-5 pt-4 pb-2 text-[16px] leading-6 text-[#22211e] outline-none placeholder:text-[#96938c] max-[640px]:px-4"
-              id="question"
-              ref={composerRef}
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              onKeyDown={handleComposerKeyDown}
-              placeholder="给 Context 发消息"
-              rows={1}
-            />
+          <div className="mx-auto max-w-[840px]">
+            <PetCompanion busy={isBusy} />
 
-            <div className="flex items-center justify-between gap-3 px-2.5 pb-2.5 pl-3.5">
-              <div className="flex min-w-0 items-center gap-2">
-                <input
-                  id={fileInputId}
-                  className="peer sr-only"
-                  type="file"
-                  onChange={(event) => setAttachment(event.target.files?.[0]?.name ?? '')}
-                />
-                <label
-                  className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-full text-[#5a5852] transition-colors hover:bg-[#f0ede6] hover:text-[#e34f22] peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-[#f05a2a]/30 peer-focus-visible:outline-offset-2"
-                  htmlFor={fileInputId}
-                  title="附加文件"
+            <form
+              className="overflow-hidden rounded-[26px] border border-[#b9b8b3] bg-white/85 shadow-[0_12px_36px_rgba(58,50,43,0.1)] transition-[border-color,box-shadow] duration-150 focus-within:border-[#8f8e89] focus-within:shadow-[0_12px_38px_rgba(58,50,43,0.13),0_0_0_4px_rgba(240,90,42,0.07)]"
+              onSubmit={handleSubmit}
+            >
+              <label className="sr-only" htmlFor="question">
+                输入消息
+              </label>
+              <textarea
+                className="block max-h-40 min-h-[58px] w-full resize-none border-0 bg-transparent px-5 pt-4 pb-2 text-[16px] leading-6 text-[#22211e] outline-none placeholder:text-[#96938c] max-[640px]:px-4"
+                id="question"
+                ref={composerRef}
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                onKeyDown={handleComposerKeyDown}
+                placeholder="给 Context 发消息"
+                rows={1}
+              />
+
+              <div className="flex items-center justify-between gap-3 px-2.5 pb-2.5 pl-3.5">
+                <div className="flex min-w-0 items-center gap-2">
+                  <input
+                    id={fileInputId}
+                    className="peer sr-only"
+                    type="file"
+                    onChange={(event) => setAttachment(event.target.files?.[0]?.name ?? '')}
+                  />
+                  <label
+                    className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-full text-[#5a5852] transition-colors hover:bg-[#f0ede6] hover:text-[#e34f22] peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-[#f05a2a]/30 peer-focus-visible:outline-offset-2"
+                    htmlFor={fileInputId}
+                    title="附加文件"
+                  >
+                    <AttachIcon size={20} />
+                    <span className="sr-only">附加文件</span>
+                  </label>
+                  {attachment ? (
+                    <span className="max-w-[260px] truncate text-xs text-[#77746d] max-[640px]:max-w-[140px]">
+                      {attachment}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-[#8a8881] max-[520px]:hidden">
+                      Enter 发送 · Shift + Enter 换行
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  className={`${focusRing} grid size-10 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-[#1f1f1f] p-0 text-white shadow-[0_4px_10px_rgba(31,31,31,0.18)] transition-colors hover:not-disabled:bg-[#f05a2a] disabled:cursor-not-allowed disabled:bg-[#d8d6d0] disabled:text-[#8f8c85] disabled:shadow-none`}
+                  type={isBusy ? 'button' : 'submit'}
+                  disabled={!question.trim() && !isBusy}
+                  aria-label={isBusy ? '停止生成' : '发送消息'}
+                  onClick={isBusy ? () => cancelSubmit() : undefined}
                 >
-                  <AttachIcon size={20} />
-                  <span className="sr-only">附加文件</span>
-                </label>
-                {attachment ? (
-                  <span className="max-w-[260px] truncate text-xs text-[#77746d] max-[640px]:max-w-[140px]">
-                    {attachment}
-                  </span>
-                ) : (
-                  <span className="text-xs text-[#8a8881] max-[520px]:hidden">
-                    Enter 发送 · Shift + Enter 换行
-                  </span>
-                )}
+                  {isBusy ? (
+                    <StopIcon size={20} play="once" strokeWidth={2} />
+                  ) : (
+                    <SendIcon size={20} strokeWidth={2} />
+                  )}
+                </button>
               </div>
-
-              <button
-                className={`${focusRing} grid size-10 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-[#1f1f1f] p-0 text-white shadow-[0_4px_10px_rgba(31,31,31,0.18)] transition-colors hover:not-disabled:bg-[#f05a2a] disabled:cursor-not-allowed disabled:bg-[#d8d6d0] disabled:text-[#8f8c85] disabled:shadow-none`}
-                type={isBusy ? 'button' : 'submit'}
-                disabled={!question.trim() && !isBusy}
-                aria-label={isBusy ? '停止生成' : '发送消息'}
-                onClick={isBusy ? () => cancelSubmit() : undefined}
-              >
-                {isBusy ? (
-                  <StopIcon size={20} play="once" strokeWidth={2} />
-                ) : (
-                  <SendIcon size={20} strokeWidth={2} />
-                )}
-              </button>
-            </div>
-          </form>
+            </form>
+          </div>
 
           {status === 'error' ? (
             <div

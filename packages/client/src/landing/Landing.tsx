@@ -1,14 +1,12 @@
-import { ContextLogo, NewChatIcon, SendIcon } from '../icons'
+import { ContextLogo, SendIcon } from '../icons'
 import { Demo } from './Demo'
 import { Hero, REPO_URL } from './Hero'
+import { Navbar } from './Navbar'
 import { Pipeline } from './Pipeline'
 import { Reveal } from './Reveal'
 import { ghostButton, primaryButton, sectionShell } from './ui'
 import { Roadmap } from './Roadmap'
 import './landing.css'
-
-const navLink =
-  'rounded-lg px-2 py-1 text-sm font-medium text-[#5c5a54] no-underline transition-colors hover:text-[#d4491f]'
 
 export function Landing() {
   return (
@@ -20,44 +18,7 @@ export function Landing() {
         跳到正文
       </a>
 
-      <header className="sticky top-0 z-40 border-b border-[#e6e4dd] bg-[#faf9f5]/85 backdrop-blur-md">
-        <div className={`${sectionShell} flex h-16 items-center justify-between gap-4`}>
-          <a
-            className="ctx-trigger rounded-lg text-[#1f1f1f] no-underline"
-            href="/"
-            aria-label="Context 首页"
-          >
-            <ContextLogo size={26} />
-          </a>
-
-          <nav className="flex items-center gap-1.5" aria-label="页面导航">
-            <a className={`${navLink} max-[640px]:hidden`} href="#how">
-              工作方式
-            </a>
-            <a className={`${navLink} max-[640px]:hidden`} href="#demo">
-              界面
-            </a>
-            <a className={`${navLink} max-[640px]:hidden`} href="#roadmap">
-              进度
-            </a>
-            <a
-              className={`${navLink} max-[820px]:hidden`}
-              href={REPO_URL}
-              target="_blank"
-              rel="noreferrer"
-            >
-              GitHub
-            </a>
-            <a
-              className="ctx-trigger ml-2 inline-flex h-10 items-center gap-2 rounded-full bg-[#1f1f1f] px-4 text-sm font-semibold text-[#faf9f5] no-underline transition-colors duration-200 hover:bg-[#f05a2a]"
-              href="/app"
-            >
-              <NewChatIcon size={17} />
-              打开对话
-            </a>
-          </nav>
-        </div>
-      </header>
+      <Navbar />
 
       <main>
         <Hero />

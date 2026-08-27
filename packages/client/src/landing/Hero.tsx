@@ -38,7 +38,7 @@ function ComposerPreview() {
 
 export function Hero() {
   return (
-    <section className="landing-glow relative overflow-hidden pt-[92px] pb-[104px] max-[640px]:pt-16 max-[640px]:pb-16">
+    <section className="landing-glow relative overflow-hidden pt-[150px] pb-[104px] max-[640px]:pt-[104px] max-[640px]:pb-16">
       <ConnectorArt className="pointer-events-none absolute top-[46%] left-1/2 z-0 w-[min(1240px,124vw)] max-w-none -translate-x-1/2 -translate-y-1/2 select-none opacity-60 max-[640px]:top-[38%] max-[640px]:w-[190vw] max-[640px]:opacity-40" />
 
       <div className={`relative z-10 ${sectionShell} flex flex-col items-center text-center`}>
