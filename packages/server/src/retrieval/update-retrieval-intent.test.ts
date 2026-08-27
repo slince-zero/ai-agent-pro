@@ -62,6 +62,39 @@ test('moves a preference to hard constraints', async () => {
   assert.deepEqual(result.preferences, [])
 })
 
+test('removes an existing hard constraint', async () => {
+  const result = await updateRetrievalIntent(
+    currentIntent,
+    '不要求适合初学者了',
+    new AbortController().signal,
+    async () =>
+      JSON.stringify({
+        hardConstraints: ['包含完整示例'],
+      }),
+  )
+
+  assert.deepEqual(result.hardConstraints, ['包含完整示例'])
+  assert.deepEqual(result.exclusions, currentIntent.exclusions)
+  assert.deepEqual(result.preferences, currentIntent.preferences)
+})
+
+test('replaces an existing hard constraint', async () => {
+  const result = await updateRetrievalIntent(
+    currentIntent,
+    '把适合初学者改成适合有 JavaScript 基础的人',
+    new AbortController().signal,
+    async () =>
+      JSON.stringify({
+        hardConstraints: ['适合有 JavaScript 基础的人', '包含完整示例'],
+      }),
+  )
+
+  assert.deepEqual(result.hardConstraints, ['适合有 JavaScript 基础的人', '包含完整示例'])
+  assert.equal(result.hardConstraints.includes('适合初学者'), false)
+  assert.deepEqual(result.exclusions, currentIntent.exclusions)
+  assert.deepEqual(result.preferences, currentIntent.preferences)
+})
+
 test('removes a scalar restriction with null', async () => {
   const result = await updateRetrievalIntent(
     currentIntent,
