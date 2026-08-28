@@ -48,12 +48,23 @@ test('returns schema issues for invalid search arguments', async () => {
   assert.equal(parsedResult.issues.length > 0, true)
 })
 
-test('does not hide an unavailable search implementation', async () => {
-  await assert.rejects(
-    executeTool(
-      createToolCall('search', JSON.stringify({ query: 'Agent 教程' })),
-      new AbortController().signal,
-    ),
-    /Search is not implemented/,
-  )
+test('does not hide a missing Tavily API key', async () => {
+  const originalApiKey = process.env.TAVILY_API_KEY
+  delete process.env.TAVILY_API_KEY
+
+  try {
+    await assert.rejects(
+      executeTool(
+        createToolCall('search', JSON.stringify({ query: 'Agent 教程' })),
+        new AbortController().signal,
+      ),
+      /TAVILY_API_KEY is not configured/,
+    )
+  } finally {
+    if (originalApiKey === undefined) {
+      delete process.env.TAVILY_API_KEY
+    } else {
+      process.env.TAVILY_API_KEY = originalApiKey
+    }
+  }
 })

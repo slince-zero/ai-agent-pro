@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { z } from 'zod'
 import { search, searchInputSchema } from './search.js'
 
 test('parses valid search input', () => {
@@ -29,10 +30,36 @@ test('rejects unknown properties', () => {
   assert.equal(result.success, false)
 })
 
-test('fails explicitly while no search source is configured', async () => {
+test('rejects a missing Tavily API key', async () => {
   await assert.rejects(
-    search({ query: 'Agent 教程' }, new AbortController().signal),
-    /Search is not implemented/,
+    search({ query: 'Agent 教程' }, new AbortController().signal, { apiKey: '' }),
+    /TAVILY_API_KEY is not configured/,
+  )
+})
+
+test('rejects a Tavily HTTP error', async () => {
+  await assert.rejects(
+    search({ query: 'Agent 教程' }, new AbortController().signal, {
+      apiKey: 'test-key',
+      request: async () => new Response('', { status: 429 }),
+    }),
+    /Tavily search failed with HTTP 429/,
+  )
+})
+
+test('rejects an invalid Tavily response', async () => {
+  await assert.rejects(
+    search({ query: 'Agent 教程' }, new AbortController().signal, {
+      apiKey: 'test-key',
+      request: async () =>
+        new Response(JSON.stringify({ results: [{ title: 123 }] }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }),
+    }),
+    z.ZodError,
   )
 })
 
