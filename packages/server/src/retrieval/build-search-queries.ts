@@ -1,4 +1,4 @@
-import { agentLimits } from '../agent-limits.js'
+import { agentLimits } from '../util.js'
 import type { RetrievalIntent } from './retrieval-intent.js'
 
 const MAX_QUERY_LENGTH = 200
@@ -20,8 +20,5 @@ export function buildSearchQueries(intent: RetrievalIntent): string[] {
   const primaryQuery = joinQueryParts(requiredParts)
   const preferredQuery = joinQueryParts([...requiredParts, ...intent.preferences])
 
-  return [...new Set([primaryQuery, preferredQuery])].slice(
-    0,
-    agentLimits.maxInitialSearchQueries,
-  )
+  return [...new Set([primaryQuery, preferredQuery])].slice(0, agentLimits.maxInitialSearchQueries)
 }

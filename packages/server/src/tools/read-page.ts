@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ChatCompletionTool } from 'openai/resources/index.mjs'
-import { agentLimits } from '../agent-limits.js'
+import { agentLimits } from '../util.js'
 import { ToolConfigurationError, ToolProviderHttpError } from './tool-errors.js'
 
 const TAVILY_EXTRACT_URL = 'https://api.tavily.com/extract'
@@ -12,8 +12,7 @@ export const readPageInputSchema = z.strictObject({
     .string()
     .url()
     .refine(
-      (value) =>
-        URL.canParse(value) && ['http:', 'https:'].includes(new URL(value).protocol),
+      (value) => URL.canParse(value) && ['http:', 'https:'].includes(new URL(value).protocol),
       {
         message: 'url 必须使用 http 或 https 协议',
       },

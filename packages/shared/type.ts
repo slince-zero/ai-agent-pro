@@ -19,6 +19,18 @@ export type AgentStreamEvent =
       usage: TokenUsage
     }
   | {
+      type: 'tool_call'
+      id: string
+      name: string
+      arguments: string
+    }
+  | {
+      type: 'tool_result'
+      id: string
+      name: string
+      ok: boolean
+    }
+  | {
       type: 'done'
     }
 

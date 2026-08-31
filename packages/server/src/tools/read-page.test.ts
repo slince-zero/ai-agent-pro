@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { z } from 'zod'
-import { agentLimits } from '../agent-limits.js'
+import { agentLimits } from '../util.js'
 import { readPage, readPageInputSchema } from './read-page.js'
 
 test('rejects invalid or unknown read page arguments', () => {

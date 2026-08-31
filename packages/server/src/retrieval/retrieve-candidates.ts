@@ -1,4 +1,4 @@
-import { agentLimits } from '../agent-limits.js'
+import { agentLimits } from '../util.js'
 import { search } from '../tools/search.js'
 import type { SearchResult } from '../tools/search.js'
 import { buildSearchQueries } from './build-search-queries.js'
