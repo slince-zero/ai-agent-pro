@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ChatCompletionTool } from 'openai/resources/index.mjs'
+import { ToolConfigurationError, ToolProviderHttpError } from './tool-errors.js'
 
 const TAVILY_SEARCH_URL = 'https://api.tavily.com/search'
 const SEARCH_TIMEOUT_MS = 8_000
@@ -26,10 +27,7 @@ const tavilyResponseSchema = z.object({
   ),
 })
 
-type SearchRequest = (
-  input: string | URL,
-  init?: RequestInit,
-) => Promise<Response>
+type SearchRequest = (input: string | URL, init?: RequestInit) => Promise<Response>
 
 type SearchDependencies = {
   apiKey?: string
@@ -57,7 +55,7 @@ export async function search(
   const request = dependencies.request ?? fetch
 
   if (!apiKey) {
-    throw new Error('TAVILY_API_KEY is not configured')
+    throw new ToolConfigurationError('TAVILY_API_KEY is not configured')
   }
 
   const response = await request(TAVILY_SEARCH_URL, {
@@ -75,14 +73,11 @@ export async function search(
       include_raw_content: false,
       include_images: false,
     }),
-    signal: AbortSignal.any([
-      signal,
-      AbortSignal.timeout(SEARCH_TIMEOUT_MS),
-    ]),
+    signal: AbortSignal.any([signal, AbortSignal.timeout(SEARCH_TIMEOUT_MS)]),
   })
 
   if (!response.ok) {
-    throw new Error(`Tavily search failed with HTTP ${response.status}`)
+    throw new ToolProviderHttpError('Tavily search failed', response.status)
   }
 
   let body: unknown

@@ -33,51 +33,47 @@ test('rejects unknown properties', () => {
 test('requests Tavily and maps successful search results', async () => {
   let requestCount = 0
 
-  const results = await search(
-    { query: 'TypeScript Agent 教程' },
-    new AbortController().signal,
-    {
-      apiKey: 'test-key',
-      request: async (input, init) => {
-        requestCount += 1
+  const results = await search({ query: 'TypeScript Agent 教程' }, new AbortController().signal, {
+    apiKey: 'test-key',
+    request: async (input, init) => {
+      requestCount += 1
 
-        assert.equal(input.toString(), 'https://api.tavily.com/search')
-        assert.equal(init?.method, 'POST')
-        assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer test-key')
-        assert.equal(new Headers(init?.headers).get('Content-Type'), 'application/json')
-        assert.equal(typeof init?.body, 'string')
-        assert.deepEqual(JSON.parse(init?.body as string), {
-          query: 'TypeScript Agent 教程',
-          topic: 'general',
-          search_depth: 'basic',
-          max_results: 5,
-          include_answer: false,
-          include_raw_content: false,
-          include_images: false,
-        })
-        assert.ok(init?.signal)
+      assert.equal(input.toString(), 'https://api.tavily.com/search')
+      assert.equal(init?.method, 'POST')
+      assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer test-key')
+      assert.equal(new Headers(init?.headers).get('Content-Type'), 'application/json')
+      assert.equal(typeof init?.body, 'string')
+      assert.deepEqual(JSON.parse(init?.body as string), {
+        query: 'TypeScript Agent 教程',
+        topic: 'general',
+        search_depth: 'basic',
+        max_results: 5,
+        include_answer: false,
+        include_raw_content: false,
+        include_images: false,
+      })
+      assert.ok(init?.signal)
 
-        return new Response(
-          JSON.stringify({
-            results: [
-              {
-                title: 'Context Engineering Guide',
-                url: 'https://example.com/context-engineering',
-                content: 'A TypeScript tutorial with complete examples.',
-                score: 0.91,
-              },
-            ],
-          }),
-          {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json',
+      return new Response(
+        JSON.stringify({
+          results: [
+            {
+              title: 'Context Engineering Guide',
+              url: 'https://example.com/context-engineering',
+              content: 'A TypeScript tutorial with complete examples.',
+              score: 0.91,
             },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
           },
-        )
-      },
+        },
+      )
     },
-  )
+  })
 
   assert.equal(requestCount, 1)
   assert.deepEqual(results, [
@@ -90,14 +86,10 @@ test('requests Tavily and maps successful search results', async () => {
 })
 
 test('returns an empty list when Tavily finds no results', async () => {
-  const results = await search(
-    { query: '不存在的 Agent 教程' },
-    new AbortController().signal,
-    {
-      apiKey: 'test-key',
-      request: async () => Response.json({ results: [] }),
-    },
-  )
+  const results = await search({ query: '不存在的 Agent 教程' }, new AbortController().signal, {
+    apiKey: 'test-key',
+    request: async () => Response.json({ results: [] }),
+  })
 
   assert.deepEqual(results, [])
 })
