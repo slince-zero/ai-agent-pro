@@ -416,6 +416,18 @@
   color: #8a8881;
 }
 
+/* 收起时也要看得出这次搜索有几条命中，否则展开是一次盲点击 */
+.trace-tool-count {
+  flex: none;
+  border-radius: 999px;
+  background: #f2efe8;
+  padding: 1px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #85827b;
+}
+
 .trace-tool-status {
   flex: none;
   margin-left: auto;
@@ -456,6 +468,111 @@
   word-break: break-word;
 }
 
+/* 搜索来源 -------------------------------------------------------------- */
+
+.trace-sources {
+  margin: 2px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  padding: 0 8px 5px;
+}
+
+.trace-source {
+  display: flex;
+  gap: 9px;
+  border-radius: 10px;
+  padding: 6px 7px;
+  transition: background-color 160ms ease;
+  animation: trace-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 55ms);
+}
+
+.trace-source:hover {
+  background: #faf8f4;
+}
+
+/* 编号色块按域名取色，同一个站永远是同一个颜色：重复来源不用读字就看得出来 */
+.trace-source-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
+  border-radius: 6px;
+  background: hsl(var(--hue, 20) 40% 92%);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: hsl(var(--hue, 20) 30% 38%);
+}
+
+.trace-source-body {
+  min-width: 0;
+}
+
+.trace-source-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trace-source-host {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #a29e96;
+}
+
+/* 这一条真的被读了正文：搜到 → 挑中 → 读回来，链条在这里闭合 */
+.trace-source-read {
+  flex: none;
+  border: 1px solid #d8e7dd;
+  border-radius: 999px;
+  background: #f2f8f4;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #4e8f6a;
+}
+
+.trace-source-title {
+  display: block;
+  margin-top: 1px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.55;
+  color: #34332f;
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+.trace-source-title:hover {
+  color: #d4491f;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/*
+ * 摘要压成两行：提供方给的那段话常常是从正文中间截下来的，
+ * 铺开也不会更清楚，只会把下一条来源推出视野。
+ */
+.trace-source-snippet {
+  margin: 2px 0 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: #8a8881;
+}
+
 @keyframes trace-enter {
   from {
     opacity: 0;
@@ -471,6 +588,7 @@
 @media (prefers-reduced-motion: reduce) {
   .trace-round,
   .trace-tool,
+  .trace-source,
   .trace-live-dot::after,
   .trace-round[data-state='active']::before,
   .trace-round[data-state='active'] > .trace-dot::after,
@@ -485,7 +603,9 @@
   .trace-body,
   .trace-think-body,
   .trace-tool-body,
-  .trace-tool-row {
+  .trace-tool-row,
+  .trace-source,
+  .trace-source-title {
     transition: none;
   }
 }

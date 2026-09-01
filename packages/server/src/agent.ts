@@ -3,7 +3,7 @@ import type {
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
 } from 'openai/resources/index.mjs'
-import type { AgentStreamEvent, ChatMessage } from '@ai-agent-pro/shared/type.js'
+import type { AgentStreamEvent, ChatMessage, ToolSource } from '@ai-agent-pro/shared/type.js'
 import { createDeepSeekClient } from './deepseek-client.js'
 import { agentLimits } from './util.js'
 import { executeTool } from './tools/execute-tool.js'
@@ -65,6 +65,32 @@ type AssistantMessage = Extract<ChatCompletionMessageParam, { role: 'assistant' 
 /** 界面上那行摘要最多这么长——再长也只是把工具链的排版撑破 */
 const TOOL_PREVIEW_MAX_LENGTH = 120
 
+/*
+ * 上线的命中数和每条的长度上限。
+ *
+ * 五条是 Tavily 单次的上限，也刚好是一屏能扫完的量；标题和摘要裁到这个长度，
+ * 一次搜索的结果加起来约 1.5 KB——够判断值不值得点开，又不至于把整份摘要搬过去。
+ */
+const TOOL_SOURCE_MAX_COUNT = 5
+const TOOL_SOURCE_TITLE_MAX_LENGTH = 120
+const TOOL_SOURCE_SNIPPET_MAX_LENGTH = 160
+
+/**
+ * 失败原因给人看的说法。
+ *
+ * 工具返回的 error 码和 message 是写给模型的（英文、固定措辞），直接摆到时间轴上
+ * 就是一句 "budget_exhausted · No search call left."——用户读不出这是产品的限额。
+ * 所以这里把已知的失败翻一遍；未知的码保持原样，出了新错误不会被吞掉。
+ */
+const toolErrorPreview: Record<string, string> = {
+  invalid_tool_arguments: '参数不合法',
+  budget_exhausted: '这一次检索的调用次数已用完',
+  rate_limited: '被提供方限流',
+  tool_unavailable: '工具不可用',
+  provider_error: '提供方请求失败',
+  unknown_tool: '未知工具',
+}
+
 /**
  * TODO(owner)：这是仅为通过类型检查而写的最小版本，正式的证据纪律和
  * 动作集约定需要你自己重写（对应 product-plan 阶段 6 的完成条件）。
@@ -83,22 +109,56 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function condense(value: string) {
+function condense(value: string, maxLength = TOOL_PREVIEW_MAX_LENGTH) {
   const collapsed = value.replace(/\s+/g, ' ').trim()
 
-  return collapsed.length > TOOL_PREVIEW_MAX_LENGTH
-    ? `${collapsed.slice(0, TOOL_PREVIEW_MAX_LENGTH - 1)}…`
-    : collapsed
+  return collapsed.length > maxLength ? `${collapsed.slice(0, maxLength - 1)}…` : collapsed
 }
 
 /**
- * 把工具结果读成界面要的两件事：成没成，以及拿回了什么。
+ * 把搜索结果读成界面上那份来源列表。
  *
- * 完整结果只留在服务端的账本里——read_page 一次能带回两万字符，原样推到前端
- * 既没人看得完，也等于把证据变成了客户端手里的数据。所以这里只提炼一行摘要：
- * 搜到几条、读到多少字、失败的话是哪种失败。
+ * 没有 url 的一条直接丢掉：界面上它既点不开，也无从判断是哪个站说的，
+ * 留着只是占一个名额。裁剪在服务端做，客户端拿到的就是能直接渲染的形状。
  */
-function readToolOutcome(content: string): { ok: boolean; preview?: string } {
+function readSources(results: unknown[]): ToolSource[] {
+  return results
+    .flatMap((result) => {
+      if (!isRecord(result)) return []
+
+      const url = typeof result.url === 'string' ? result.url : ''
+
+      if (!url) return []
+
+      return [
+        {
+          url,
+          title: condense(
+            typeof result.title === 'string' ? result.title : '',
+            TOOL_SOURCE_TITLE_MAX_LENGTH,
+          ),
+          snippet: condense(
+            typeof result.snippet === 'string' ? result.snippet : '',
+            TOOL_SOURCE_SNIPPET_MAX_LENGTH,
+          ),
+        },
+      ]
+    })
+    .slice(0, TOOL_SOURCE_MAX_COUNT)
+}
+
+/**
+ * 把工具结果读成界面要的几件事：成没成、拿回了什么，以及搜到了哪些来源。
+ *
+ * read_page 的完整正文只留在服务端的账本里——一次能带回两万字符，原样推到前端
+ * 既没人看得完，也等于把证据变成了客户端手里的数据。所以这里只提炼摘要：
+ * 搜到几条、读到多少字、失败的话是哪种失败；search 的命中额外给一份裁剪过的来源列表。
+ */
+function readToolOutcome(content: string): {
+  ok: boolean
+  preview?: string
+  sources?: ToolSource[]
+} {
   let parsed: unknown
 
   try {
@@ -113,6 +173,10 @@ function readToolOutcome(content: string): { ok: boolean; preview?: string } {
 
   if (!ok) {
     const error = typeof parsed.error === 'string' ? parsed.error : 'unknown_error'
+    const label = toolErrorPreview[error]
+
+    if (label) return { ok, preview: label }
+
     const message = typeof parsed.message === 'string' ? parsed.message : ''
 
     return { ok, preview: condense(message ? `${error} · ${message}` : error) }
@@ -132,6 +196,7 @@ function readToolOutcome(content: string): { ok: boolean; preview?: string } {
     return {
       ok,
       preview: condense(titles.length > 0 ? `${count} 条 · ${titles.join(' · ')}` : `${count} 条`),
+      sources: readSources(parsed.results),
     }
   }
 
@@ -179,10 +244,13 @@ function spendToolBudget(budget: ToolBudget, name: string): string | undefined {
   if (name !== 'search' && name !== 'read_page') return undefined // 未知工具交给 executeTool 报错
 
   if (budget[name] <= 0) {
+    const other = name === 'search' ? 'read_page' : 'search'
+
+    // 告诉它另一种工具还剩多少：预算用尽不等于无路可走，常常是"别再搜了，去读页面"。
     return JSON.stringify({
       ok: false,
       error: 'budget_exhausted',
-      message: `No ${name} call left. Answer with the evidence you already have.`,
+      message: `No ${name} call left in this run. ${budget[other]} ${other} call(s) remain. Do not retry ${name}; use what you have.`,
       retryable: false,
     })
   }
@@ -351,7 +419,7 @@ export async function* askAgentStream(
 
       if (!('content' in settled)) throw settled.failure
 
-      const { ok, preview } = readToolOutcome(settled.content)
+      const { ok, preview, sources } = readToolOutcome(settled.content)
 
       transcript.push({ role: 'tool', tool_call_id: toolCall.id, content: settled.content })
       yield {
@@ -360,6 +428,7 @@ export async function* askAgentStream(
         name: toolCall.function.name,
         ok,
         ...(preview ? { preview } : {}),
+        ...(sources && sources.length > 0 ? { sources } : {}),
       }
     }
   }

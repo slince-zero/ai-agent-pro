@@ -254,7 +254,15 @@ test('searches once and then answers', async () => {
     { type: 'round_start', round: 1 },
     { type: 'text_delta', delta: '我先搜一下。' },
     { type: 'tool_call', id: 'call_1', name: 'search', arguments: '{"query":"ts agent"}' },
-    { type: 'tool_result', id: 'call_1', name: 'search', ok: true, preview: '1 条' },
+    {
+      type: 'tool_result',
+      id: 'call_1',
+      name: 'search',
+      ok: true,
+      preview: '1 条',
+      // 搜索的命中随结果一起上线，界面才能在展开时给出这一次到底搜到了什么
+      sources: [{ url: 'https://example.com', title: '', snippet: '' }],
+    },
     { type: 'round_start', round: 2 },
     { type: 'text_delta', delta: '这里是答案。' },
     { type: 'done' },
@@ -428,10 +436,22 @@ test('fails when the loop reaches the round limit', async () => {
 
 test('refuses tool calls once the search budget is spent', async () => {
   const controller = new AbortController()
-  const overBudgetTurns = Array.from({ length: agentLimits.maxSearchCalls + 1 }, (_value, index) =>
-    searchTurn(`call_${index + 1}`),
+  /*
+   * 预算是这样被耗尽的：一轮里并行发出比预算多一次的搜索。
+   * "对比这五个框架"就长这样——真实的越界发生在同一轮内部，不是攒够很多轮才发生。
+   */
+  const overBudgetCalls = Array.from(
+    { length: agentLimits.maxSearchCalls + 1 },
+    (_value, index) => ({
+      id: `call_${index + 1}`,
+      name: 'search',
+      arguments: `{"query":"q${index + 1}"}`,
+    }),
   )
-  const { requestModel, calls } = scriptModel([...overBudgetTurns, { text: '用已有证据回答。' }])
+  const { requestModel, calls } = scriptModel([
+    { text: '', toolCalls: overBudgetCalls },
+    { text: '用已有证据回答。' },
+  ])
   const { runTool, seen } = scriptTools(() => JSON.stringify({ ok: true, results: [] }))
 
   const events = await collectEvents(
@@ -577,14 +597,62 @@ test('previews each tool result for the timeline', async () => {
     askAgentStream(messages, { signal: controller.signal }, { requestModel, runTool }),
   )
 
-  // 完整结果只进服务端账本，界面拿到的是这一行摘要
+  // 完整结果只进服务端账本，界面拿到的是这一行摘要；失败原因翻成人话，不摆英文错误码
   assert.deepEqual(
     pickEvents(events, 'tool_result').map((event) => event.preview),
-    [
-      '2 条 · TypeScript 手册 · 入门',
-      '没有命中',
-      '4 字符（截断） · 正文开头',
-      'provider_error · 502',
-    ],
+    ['2 条 · TypeScript 手册 · 入门', '没有命中', '4 字符（截断） · 正文开头', '提供方请求失败'],
   )
+})
+
+test('sends a bounded source list along with a successful search', async () => {
+  const controller = new AbortController()
+  const { requestModel } = scriptModel([
+    {
+      text: '',
+      toolCalls: [
+        { id: 'call_search', name: 'search', arguments: '{"query":"a"}' },
+        { id: 'call_page', name: 'read_page', arguments: '{"url":"https://c.example"}' },
+      ],
+    },
+    { text: '答案。' },
+  ])
+  const { runTool } = scriptTools((toolCall) => {
+    if (toolCall.id === 'call_page') {
+      return JSON.stringify({ ok: true, result: { content: '正文' } })
+    }
+
+    return JSON.stringify({
+      ok: true,
+      results: [
+        // 没有 url 的一条在界面上既点不开也无从追溯，直接丢掉而不是占一个名额
+        { title: '没有地址', snippet: '略' },
+        { url: 'https://a.example/1', title: ' 标\n题 ', snippet: 'x'.repeat(200) },
+        ...Array.from({ length: 6 }, (_value, index) => ({
+          url: `https://b.example/${index}`,
+          title: `第 ${index} 条`,
+          snippet: '',
+        })),
+      ],
+    })
+  })
+
+  const events = await collectEvents(
+    askAgentStream(messages, { signal: controller.signal }, { requestModel, runTool }),
+  )
+  const [search, page] = pickEvents(events, 'tool_result')
+
+  // 上限 5 条：一屏能扫完，也不至于把整份搜索结果搬到客户端
+  assert.equal(search?.sources?.length, 5)
+  assert.deepEqual(search?.sources?.[0], {
+    url: 'https://a.example/1',
+    title: '标 题',
+    // 摘要裁到 160 字符，最后一个字符换成省略号，读得出后面还有
+    snippet: `${'x'.repeat(159)}…`,
+  })
+  assert.deepEqual(
+    search?.sources?.slice(1).map((source) => source.url),
+    ['https://b.example/0', 'https://b.example/1', 'https://b.example/2', 'https://b.example/3'],
+  )
+  // read_page 的正文是这里唯一的实证据，它继续只给一行摘要，不往客户端推
+  assert.equal(page?.sources, undefined)
 })

@@ -20,7 +20,7 @@ import {
   TokensIcon,
   UnmetIcon,
 } from './icons'
-import { AgentTrace, type TraceRound } from './agent-trace'
+import { AgentTrace, type ToolCallView, type TraceRound } from './agent-trace'
 import { AssistantMarkdown } from './markdown'
 import { PetCompanion } from './pet'
 import { consumeNDJSON } from './util'
@@ -121,17 +121,20 @@ function withRound(
   return rounds.map((entry) => (entry === existing ? update(existing) : entry))
 }
 
-/** tool_result 只带 id，不带轮次，所以直接按 id 全表找 */
+/**
+ * tool_result 只带 id，不带轮次，所以直接按 id 全表找。
+ *
+ * 结果里那几项（成没成、摘要、来源）整体覆盖上去，而不是逐个列出来：
+ * 服务端往结果上再加一项时，这里不用跟着改一遍。
+ */
 function markToolResult(
   trace: TraceRound[] | undefined,
-  id: string,
-  ok: boolean,
-  preview?: string,
+  result: Omit<ToolCallView, 'name' | 'arguments'>,
 ): TraceRound[] {
   return (trace ?? []).map((entry) => ({
     ...entry,
     toolCalls: entry.toolCalls.map((toolCall) =>
-      toolCall.id === id ? { ...toolCall, ok, preview } : toolCall,
+      toolCall.id === result.id ? { ...toolCall, ...result } : toolCall,
     ),
   }))
 }
@@ -556,7 +559,12 @@ export function App() {
           setMessages((previousMessages) =>
             updateLastAssistant(previousMessages, (message) => ({
               ...message,
-              trace: markToolResult(message.trace, e.id, e.ok, e.preview),
+              trace: markToolResult(message.trace, {
+                id: e.id,
+                ok: e.ok,
+                preview: e.preview,
+                sources: e.sources,
+              }),
             })),
           )
         }

@@ -9,6 +9,18 @@ export type ChatMessage = {
   content: string
 }
 
+/**
+ * 一条搜索命中在界面上的样子。
+ *
+ * 它不是证据本身——摘要只够初筛，正文要靠 read_page 读回来。所以这里只带三样
+ * 足够让人判断"值不值得点进去"的东西：能打开的地址、标题、一句摘要。
+ */
+export type ToolSource = {
+  title: string
+  url: string
+  snippet: string
+}
+
 export type AgentStreamEvent =
   | {
       type: 'text_delta'
@@ -58,6 +70,13 @@ export type AgentStreamEvent =
        * 不让客户端去解析工具的原始 JSON。
        */
       preview?: string
+      /**
+       * search 的命中列表：最多 5 条，标题和摘要都已裁短。
+       *
+       * 只有 search 有这一项。read_page 的正文上限两万字符，是这里唯一的实证据，
+       * 它继续只给一行摘要——推到客户端既没人读得完，也等于把证据交到了客户端手上。
+       */
+      sources?: ToolSource[]
     }
   | {
       type: 'done'
