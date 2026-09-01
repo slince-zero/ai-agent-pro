@@ -19,8 +19,25 @@ function isMessageStreamEvent(value: unknown): value is MessageStreamEvent {
   switch (value.type) {
     case 'text_delta':
       return typeof value.delta === 'string'
+    case 'reasoning_delta':
+      return typeof value.delta === 'string'
     case 'usage':
       return isTokenUsage(value.usage)
+    case 'round_start':
+      return typeof value.round === 'number'
+    case 'tool_call':
+      return (
+        typeof value.id === 'string' &&
+        typeof value.name === 'string' &&
+        typeof value.arguments === 'string'
+      )
+    case 'tool_result':
+      return (
+        typeof value.id === 'string' &&
+        typeof value.name === 'string' &&
+        typeof value.ok === 'boolean' &&
+        (value.preview === undefined || typeof value.preview === 'string')
+      )
     case 'done':
       return true
     case 'error':

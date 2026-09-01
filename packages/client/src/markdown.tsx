@@ -5,7 +5,7 @@
  * 插件、图片、代码块各自的处理都在这个文件，App 只负责给出
  * 「一段文本」和「是不是还在流」这两个信息。
  */
-import { Component, Suspense, isValidElement, lazy, useState } from 'react'
+import { Component, Suspense, isValidElement, lazy, memo, useState } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import type { Components, Options } from 'react-markdown'
@@ -167,10 +167,17 @@ type AssistantMarkdownProps = {
   streaming?: boolean
 }
 
-export function AssistantMarkdown({ content, streaming = false }: AssistantMarkdownProps) {
+/**
+ * memo 在这里是必需的，不是优化余量：思维链每一帧都在长，而它和答案挂在同一棵树上。
+ * 不隔开的话，每来一段推理都要把整段回答重新解析成 hast 再重新渲染一遍。
+ */
+export const AssistantMarkdown = memo(function AssistantMarkdown({
+  content,
+  streaming = false,
+}: AssistantMarkdownProps) {
   return (
     <Markdown components={components} rehypePlugins={rehypePlugins} remarkPlugins={remarkPlugins}>
       {streaming ? closeDanglingMarkdown(content) : content}
     </Markdown>
   )
-}
+})

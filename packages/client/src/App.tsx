@@ -20,6 +20,7 @@ import {
   TokensIcon,
   UnmetIcon,
 } from './icons'
+import { AgentTrace, type TraceRound } from './agent-trace'
 import { AssistantMarkdown } from './markdown'
 import { PetCompanion } from './pet'
 import { consumeNDJSON } from './util'
@@ -27,6 +28,21 @@ import { consumeNDJSON } from './util'
 type ChatMessage = RequestMessage & {
   usage?: TokenUsage
   cancelled?: boolean
+  trace?: TraceRound[]
+  /** 这条回答停下来的时刻，用来给最后一轮结算耗时 */
+  finishedAt?: number
+}
+
+/**
+ * 还没显示出来的文字。
+ *
+ * 按轮次分段是因为轮次边界一到，积压就会被记到下一轮名下；再按 channel 分段是因为
+ * 思维链和正文是两条流，混在一起吐会把推理写进答案里。
+ */
+type PendingChunk = {
+  round: number
+  channel: 'reasoning' | 'text'
+  text: string
 }
 
 /**
@@ -39,12 +55,8 @@ type ChatMessage = RequestMessage & {
  */
 type UIStatus = 'idle' | 'loading' | 'streaming' | 'success' | 'error'
 
-const initialMessages: ChatMessage[] = [
-  {
-    role: 'system',
-    content: '你是一个负责检索问题搜索回答的 AI 助手',
-  },
-]
+/** system prompt 归服务端所有：它是行为约束，不能是客户端可以改写的东西 */
+const initialMessages: ChatMessage[] = []
 
 const examplePrompts = [
   { label: '找一篇 TypeScript 入门教程', icon: QueryIcon },
@@ -73,6 +85,100 @@ function isHighSurrogate(code: number) {
   return code >= 0xd800 && code <= 0xdbff
 }
 
+function updateLastAssistant(
+  messages: ChatMessage[],
+  update: (message: ChatMessage) => ChatMessage,
+): ChatMessage[] {
+  const lastIndex = messages.length - 1
+  const lastMessage = messages[lastIndex]
+
+  if (lastMessage?.role !== 'assistant') return messages
+
+  const nextMessages = [...messages]
+  nextMessages[lastIndex] = update(lastMessage)
+
+  return nextMessages
+}
+
+/** 找到（或补上）某一轮的记录。轮次事件按序到达，所以直接追加就是正确顺序 */
+function withRound(
+  trace: TraceRound[] | undefined,
+  round: number,
+  update: (entry: TraceRound) => TraceRound,
+): TraceRound[] {
+  const rounds = trace ?? []
+  const existing = rounds.find((entry) => entry.round === round)
+
+  // startedAt 落在这里而不是 round_start 里，是为了让"补上"这条路径也有起点；
+  // 正常情况下 round_start 先到，所以这个时刻就是这一轮真正的开始
+  if (!existing) {
+    return [
+      ...rounds,
+      update({ round, reasoning: '', text: '', toolCalls: [], startedAt: Date.now() }),
+    ]
+  }
+
+  return rounds.map((entry) => (entry === existing ? update(existing) : entry))
+}
+
+/** tool_result 只带 id，不带轮次，所以直接按 id 全表找 */
+function markToolResult(
+  trace: TraceRound[] | undefined,
+  id: string,
+  ok: boolean,
+  preview?: string,
+): TraceRound[] {
+  return (trace ?? []).map((entry) => ({
+    ...entry,
+    toolCalls: entry.toolCalls.map((toolCall) =>
+      toolCall.id === id ? { ...toolCall, ok, preview } : toolCall,
+    ),
+  }))
+}
+
+/**
+ * 收尾时把最后一轮搬进 content。
+ *
+ * 流式过程中答案还躺在 trace 里（谁是答案只有轮次结束才知道），收尾之后
+ * content 就只装答案：复制、下一轮请求、回放历史看到的都该是答案本身。
+ */
+function promoteAnswer(message: ChatMessage): ChatMessage {
+  const lastRound = message.trace?.at(-1)
+
+  if (!lastRound || lastRound.toolCalls.length > 0) return message
+
+  return {
+    ...message,
+    content: message.content + lastRound.text,
+    // 正文搬走了，思维链留下：最后一轮"怎么想出这个答案的"和前几轮一样属于过程
+    trace: message.trace?.map((entry) => (entry === lastRound ? { ...entry, text: '' } : entry)),
+  }
+}
+
+/** 答案在收尾前后待的地方不一样，取值统一走这里 */
+function readAnswer(message: ChatMessage) {
+  if (message.content) return message.content
+
+  const lastRound = message.trace?.at(-1)
+
+  return lastRound && lastRound.toolCalls.length === 0 ? lastRound.text : ''
+}
+
+function hasRenderableContent(message: ChatMessage) {
+  return Boolean(message.content) || (message.trace?.length ?? 0) > 0
+}
+
+function addUsage(total: TokenUsage | undefined, next: TokenUsage): TokenUsage {
+  if (!total) return next
+
+  // 每轮各报一次用量，覆盖只会显示最后一轮，看起来比真实成本便宜得多
+  return {
+    inputTokens: total.inputTokens + next.inputTokens,
+    outputTokens: total.outputTokens + next.outputTokens,
+    totalTokens: total.totalTokens + next.totalTokens,
+  }
+}
+
 /** 消息下方的操作按钮：常显但压到最低对比度，hover 才变成品牌色 */
 const messageAction =
   'inline-flex cursor-pointer items-center gap-1.5 rounded-lg border-0 bg-transparent px-1.5 py-1 text-xs text-[#a8a59e] transition-colors hover:text-[#d4491f]'
@@ -92,9 +198,11 @@ export function App() {
   /** 用户是否贴在对话底部，决定新内容是否要自动滚动跟随 */
   const pinnedToBottomRef = useRef(true)
   /** 已经收到、但还没显示出来的文字；由 revealFrame 匀速吐给界面 */
-  const pendingTextRef = useRef('')
+  const pendingRef = useRef<PendingChunk[]>([])
   const revealFrameRef = useRef<number | null>(null)
   const lastRevealAtRef = useRef(0)
+  /** 当前是第几轮：tool_call 事件不带轮次，得靠 round_start 记着 */
+  const currentRoundRef = useRef(1)
   /** 流已经结束、积压还没吐完时的收尾动作 */
   const afterDrainRef = useRef<(() => void) | null>(null)
   const [question, setQuestion] = useState('')
@@ -103,16 +211,15 @@ export function App() {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
 
-  const conversation = messages.filter((message) => message.role !== 'system')
   /**
    * 没有内容的助手消息不渲染，否则只会留下一个孤零零的头像。
    * 它有两个来源：请求刚发出时的占位，以及请求失败后留下的空壳。
    * 失败的空壳不一定在末尾（用户可以接着发下一条），所以不能只判断末位。
    */
-  const visibleConversation = conversation.filter(
-    (message) => message.role !== 'assistant' || message.content,
+  const visibleConversation = messages.filter(
+    (message) => message.role !== 'assistant' || hasRenderableContent(message),
   )
-  const hasConversation = conversation.length > 0
+  const hasConversation = messages.length > 0
   const isBusy = status === 'loading' || status === 'streaming'
 
   /**
@@ -148,25 +255,21 @@ export function App() {
   }
 
   /**
-   * 把一段文字追加到最后一条助手消息上。
+   * 把一段文字追加到最后一条助手消息的某一轮上。
    * 服务端每个 token 一个 NDJSON 事件，逐个 setState 会让 Markdown 每秒重新解析几十次，
    * 所以调用它的只有 revealFrame（每帧最多一次）和收尾时的 flushPendingText。
    */
-  function appendToLastMessage(chunk: string) {
-    setMessages((previousMessages) => {
-      const newMessages = [...previousMessages]
-      const lastIndex = newMessages.length - 1
-      const lastMessage = newMessages[lastIndex]
-
-      if (lastMessage?.role !== 'assistant') return previousMessages
-
-      newMessages[lastIndex] = {
-        ...lastMessage,
-        content: lastMessage.content + chunk,
-      }
-
-      return newMessages
-    })
+  function appendRevealedText(chunk: PendingChunk, text: string) {
+    setMessages((previousMessages) =>
+      updateLastAssistant(previousMessages, (message) => ({
+        ...message,
+        trace: withRound(message.trace, chunk.round, (entry) =>
+          chunk.channel === 'reasoning'
+            ? { ...entry, reasoning: entry.reasoning + text }
+            : { ...entry, text: entry.text + text },
+        ),
+      })),
+    )
   }
 
   function cancelReveal() {
@@ -184,6 +287,10 @@ export function App() {
     afterDrain?.()
   }
 
+  function pendingLength() {
+    return pendingRef.current.reduce((total, chunk) => total + chunk.text.length, 0)
+  }
+
   /**
    * 一帧吐一小段：吐多少由积压量和这一帧的时长决定。
    * 积压越多吐得越快，所以模型突然加速时屏幕不会越拖越远；
@@ -195,24 +302,30 @@ export function App() {
     const frameGap = Math.min(timestamp - lastRevealAtRef.current, MAX_FRAME_GAP_MS)
     lastRevealAtRef.current = timestamp
 
-    const pending = pendingTextRef.current
+    const chunk = pendingRef.current[0]
 
-    if (!pending) {
+    if (!chunk) {
       runAfterDrain()
       return
     }
 
-    let count = Math.max(1, Math.round((pending.length / REVEAL_WINDOW_MS) * frameGap))
+    // 节奏按总积压算，但一帧只从队首那一段里取字，免得跨过轮次或通道的边界记错账
+    let count = Math.min(
+      Math.max(1, Math.round((pendingLength() / REVEAL_WINDOW_MS) * frameGap)),
+      chunk.text.length,
+    )
 
     // emoji 这类字符由两个 code unit 组成，劈在中间会闪一帧乱码
-    if (count < pending.length && isHighSurrogate(pending.charCodeAt(count - 1))) {
+    if (count < chunk.text.length && isHighSurrogate(chunk.text.charCodeAt(count - 1))) {
       count += 1
     }
 
-    pendingTextRef.current = pending.slice(count)
-    appendToLastMessage(pending.slice(0, count))
+    appendRevealedText(chunk, chunk.text.slice(0, count))
+    chunk.text = chunk.text.slice(count)
 
-    if (pendingTextRef.current) {
+    if (!chunk.text) pendingRef.current.shift()
+
+    if (pendingRef.current.length > 0) {
       revealFrameRef.current = requestAnimationFrame(revealFrame)
       return
     }
@@ -220,8 +333,14 @@ export function App() {
     runAfterDrain()
   }
 
-  function queuePendingText(delta: string) {
-    pendingTextRef.current += delta
+  function queuePendingText(chunk: Omit<PendingChunk, 'text'>, delta: string) {
+    const lastChunk = pendingRef.current.at(-1)
+
+    if (lastChunk?.round === chunk.round && lastChunk.channel === chunk.channel) {
+      lastChunk.text += delta
+    } else {
+      pendingRef.current.push({ ...chunk, text: delta })
+    }
 
     if (revealFrameRef.current !== null) return
 
@@ -234,24 +353,42 @@ export function App() {
   function flushPendingText() {
     cancelReveal()
 
-    const pending = pendingTextRef.current
+    const pending = pendingRef.current
 
-    pendingTextRef.current = ''
+    pendingRef.current = []
     afterDrainRef.current = null
 
-    if (pending) {
-      appendToLastMessage(pending)
+    for (const chunk of pending) {
+      if (chunk.text) appendRevealedText(chunk, chunk.text)
     }
   }
 
   /** 流结束后等屏幕上的字追上来再收尾，否则光标会在文字还在出的时候就消失 */
   function settleAfterDrain(settle: () => void) {
-    if (!pendingTextRef.current) {
+    if (pendingRef.current.length === 0) {
       settle()
       return
     }
 
     afterDrainRef.current = settle
+  }
+
+  /** 请求之间要把节奏机器归零，否则上一轮的积压会吐到下一条消息上 */
+  function resetReveal() {
+    cancelReveal()
+    pendingRef.current = []
+    afterDrainRef.current = null
+    currentRoundRef.current = 1
+  }
+
+  /** 时间轴要有终点：不盖上这个时刻，最后一轮会永远停在"进行中" */
+  function finishTrace() {
+    setMessages((previousMessages) =>
+      updateLastAssistant(previousMessages, (message) => ({
+        ...message,
+        finishedAt: Date.now(),
+      })),
+    )
   }
 
   function cancelSubmit() {
@@ -262,9 +399,7 @@ export function App() {
     cancelController.abort()
     setStatus('idle')
 
-    cancelReveal()
-    pendingTextRef.current = ''
-    afterDrainRef.current = null
+    resetReveal()
 
     setMessages((prev) => {
       const lastMessage = prev.at(-1)
@@ -273,7 +408,7 @@ export function App() {
         return prev
       }
 
-      if (!lastMessage.content) {
+      if (!hasRenderableContent(lastMessage)) {
         return prev.slice(0, -1)
       }
 
@@ -281,6 +416,7 @@ export function App() {
       nextMessages[nextMessages.length - 1] = {
         ...lastMessage,
         cancelled: true,
+        finishedAt: Date.now(),
       }
 
       return nextMessages
@@ -292,9 +428,7 @@ export function App() {
     requestControllerRef.current?.abort()
     requestControllerRef.current = null
 
-    cancelReveal()
-    pendingTextRef.current = ''
-    afterDrainRef.current = null
+    resetReveal()
     pinnedToBottomRef.current = true
 
     setMessages(initialMessages)
@@ -345,9 +479,7 @@ export function App() {
     requestControllerRef.current = controller
 
     pinnedToBottomRef.current = true
-    cancelReveal()
-    pendingTextRef.current = ''
-    afterDrainRef.current = null
+    resetReveal()
 
     setMessages([
       ...nextMessages,
@@ -363,6 +495,7 @@ export function App() {
       /**
        * 只把真正说过话的消息发给模型：
        * 被停止的那条内容不完整，失败留下的空壳则连角色都对不上（连续两个 user 会让模型困惑）。
+       * trace 是本地视图，不上线——工具结果的账本只能由服务端自己写。
        */
       const requestMessages: RequestMessage[] = nextMessages
         .filter((message) => !message.cancelled && message.content)
@@ -384,36 +517,80 @@ export function App() {
       await consumeNDJSON(response, (e) => {
         if (controller.signal.aborted) return
 
+        if (e.type === 'round_start') {
+          currentRoundRef.current = e.round
+
+          // 轮次一开始就把这一轮建出来：时间轴要立刻出现"第 N 轮 · 进行中"，
+          // 而且 startedAt 只有此刻才是准的——等第一个 delta 到已经晚了几百毫秒
+          setMessages((previousMessages) =>
+            updateLastAssistant(previousMessages, (message) => ({
+              ...message,
+              trace: withRound(message.trace, e.round, (entry) => entry),
+            })),
+          )
+        }
+
+        if (e.type === 'reasoning_delta') {
+          setStatus('streaming')
+          queuePendingText({ round: currentRoundRef.current, channel: 'reasoning' }, e.delta)
+        }
+
         if (e.type === 'text_delta') {
           setStatus('streaming')
-          queuePendingText(e.delta)
+          queuePendingText({ round: currentRoundRef.current, channel: 'text' }, e.delta)
         }
+
+        if (e.type === 'tool_call') {
+          setMessages((previousMessages) =>
+            updateLastAssistant(previousMessages, (message) => ({
+              ...message,
+              trace: withRound(message.trace, currentRoundRef.current, (entry) => ({
+                ...entry,
+                toolCalls: [...entry.toolCalls, { id: e.id, name: e.name, arguments: e.arguments }],
+              })),
+            })),
+          )
+        }
+
+        if (e.type === 'tool_result') {
+          setMessages((previousMessages) =>
+            updateLastAssistant(previousMessages, (message) => ({
+              ...message,
+              trace: markToolResult(message.trace, e.id, e.ok, e.preview),
+            })),
+          )
+        }
+
         if (e.type === 'usage') {
-          setMessages((previousMessages) => {
-            const newMessages = [...previousMessages]
-            const lastIndex = newMessages.length - 1
-
-            newMessages[lastIndex] = {
-              ...newMessages[lastIndex],
-              usage: e.usage,
-            }
-
-            return newMessages
-          })
+          setMessages((previousMessages) =>
+            updateLastAssistant(previousMessages, (message) => ({
+              ...message,
+              usage: addUsage(message.usage, e.usage),
+            })),
+          )
         }
 
         if (e.type === 'done') {
-          settleAfterDrain(() => setStatus('success'))
+          settleAfterDrain(() => {
+            setMessages((previousMessages) =>
+              updateLastAssistant(previousMessages, (message) =>
+                promoteAnswer({ ...message, finishedAt: Date.now() }),
+              ),
+            )
+            setStatus('success')
+          })
         }
 
         if (e.type === 'error') {
           flushPendingText()
+          finishTrace()
           setStatus('error')
         }
       })
     } catch {
       if (!controller.signal.aborted) {
         flushPendingText()
+        finishTrace()
         setStatus('error')
       }
     } finally {
@@ -497,6 +674,7 @@ export function App() {
 
                 const isStreamingMessage =
                   status === 'streaming' && index === visibleConversation.length - 1
+                const answer = readAnswer(message)
 
                 return (
                   <article
@@ -507,25 +685,27 @@ export function App() {
                       <ContextAvatar size={20} />
                     </div>
                     <div className="min-w-0 pt-1">
+                      <AgentTrace
+                        rounds={message.trace ?? []}
+                        live={isStreamingMessage}
+                        finishedAt={message.finishedAt}
+                      />
                       <div
                         className={
                           isStreamingMessage ? 'assistant-prose stream-caret' : 'assistant-prose'
                         }
                       >
-                        <AssistantMarkdown
-                          content={message.content}
-                          streaming={isStreamingMessage}
-                        />
+                        <AssistantMarkdown content={answer} streaming={isStreamingMessage} />
                       </div>
                       {message.cancelled ? (
                         <p className="mt-3 mb-0 text-xs leading-5 text-[#8a8881]">已停止生成</p>
                       ) : null}
-                      {message.content && !isBusy ? (
+                      {!isBusy && hasRenderableContent(message) ? (
                         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
                           <button
                             type="button"
                             className={`${focusRing} ${messageAction}`}
-                            onClick={() => copyMessage(message.content, index)}
+                            onClick={() => copyMessage(answer, index)}
                             aria-label={copiedIndex === index ? '已复制回答' : '复制回答'}
                           >
                             {copiedIndex === index ? (

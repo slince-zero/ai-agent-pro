@@ -1,4 +1,5 @@
 import type {
+  ChatCompletionCreateParamsStreaming,
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
 } from 'openai/resources/index.mjs'
@@ -14,17 +15,19 @@ export type AgentRunContext = {
 
 export type AssistantTurn = {
   text: string
+  /** 这一轮的思维链。带 tools 请求时必须原样发回去，见 assistantMessage */
+  reasoning: string
   toolCalls: ChatCompletionMessageFunctionToolCall[]
 }
 
 /**
  * 模型流的分片。
  *
- * text_delta 和 usage 直接从 AgentStreamEvent 派生，保证循环里的
+ * text_delta、reasoning_delta 和 usage 直接从 AgentStreamEvent 派生，保证循环里的
  * `yield chunk` 永远类型安全；turn_end 只给循环自己用，不转发给客户端。
  */
 export type ModelStreamChunk =
-  | Extract<AgentStreamEvent, { type: 'text_delta' | 'usage' }>
+  | Extract<AgentStreamEvent, { type: 'text_delta' | 'reasoning_delta' | 'usage' }>
   | {
       type: 'turn_end'
       turn: AssistantTurn
@@ -44,6 +47,25 @@ type ToolBudget = {
 }
 
 /**
+ * DeepSeek 的思考模式开关。OpenAI 的参数类型里没有它，交叉进请求体而不是
+ * 就地断言：这样多出来的字段仍然受类型检查，写错名字编译期就会发现。
+ */
+type ThinkingParams = {
+  thinking: { type: 'enabled' | 'disabled' }
+}
+
+/**
+ * 带 tools 的请求必须把上一轮的 reasoning_content 一起发回去，少一条 DeepSeek 直接 400。
+ * OpenAI 的消息类型里同样没有这个字段，所以在这里补上。
+ */
+type AssistantMessage = Extract<ChatCompletionMessageParam, { role: 'assistant' }> & {
+  reasoning_content?: string
+}
+
+/** 界面上那行摘要最多这么长——再长也只是把工具链的排版撑破 */
+const TOOL_PREVIEW_MAX_LENGTH = 120
+
+/**
  * TODO(owner)：这是仅为通过类型检查而写的最小版本，正式的证据纪律和
  * 动作集约定需要你自己重写（对应 product-plan 阶段 6 的完成条件）。
  */
@@ -57,11 +79,95 @@ const agentSystemPrompt = `
 - 工具返回 ok:false 时不要重复同样的调用，换查询或直接说明限制。
 `.trim()
 
-function isOkResult(content: string) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function condense(value: string) {
+  const collapsed = value.replace(/\s+/g, ' ').trim()
+
+  return collapsed.length > TOOL_PREVIEW_MAX_LENGTH
+    ? `${collapsed.slice(0, TOOL_PREVIEW_MAX_LENGTH - 1)}…`
+    : collapsed
+}
+
+/**
+ * 把工具结果读成界面要的两件事：成没成，以及拿回了什么。
+ *
+ * 完整结果只留在服务端的账本里——read_page 一次能带回两万字符，原样推到前端
+ * 既没人看得完，也等于把证据变成了客户端手里的数据。所以这里只提炼一行摘要：
+ * 搜到几条、读到多少字、失败的话是哪种失败。
+ */
+function readToolOutcome(content: string): { ok: boolean; preview?: string } {
+  let parsed: unknown
+
   try {
-    return (JSON.parse(content) as { ok?: unknown }).ok === true
+    parsed = JSON.parse(content)
   } catch {
-    return false
+    return { ok: false }
+  }
+
+  if (!isRecord(parsed)) return { ok: false }
+
+  const ok = parsed.ok === true
+
+  if (!ok) {
+    const error = typeof parsed.error === 'string' ? parsed.error : 'unknown_error'
+    const message = typeof parsed.message === 'string' ? parsed.message : ''
+
+    return { ok, preview: condense(message ? `${error} · ${message}` : error) }
+  }
+
+  // search：几条结果 + 前几个标题
+  if (Array.isArray(parsed.results)) {
+    const count = parsed.results.length
+
+    if (count === 0) return { ok, preview: '没有命中' }
+
+    // 标题是提供方给的，不一定有；条数才是"这一步拿回了什么"的下限
+    const titles = parsed.results
+      .map((result) => (isRecord(result) && typeof result.title === 'string' ? result.title : ''))
+      .filter(Boolean)
+
+    return {
+      ok,
+      preview: condense(titles.length > 0 ? `${count} 条 · ${titles.join(' · ')}` : `${count} 条`),
+    }
+  }
+
+  // read_page：读到多少字 + 正文开头，让人看得出这页到底是什么
+  if (isRecord(parsed.result) && typeof parsed.result.content === 'string') {
+    const { content: pageContent, truncated } = parsed.result
+    const size = `${pageContent.length} 字符${truncated === true ? '（截断）' : ''}`
+
+    return { ok, preview: condense(`${size} · ${pageContent}`) }
+  }
+
+  return { ok }
+}
+
+/** DeepSeek 在 delta 上多挂一个 reasoning_content，OpenAI 的类型里没有这个字段 */
+function readReasoningDelta(delta: unknown): string {
+  if (!isRecord(delta)) return ''
+
+  const reasoning = delta.reasoning_content
+
+  return typeof reasoning === 'string' ? reasoning : ''
+}
+
+/**
+ * 把一次工具执行的成败都变成值。
+ *
+ * 一轮里的调用是并行起飞的：如果直接 `await` 第一个而它 reject（取消时全部都会），
+ * 同轮其他 promise 就没人接手，Node 会按 unhandled rejection 处理。
+ */
+async function settleToolCall(
+  run: () => Promise<string>,
+): Promise<{ content: string } | { failure: unknown }> {
+  try {
+    return { content: await run() }
+  } catch (failure: unknown) {
+    return { failure }
   }
 }
 
@@ -90,22 +196,32 @@ async function* requestDeepSeekStream(
   options: { withTools: boolean },
   context: AgentRunContext,
 ): AsyncGenerator<ModelStreamChunk> {
-  const stream = await createDeepSeekClient().chat.completions.create(
-    {
-      model: 'deepseek-v4-flash',
-      messages,
-      stream: true,
-      stream_options: { include_usage: true },
-      ...(options.withTools ? { tools: retrievalTools } : {}),
-    },
-    { signal: context.signal },
-  )
+  const body: ChatCompletionCreateParamsStreaming & ThinkingParams = {
+    model: 'deepseek-v4-flash',
+    messages,
+    stream: true,
+    stream_options: { include_usage: true },
+    // v4 默认就开着，但写出来才说得清这个循环依赖它：思维链是界面上"这一轮在想什么"的唯一来源
+    thinking: { type: 'enabled' },
+    ...(options.withTools ? { tools: retrievalTools } : {}),
+  }
+  const stream = await createDeepSeekClient().chat.completions.create(body, {
+    signal: context.signal,
+  })
 
   let text = ''
+  let reasoning = ''
   const partials = new Map<number, { id: string; name: string; arguments: string }>()
 
   for await (const chunk of stream) {
     const delta = chunk.choices[0]?.delta
+    const reasoningDelta = readReasoningDelta(delta)
+
+    // 思维链整段走在正文前面，所以先转发它，客户端看到的顺序才和模型的顺序一致
+    if (reasoningDelta) {
+      reasoning += reasoningDelta
+      yield { type: 'reasoning_delta', delta: reasoningDelta }
+    }
 
     if (delta?.content) {
       text += delta.content
@@ -137,6 +253,7 @@ async function* requestDeepSeekStream(
     type: 'turn_end',
     turn: {
       text,
+      reasoning,
       toolCalls: [...partials.entries()]
         .toSorted(([a], [b]) => a - b)
         .map(([, partial]) => ({
@@ -168,6 +285,7 @@ export async function* askAgentStream(
 
   for (let round = 1; round <= agentLimits.maxRounds; round++) {
     context.signal.throwIfAborted()
+    yield { type: 'round_start', round }
 
     // 最后一轮不带 tools：模型没有工具可选，循环必然在有限轮内收敛。
     const withTools = round < agentLimits.maxRounds
@@ -191,30 +309,57 @@ export async function* askAgentStream(
       return
     }
 
-    transcript.push({
+    const assistantMessage: AssistantMessage = {
       role: 'assistant',
       content: turn.text || null,
       tool_calls: turn.toolCalls,
+    }
+
+    // 思考模式下，带 tools 的请求要求每条 assistant.tool_calls 都配着它的 reasoning_content。
+    // 漏掉这一条，下一轮就是 400——所以这个字段是协议要求，不是给人看的附赠品。
+    if (turn.reasoning) assistantMessage.reasoning_content = turn.reasoning
+
+    transcript.push(assistantMessage)
+
+    // 模型一轮里常常并行发多个调用（两次 search、两次 read_page）。串行执行会把
+    // 两个 12s 超时叠成 24s，所以这里先让它们全部起飞，再按原顺序收结果。
+    // 预算在起飞前按顺序扣，扣的结果才不依赖谁先返回。
+    const executions = turn.toolCalls.map((toolCall) => {
+      const rejection = spendToolBudget(budget, toolCall.function.name)
+
+      return {
+        toolCall,
+        // 预算不足时不发请求，但仍然要占一条 tool 消息。
+        outcome: settleToolCall(() =>
+          rejection === undefined ? runTool(toolCall, context.signal) : Promise.resolve(rejection),
+        ),
+      }
     })
 
-    // 每个 tool_call.id 必须恰好有一条 tool 消息回应，缺一条下一轮就会 400。
-    for (const toolCall of turn.toolCalls) {
+    for (const { toolCall } of executions) {
       yield {
         type: 'tool_call',
         id: toolCall.id,
         name: toolCall.function.name,
         arguments: toolCall.function.arguments,
       }
+    }
 
-      const content =
-        spendToolBudget(budget, toolCall.function.name) ?? (await runTool(toolCall, context.signal))
+    // 每个 tool_call.id 必须恰好有一条 tool 消息回应，缺一条下一轮就会 400。
+    for (const { toolCall, outcome } of executions) {
+      const settled = await outcome
 
-      transcript.push({ role: 'tool', tool_call_id: toolCall.id, content })
+      if (!('content' in settled)) throw settled.failure
+
+      const { ok, preview } = readToolOutcome(settled.content)
+
+      transcript.push({ role: 'tool', tool_call_id: toolCall.id, content: settled.content })
       yield {
         type: 'tool_result',
         id: toolCall.id,
         name: toolCall.function.name,
-        ok: isOkResult(content),
+        ok,
+        ...(preview ? { preview } : {}),
       }
     }
   }

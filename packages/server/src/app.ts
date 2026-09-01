@@ -3,8 +3,14 @@ import type { ChatMessage, MessageStreamEvent } from '@ai-agent-pro/shared/type.
 import { askAgentStream } from './agent.js'
 import { reportErrorLog } from './util.js'
 
-function isChatMessageRole(value: unknown): value is ChatMessage['role'] {
-  return value === 'system' || value === 'user' || value === 'assistant'
+/**
+ * 客户端只能提交对话双方的发言。system prompt 归服务端所有——
+ * 一旦接受客户端的 system 消息，行为约束就成了可以从外部改写的东西。
+ */
+type ClientMessageRole = Exclude<ChatMessage['role'], 'system'>
+
+function isClientMessageRole(value: unknown): value is ClientMessageRole {
+  return value === 'user' || value === 'assistant'
 }
 
 function parseChatMessages(value: unknown): ChatMessage[] | undefined {
@@ -16,7 +22,7 @@ function parseChatMessages(value: unknown): ChatMessage[] | undefined {
     if (typeof item !== 'object' || item === null) return undefined
 
     const message = item as Record<string, unknown>
-    if (!isChatMessageRole(message.role) || typeof message.content !== 'string') return undefined
+    if (!isClientMessageRole(message.role) || typeof message.content !== 'string') return undefined
 
     messages.push({ role: message.role, content: message.content })
   }

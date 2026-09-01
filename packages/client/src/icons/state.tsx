@@ -43,6 +43,22 @@ export function ThinkingIcon({ play = 'loop', duration = 1100, ...rest }: IconPr
   )
 }
 
+/** 思维链：泡里那条思路被一笔画出来 */
+export function ReasoningIcon({ stagger = 130, ...rest }: IconProps) {
+  return (
+    <IconBase stagger={stagger} {...rest}>
+      <path
+        d="M8.4 4.8h7a3.9 3.9 0 0 1 0 7.8h-.8l-3.4 3v-3H8.4a3.9 3.9 0 0 1 0-7.8z"
+        data-a="draw"
+        style={step(0)}
+        {...drawn}
+      />
+      <path d="M9.9 8.7h5.4" data-a="draw" style={step(1)} {...drawn} />
+      <circle cx="7.2" cy="18.6" r="1.25" data-a="pop" style={step(2)} {...solid} />
+    </IconBase>
+  )
+}
+
 /** Token 用量：前五格已消耗，后四格是剩余预算 */
 export function TokensIcon({ stagger = 55, ...rest }: IconProps) {
   return (

@@ -43,6 +43,15 @@ export function AttachIcon(props: IconProps) {
   )
 }
 
+/** 折叠 / 展开：箭头轻轻下沉一下，暗示它是可以点的 */
+export function DisclosureIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M6.8 9.8 12 15l5.2-5.2" data-a="rise" />
+    </IconBase>
+  )
+}
+
 /** 新对话：气泡描出，加号弹入 */
 export function NewChatIcon(props: IconProps) {
   return (

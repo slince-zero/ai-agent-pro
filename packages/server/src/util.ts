@@ -5,7 +5,9 @@ export function reportErrorLog(error: unknown) {
 }
 
 export const agentLimits = {
-  maxRounds: 4,
+  // 只有 round < maxRounds 的轮次带 tools，所以能调工具的轮数是 maxRounds - 1。
+  // 让每类工具的预算（而不是轮数）成为真正的约束条件。
+  maxRounds: 8,
   maxInitialSearchQueries: 2,
   maxSearchCalls: 3,
   maxPageReads: 5,

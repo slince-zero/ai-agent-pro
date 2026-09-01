@@ -6,6 +6,7 @@ export {
   AccountIcon,
   AttachIcon,
   CopyIcon,
+  DisclosureIcon,
   HistoryIcon,
   NewChatIcon,
   SendIcon,
@@ -14,6 +15,7 @@ export {
 export {
   ConfirmedIcon,
   EmptyIcon,
+  ReasoningIcon,
   SparkIcon,
   ThinkingIcon,
   TokensIcon,
