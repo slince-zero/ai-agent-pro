@@ -7,10 +7,21 @@ import type {
 import type { AgentStreamEvent, ChatMessage, TokenUsage } from '@ai-agent-pro/shared/type.js'
 import { askAgentStream } from './agent.js'
 import type { AgentRunContext, ModelRequest, ModelStreamChunk } from './agent.js'
+import type { RetrievalIntent } from './retrieval/retrieval-intent.js'
 import { agentLimits } from './util.js'
 
 const messages: ChatMessage[] = [{ role: 'user', content: 'What is an agent?' }]
 const usage: TokenUsage = { inputTokens: 10, outputTokens: 12, totalTokens: 22 }
+const intent: RetrievalIntent = {
+  target: 'Agent 教程',
+  contentType: '教程',
+  hardConstraints: ['包含完整示例'],
+  exclusions: ['只讲框架用法'],
+  preferences: ['TypeScript'],
+  ambiguities: [],
+  language: '中文',
+  timeRange: null,
+}
 
 type ScriptedCall = { id: string; name: string; arguments: string }
 type ScriptedTurn = { text: string; reasoning?: string; toolCalls?: ScriptedCall[] }
@@ -261,10 +272,15 @@ test('searches once and then answers', async () => {
       ok: true,
       preview: '1 条',
       // 搜索的命中随结果一起上线，界面才能在展开时给出这一次到底搜到了什么
-      sources: [{ url: 'https://example.com', title: '', snippet: '' }],
+      sources: [{ ref: 1, url: 'https://example.com', title: '', snippet: '' }],
     },
     { type: 'round_start', round: 2 },
     { type: 'text_delta', delta: '这里是答案。' },
+    // 收尾时一次给全来源：答案里的 [1] 要能点开，客户端就得有编号到地址的映射
+    {
+      type: 'evidence',
+      sources: [{ ref: 1, url: 'https://example.com', title: '', snippet: '', read: false }],
+    },
     { type: 'done' },
   ])
   assert.equal(seen.length, 1)
@@ -644,6 +660,7 @@ test('sends a bounded source list along with a successful search', async () => {
   // 上限 5 条：一屏能扫完，也不至于把整份搜索结果搬到客户端
   assert.equal(search?.sources?.length, 5)
   assert.deepEqual(search?.sources?.[0], {
+    ref: 1,
     url: 'https://a.example/1',
     title: '标 题',
     // 摘要裁到 160 字符，最后一个字符换成省略号，读得出后面还有
@@ -655,4 +672,81 @@ test('sends a bounded source list along with a successful search', async () => {
   )
   // read_page 的正文是这里唯一的实证据，它继续只给一行摘要，不往客户端推
   assert.equal(page?.sources, undefined)
+})
+
+test('puts the parsed intent in front of the first round', async () => {
+  const controller = new AbortController()
+  const { requestModel, calls } = scriptModel([{ text: '答案。' }])
+  const asked: string[] = []
+
+  await collectEvents(
+    askAgentStream(
+      messages,
+      { signal: controller.signal },
+      {
+        requestModel,
+        extractIntent: async (input) => {
+          asked.push(input)
+          return intent
+        },
+      },
+    ),
+  )
+
+  assert.deepEqual(asked, ['What is an agent?'])
+
+  /*
+   * 硬条件和排除项进了 system 消息，条件核对那一段才有一份现成的清单要逐条回答；
+   * 起手查询由 buildSearchQueries 从同一份意图拼出来，第一次搜索就带上这些条件。
+   */
+  const system = String(calls[0]?.transcript[0]?.content)
+  assert.match(system, /必须满足：包含完整示例/)
+  assert.match(system, /必须排除：只讲框架用法/)
+  assert.match(system, /起手查询.*Agent 教程/)
+})
+
+test('skips intent parsing for a follow-up question', async () => {
+  const controller = new AbortController()
+  const { requestModel, calls } = scriptModel([{ text: '答案。' }])
+  const followUp: ChatMessage[] = [
+    { role: 'user', content: '哪个框架是 Apache-2.0？' },
+    { role: 'assistant', content: '是 A。' },
+    { role: 'user', content: '那 B 呢？' },
+  ]
+  let asked = false
+
+  await collectEvents(
+    askAgentStream(
+      followUp,
+      { signal: controller.signal },
+      {
+        requestModel,
+        extractIntent: async () => {
+          asked = true
+          return intent
+        },
+      },
+    ),
+  )
+
+  // "那 B 呢"单独拿去解析只会得到一份跑偏的意图；这种时候历史消息本身就是上下文
+  assert.equal(asked, false)
+  assert.doesNotMatch(String(calls[0]?.transcript[0]?.content), /检索意图/)
+})
+
+test('keeps answering when intent parsing fails', async () => {
+  const controller = new AbortController()
+  const { requestModel, calls } = scriptModel([{ text: '答案。' }])
+
+  const events = await collectEvents(
+    askAgentStream(
+      messages,
+      { signal: controller.signal },
+      { requestModel, extractIntent: () => Promise.reject(new Error('intent failed')) },
+    ),
+  )
+
+  // 锦上添花的一步失败了不该让整次提问失败：循环没有它照样跑
+  assert.deepEqual(events.at(-1), { type: 'done' })
+  assert.doesNotMatch(String(calls[0]?.transcript[0]?.content), /检索意图/)
 })

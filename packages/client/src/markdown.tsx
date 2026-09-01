@@ -5,16 +5,36 @@
  * 插件、图片、代码块各自的处理都在这个文件，App 只负责给出
  * 「一段文本」和「是不是还在流」这两个信息。
  */
-import { Component, Suspense, isValidElement, lazy, memo, useState } from 'react'
+import { Component, Suspense, isValidElement, lazy, memo, useMemo, useState } from 'react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import type { Components, Options } from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
+import type { EvidenceSource } from '@ai-agent-pro/shared/type.js'
+import { readCitations, remarkCitations } from './citations'
 import { closeDanglingMarkdown } from './streaming-markdown'
 
-const remarkPlugins = [remarkGfm]
+const linkAttributes = defaultSchema.attributes?.a ?? []
+
+/**
+ * 放行引用角标的 class，同时保住默认白名单原来放行的那个值。
+ *
+ * 默认白名单里 a 的 className 已经有一条定义（脚注回跳用的），而清洗器只认
+ * 第一条匹配 className 的定义——再追加一条永远轮不到，角标的 class 会被清成空串。
+ * 所以必须把新值并进已有的那一条里。
+ *
+ * 只放行 citation 这一个字面值：模型自己写的 <a class="..."> 仍然进不来，
+ * 否则它就能伪造一个指向任意地址的角标，而角标的意思是"这个号是服务端发的"。
+ */
+const citationClassName = [
+  'className',
+  'citation',
+  ...linkAttributes.flatMap((attribute) =>
+    Array.isArray(attribute) && attribute[0] === 'className' ? attribute.slice(1) : [],
+  ),
+]
 
 /**
  * 模型不总是写 Markdown
@@ -30,6 +50,12 @@ const sanitizeSchema = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
+    a: [
+      ...linkAttributes.filter(
+        (attribute) => !Array.isArray(attribute) || attribute[0] !== 'className',
+      ),
+      citationClassName,
+    ],
     // 默认白名单不含尺寸，模型写 <img width="300"> 时那张图会被撑成原始大小
     img: [...(defaultSchema.attributes?.img ?? []), 'width', 'height'],
   },
@@ -48,6 +74,17 @@ const MermaidDiagram = lazy(() =>
 /** react-markdown 会把解析出的 hast 节点一起塞给组件，别把它透传给 DOM */
 type MarkdownProps<Tag extends keyof HTMLElementTagNameMap> = ComponentPropsWithoutRef<Tag> & {
   node?: unknown
+}
+
+/**
+ * 链接一律新开标签页。
+ *
+ * 答案里的链接指向外部来源，在当前页打开就是把正在读的对话顶掉——
+ * 回退能回来，但流式输出的状态回不来。rel 在这里补而不是写进清洗白名单：
+ * noreferrer 是给模型产出的链接兜底的安全属性，不该变成模型可以自己写的东西。
+ */
+function MarkdownLink({ node: _node, ...props }: MarkdownProps<'a'>) {
+  return <a {...props} target="_blank" rel="noreferrer noopener" />
 }
 
 /**
@@ -157,6 +194,7 @@ function MarkdownPre({ children }: MarkdownProps<'pre'>) {
 }
 
 const components: Components = {
+  a: MarkdownLink,
   img: MarkdownImage,
   pre: MarkdownPre,
 }
@@ -165,16 +203,28 @@ type AssistantMarkdownProps = {
   content: string
   /** 还在流的时候要先把半截语法补齐，见 closeDanglingMarkdown */
   streaming?: boolean
+  /** 这一次运行的全部来源，用来把正文里的 [1] 接回它指向的那一页 */
+  sources?: EvidenceSource[]
 }
 
 /**
  * memo 在这里是必需的，不是优化余量：思维链每一帧都在长，而它和答案挂在同一棵树上。
  * 不隔开的话，每来一段推理都要把整段回答重新解析成 hast 再重新渲染一遍。
+ *
+ * 所以 sources 收的是服务端那份数组本身，而不是调用方现算的一张表——
+ * 每次渲染都新建一个 Map 就等于每次都换一个 prop，memo 直接失效。
  */
 export const AssistantMarkdown = memo(function AssistantMarkdown({
   content,
   streaming = false,
+  sources,
 }: AssistantMarkdownProps) {
+  const remarkPlugins = useMemo(() => {
+    const citations = readCitations(sources)
+
+    return citations ? [remarkGfm, remarkCitations(citations)] : [remarkGfm]
+  }, [sources])
+
   return (
     <Markdown components={components} rehypePlugins={rehypePlugins} remarkPlugins={remarkPlugins}>
       {streaming ? closeDanglingMarkdown(content) : content}

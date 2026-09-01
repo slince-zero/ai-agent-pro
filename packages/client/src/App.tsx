@@ -1,6 +1,10 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent, UIEvent } from 'react'
-import type { ChatMessage as RequestMessage, TokenUsage } from '@ai-agent-pro/shared/type.js'
+import type {
+  ChatMessage as RequestMessage,
+  EvidenceSource,
+  TokenUsage,
+} from '@ai-agent-pro/shared/type.js'
 import {
   AccountIcon,
   AttachIcon,
@@ -21,6 +25,7 @@ import {
   UnmetIcon,
 } from './icons'
 import { AgentTrace, type ToolCallView, type TraceRound } from './agent-trace'
+import { AnswerSources } from './citations'
 import { AssistantMarkdown } from './markdown'
 import { PetCompanion } from './pet'
 import { consumeNDJSON } from './util'
@@ -29,6 +34,8 @@ type ChatMessage = RequestMessage & {
   usage?: TokenUsage
   cancelled?: boolean
   trace?: TraceRound[]
+  /** 这一次运行认领过的全部来源，带引用编号；答案里的 [1] 靠它落到具体某一页 */
+  evidence?: EvidenceSource[]
   /** 这条回答停下来的时刻，用来给最后一轮结算耗时 */
   finishedAt?: number
 }
@@ -569,6 +576,16 @@ export function App() {
           )
         }
 
+        if (e.type === 'evidence') {
+          // 服务端在 done 之前一次给全，所以这里直接换掉：不用自己从各次搜索里拼
+          setMessages((previousMessages) =>
+            updateLastAssistant(previousMessages, (message) => ({
+              ...message,
+              evidence: e.sources,
+            })),
+          )
+        }
+
         if (e.type === 'usage') {
           setMessages((previousMessages) =>
             updateLastAssistant(previousMessages, (message) => ({
@@ -703,8 +720,13 @@ export function App() {
                           isStreamingMessage ? 'assistant-prose stream-caret' : 'assistant-prose'
                         }
                       >
-                        <AssistantMarkdown content={answer} streaming={isStreamingMessage} />
+                        <AssistantMarkdown
+                          content={answer}
+                          streaming={isStreamingMessage}
+                          sources={message.evidence}
+                        />
                       </div>
+                      <AnswerSources content={answer} sources={message.evidence} />
                       {message.cancelled ? (
                         <p className="mt-3 mb-0 text-xs leading-5 text-[#8a8881]">已停止生成</p>
                       ) : null}

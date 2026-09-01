@@ -1,7 +1,46 @@
-import type { MessageStreamEvent, TokenUsage } from '@ai-agent-pro/shared/type.js'
+import type { EvidenceSource, MessageStreamEvent, TokenUsage } from '@ai-agent-pro/shared/type.js'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+/** 域名去掉 www.，一行里就能放下更多有用的信息 */
+export function readHost(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
+}
+
+/**
+ * 按域名散出一个色相：同一个站在整条时间轴上永远是同一个颜色，扫一眼就能看出重复来源。
+ *
+ * 不拉第三方 favicon 服务：那等于把"用户看了哪些来源"顺手送给图标服务商。
+ */
+export function readHostHue(host: string) {
+  let hash = 0
+
+  for (const char of host) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) % 360
+
+  return hash
+}
+
+/**
+ * 来源要连着 ref 一起验。
+ *
+ * ref 是答案里那个 [1] 唯一的落点：少了它，行内引用就会指到一个不存在的来源上，
+ * 而这种错在界面上表现为"点了没反应"，比直接拒掉这条事件更难查。
+ */
+function isEvidenceSource(value: unknown): value is EvidenceSource {
+  return (
+    isRecord(value) &&
+    typeof value.ref === 'number' &&
+    typeof value.url === 'string' &&
+    typeof value.title === 'string' &&
+    typeof value.snippet === 'string' &&
+    typeof value.read === 'boolean'
+  )
 }
 
 function isTokenUsage(value: unknown): value is TokenUsage {
@@ -38,6 +77,8 @@ function isMessageStreamEvent(value: unknown): value is MessageStreamEvent {
         typeof value.ok === 'boolean' &&
         (value.preview === undefined || typeof value.preview === 'string')
       )
+    case 'evidence':
+      return Array.isArray(value.sources) && value.sources.every(isEvidenceSource)
     case 'done':
       return true
     case 'error':

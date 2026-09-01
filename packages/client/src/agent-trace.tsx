@@ -12,6 +12,7 @@ import {
   UnmetIcon,
   vars,
 } from './icons'
+import { readHost, readHostHue } from './util'
 import './agent-trace.css'
 
 /** 一次工具调用在界面上的样子。ok 还是 undefined 表示结果没回来 */
@@ -106,28 +107,6 @@ function readVisitedUrls(rounds: TraceRound[]) {
   }
 
   return visited
-}
-
-/** 域名去掉 www.，一行里就能放下更多有用的信息 */
-function readHost(url: string) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '')
-  } catch {
-    return url
-  }
-}
-
-/**
- * 按域名散出一个色相：同一个站在整条时间轴上永远是同一个颜色，扫一眼就能看出重复来源。
- *
- * 不拉第三方 favicon 服务：那等于把"用户看了哪些来源"顺手送给图标服务商。
- */
-function readHostHue(host: string) {
-  let hash = 0
-
-  for (const char of host) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) % 360
-
-  return hash
 }
 
 function readToolState(toolCall: ToolCallView) {
@@ -227,6 +206,10 @@ type ToolSourceListProps = {
  *
  * 编号 + 域名 + 标题 + 一句摘要，是"要不要点进去"这个判断需要的全部信息；
  * 摘要压成两行，因为提供方给的那段话经常是从正文中间截下来的，读完也不会更清楚。
+ *
+ * 编号用服务端发的 ref，不用列表下标：同一个地址会在多次搜索里重复出现，
+ * 下标每次都不一样，而答案里的 [2] 指的是 ref。两边不一致的话，
+ * 用户顺着编号找过来会落到另一条来源上。
  */
 function ToolSourceList({ sources, visitedUrls }: ToolSourceListProps) {
   return (
@@ -237,11 +220,11 @@ function ToolSourceList({ sources, visitedUrls }: ToolSourceListProps) {
         return (
           <li
             className="trace-source"
-            key={`${index}-${source.url}`}
+            key={source.ref}
             style={vars({ '--i': index, '--hue': readHostHue(host) })}
           >
             <span className="trace-source-mark" aria-hidden="true">
-              {index + 1}
+              {source.ref}
             </span>
             <div className="trace-source-body">
               <div className="trace-source-line">

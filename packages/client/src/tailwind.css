@@ -111,6 +111,156 @@
   text-underline-offset: 2px;
 }
 
+/**
+ * 行内引用角标
+ *
+ * 模型写的是 [1]，这里把它变成一个上标小方块。压成方块而不是留着方括号，
+ * 是因为一段结论后面常常跟着 [1][3] 两三个：方括号叠在一起会把句子的节奏打断，
+ * 而小方块靠色块和位置就能读成"这句话有出处"，眼睛可以直接跳过去。
+ *
+ * 下划线要去掉：它和正文里真正的链接是两种东西——一个是"点开看这一页"，
+ * 一个是"这句话的出处在这里"。
+ */
+.assistant-prose a.citation {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2em;
+  height: 1.2em;
+  margin: 0 0.1em;
+  /* 长度值相对角标自己的字号，换算下来约等于正文的 0.24em，正好落在上标的位置 */
+  vertical-align: 0.36em;
+  border-radius: 5px;
+  background-color: #f6e7e0;
+  padding: 0 0.3em;
+  font-size: 0.68em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: #b8431c;
+  text-decoration: none;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.assistant-prose a.citation:hover {
+  background-color: #e34f22;
+  color: #fff;
+}
+
+/**
+ * 答案底下的来源清单
+ *
+ * 只列真被引用过的那几条。检索过程那一栏已经把每次搜索的全部命中摆出来了，
+ * 这里要回答的是另一个问题——"这个结论是靠哪几页得出的"。
+ */
+.answer-sources {
+  margin-top: 20px;
+  border-top: 1px solid #e8e5dd;
+  padding-top: 12px;
+}
+
+.answer-sources-title {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #a29e96;
+}
+
+.answer-sources-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.answer-source {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  border-radius: 10px;
+  padding: 5px 7px;
+  transition: background-color 160ms ease;
+  animation: answer-source-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 55ms);
+}
+
+.answer-source:hover {
+  background-color: #f7f4ee;
+}
+
+/* 编号和角标、检索过程里的色块用同一套取色：三处的 [1] 指的是同一条来源 */
+.answer-source-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 6px;
+  background-color: hsl(var(--hue, 20) 40% 92%);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: hsl(var(--hue, 20) 30% 38%);
+}
+
+.answer-source-link {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  color: #34332f;
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+.answer-source-link:hover {
+  color: #d4491f;
+}
+
+.answer-source-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.answer-source-host {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #a29e96;
+}
+
+/* 正文被真的读回来过：只有这样的来源才够支撑版本号、许可证这类具体断言 */
+.answer-source-read {
+  flex: none;
+  border: 1px solid #d8e7dd;
+  border-radius: 999px;
+  background-color: #f2f8f4;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: #4e8f6a;
+}
+
+@keyframes answer-source-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .assistant-prose strong {
   font-weight: 700;
 }
@@ -278,5 +428,14 @@
 @media (prefers-reduced-motion: reduce) {
   .stream-caret > :last-child::after {
     animation: none;
+  }
+
+  .answer-source {
+    animation: none;
+    transition: none;
+  }
+
+  .assistant-prose a.citation {
+    transition: none;
   }
 }

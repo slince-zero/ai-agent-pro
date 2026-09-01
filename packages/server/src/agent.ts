@@ -3,15 +3,34 @@ import type {
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
 } from 'openai/resources/index.mjs'
-import type { AgentStreamEvent, ChatMessage, ToolSource } from '@ai-agent-pro/shared/type.js'
+import type { AgentStreamEvent, ChatMessage } from '@ai-agent-pro/shared/type.js'
 import { createDeepSeekClient } from './deepseek-client.js'
 import { agentLimits } from './util.js'
+import {
+  createRetrievalLedger,
+  ledgerEvidence,
+  projectContext,
+  recordMessage,
+  recordToolResult,
+  setLedgerIntent,
+} from './context/retrieval-ledger.js'
+import type { RunStatus } from './context/retrieval-ledger.js'
+import { buildSearchQueries } from './retrieval/build-search-queries.js'
+import type { RetrievalIntent } from './retrieval/retrieval-intent.js'
 import { executeTool } from './tools/execute-tool.js'
 import { retrievalTools } from './tools/retrieval-tools.js'
 
 export type AgentRunContext = {
   signal: AbortSignal
 }
+
+/**
+ * 把用户的话解析成结构化检索意图。
+ *
+ * 由调用方注入而不是在这里给默认值：它是一次额外的模型请求，默认接上就意味着
+ * 每个测试都得先把网络挡掉。app.ts 作为组装点决定用不用它。
+ */
+export type IntentExtractor = (input: string, signal: AbortSignal) => Promise<RetrievalIntent>
 
 export type AssistantTurn = {
   text: string
@@ -62,153 +81,49 @@ type AssistantMessage = Extract<ChatCompletionMessageParam, { role: 'assistant' 
   reasoning_content?: string
 }
 
-/** 界面上那行摘要最多这么长——再长也只是把工具链的排版撑破 */
-const TOOL_PREVIEW_MAX_LENGTH = 120
-
-/*
- * 上线的命中数和每条的长度上限。
- *
- * 五条是 Tavily 单次的上限，也刚好是一屏能扫完的量；标题和摘要裁到这个长度，
- * 一次搜索的结果加起来约 1.5 KB——够判断值不值得点开，又不至于把整份摘要搬过去。
- */
-const TOOL_SOURCE_MAX_COUNT = 5
-const TOOL_SOURCE_TITLE_MAX_LENGTH = 120
-const TOOL_SOURCE_SNIPPET_MAX_LENGTH = 160
-
 /**
- * 失败原因给人看的说法。
+ * 循环的行为约定。
  *
- * 工具返回的 error 码和 message 是写给模型的（英文、固定措辞），直接摆到时间轴上
- * 就是一句 "budget_exhausted · No search call left."——用户读不出这是产品的限额。
- * 所以这里把已知的失败翻一遍；未知的码保持原样，出了新错误不会被吞掉。
- */
-const toolErrorPreview: Record<string, string> = {
-  invalid_tool_arguments: '参数不合法',
-  budget_exhausted: '这一次检索的调用次数已用完',
-  rate_limited: '被提供方限流',
-  tool_unavailable: '工具不可用',
-  provider_error: '提供方请求失败',
-  unknown_tool: '未知工具',
-}
-
-/**
- * TODO(owner)：这是仅为通过类型检查而写的最小版本，正式的证据纪律和
- * 动作集约定需要你自己重写（对应 product-plan 阶段 6 的完成条件）。
+ * 三件事必须写在这里而不是留给模型自己发挥：动作集（只有四个动作，没有"再想想"）、
+ * 证据纪律（摘要只做初筛，断言要有正文），以及引用怎么写。引用格式是有依赖的——
+ * 工具结果里那个 ref 由服务端账本发号，界面靠同一个号把答案里的 [1] 连回来源，
+ * 所以模型只能用真出现过的号，不能自己编。
+ *
+ * "读完一页先写一句结论"那条不是文风要求：正文会在后续轮次里被上下文预算挤成摘录，
+ * 它自己写下的那句话是唯一留得住的东西。
  */
 const agentSystemPrompt = `
-你是一个检索助手。你只能执行这些动作：调用 search 搜索、调用 read_page 读取候选页面、
-直接回答、或说明某项条件无法确认。
+你是一个检索助手。你只有四个动作：调用 search 搜索、调用 read_page 读取页面、给出答案、
+说明某个条件无法确认。除此之外什么都不要做。
 
-规则：
-- 搜索摘要只能作为初筛依据，不能当作对页面全部内容的证明。
-- 每个判断都要指出它来自哪个来源；没有来源就输出“无法确认”，不要猜测。
-- 工具返回 ok:false 时不要重复同样的调用，换查询或直接说明限制。
+怎么用工具
+- 互不依赖的子问题在同一轮里一起发出去，不要拆成好几轮来回。
+- 每条工具结果都带 budget 和 rounds_left，那是这一次运行的硬上限。快用完时先回答，
+  不要赌下一轮还来得及。
+- 结果 ok 为 false 时不要重复同样的调用：换查询、换地址，或者说明这一条无法确认。
+
+证据纪律
+- search 给的 snippet 只能用来判断"这一页值不值得打开"，不能当作页面内容的证明。
+- 具体断言（版本号、许可证、价格、时间、有没有某个功能）必须有 read_page 读回的正文支持。
+- 每读完一页，先用一两句话写下它对哪个条件给出了什么结论，再继续下一步。
+- 工具结果里出现 note 字段，说明那一页的正文已经不在上下文里了。不要重新读同一个地址，
+  用你之前写下的结论。
+
+引用
+- 每个来源在工具结果里都带一个 ref 数字。正文里用 [ref] 标注，例如 [1]。
+- 只能用工具结果里真出现过的 ref，不要自己编号，也不要在答案里写裸链接。
+- 一句话有多个来源时写成 [1][3]。
+
+回答格式
+先正面回答问题，再给一段"条件核对"，把用户提出的每个条件逐条列出来：
+- 已确认：条件 —— 结论 [ref]
+- 不满足：条件 —— 结论 [ref]
+- 无法确认：条件 —— 缺哪一份证据
+没有来源支持的条件一律进"无法确认"，不要猜，也不要用常识补齐。
 `.trim()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
-}
-
-function condense(value: string, maxLength = TOOL_PREVIEW_MAX_LENGTH) {
-  const collapsed = value.replace(/\s+/g, ' ').trim()
-
-  return collapsed.length > maxLength ? `${collapsed.slice(0, maxLength - 1)}…` : collapsed
-}
-
-/**
- * 把搜索结果读成界面上那份来源列表。
- *
- * 没有 url 的一条直接丢掉：界面上它既点不开，也无从判断是哪个站说的，
- * 留着只是占一个名额。裁剪在服务端做，客户端拿到的就是能直接渲染的形状。
- */
-function readSources(results: unknown[]): ToolSource[] {
-  return results
-    .flatMap((result) => {
-      if (!isRecord(result)) return []
-
-      const url = typeof result.url === 'string' ? result.url : ''
-
-      if (!url) return []
-
-      return [
-        {
-          url,
-          title: condense(
-            typeof result.title === 'string' ? result.title : '',
-            TOOL_SOURCE_TITLE_MAX_LENGTH,
-          ),
-          snippet: condense(
-            typeof result.snippet === 'string' ? result.snippet : '',
-            TOOL_SOURCE_SNIPPET_MAX_LENGTH,
-          ),
-        },
-      ]
-    })
-    .slice(0, TOOL_SOURCE_MAX_COUNT)
-}
-
-/**
- * 把工具结果读成界面要的几件事：成没成、拿回了什么，以及搜到了哪些来源。
- *
- * read_page 的完整正文只留在服务端的账本里——一次能带回两万字符，原样推到前端
- * 既没人看得完，也等于把证据变成了客户端手里的数据。所以这里只提炼摘要：
- * 搜到几条、读到多少字、失败的话是哪种失败；search 的命中额外给一份裁剪过的来源列表。
- */
-function readToolOutcome(content: string): {
-  ok: boolean
-  preview?: string
-  sources?: ToolSource[]
-} {
-  let parsed: unknown
-
-  try {
-    parsed = JSON.parse(content)
-  } catch {
-    return { ok: false }
-  }
-
-  if (!isRecord(parsed)) return { ok: false }
-
-  const ok = parsed.ok === true
-
-  if (!ok) {
-    const error = typeof parsed.error === 'string' ? parsed.error : 'unknown_error'
-    const label = toolErrorPreview[error]
-
-    if (label) return { ok, preview: label }
-
-    const message = typeof parsed.message === 'string' ? parsed.message : ''
-
-    return { ok, preview: condense(message ? `${error} · ${message}` : error) }
-  }
-
-  // search：几条结果 + 前几个标题
-  if (Array.isArray(parsed.results)) {
-    const count = parsed.results.length
-
-    if (count === 0) return { ok, preview: '没有命中' }
-
-    // 标题是提供方给的，不一定有；条数才是"这一步拿回了什么"的下限
-    const titles = parsed.results
-      .map((result) => (isRecord(result) && typeof result.title === 'string' ? result.title : ''))
-      .filter(Boolean)
-
-    return {
-      ok,
-      preview: condense(titles.length > 0 ? `${count} 条 · ${titles.join(' · ')}` : `${count} 条`),
-      sources: readSources(parsed.results),
-    }
-  }
-
-  // read_page：读到多少字 + 正文开头，让人看得出这页到底是什么
-  if (isRecord(parsed.result) && typeof parsed.result.content === 'string') {
-    const { content: pageContent, truncated } = parsed.result
-    const size = `${pageContent.length} 字符${truncated === true ? '（截断）' : ''}`
-
-    return { ok, preview: condense(`${size} · ${pageContent}`) }
-  }
-
-  return { ok }
 }
 
 /** DeepSeek 在 delta 上多挂一个 reasoning_content，OpenAI 的类型里没有这个字段 */
@@ -257,6 +172,65 @@ function spendToolBudget(budget: ToolBudget, name: string): string | undefined {
 
   budget[name] -= 1
   return undefined
+}
+
+/**
+ * 把结构化意图渲染成跟在 system prompt 后面的一段话。
+ *
+ * 它的用处不只是"复述一遍用户想干什么"：hardConstraints 和 exclusions 会变成
+ * 条件核对那一段要逐条回答的清单。没有这份清单，"逐条列出用户提出的每个条件"
+ * 就得靠模型自己从原话里数，数漏了也没人发现。
+ */
+function renderIntent(intent: RetrievalIntent): string {
+  const queries = buildSearchQueries(intent)
+
+  return [
+    '这一次的检索意图（上一步从用户原话解析出来的，和原话冲突时以原话为准）：',
+    `- 目标：${intent.target}`,
+    ...(intent.contentType ? [`- 内容类型：${intent.contentType}`] : []),
+    ...(intent.hardConstraints.length > 0
+      ? [`- 必须满足：${intent.hardConstraints.join('；')}`]
+      : []),
+    ...(intent.exclusions.length > 0 ? [`- 必须排除：${intent.exclusions.join('；')}`] : []),
+    ...(intent.preferences.length > 0
+      ? [`- 偏好（不是硬条件，不要当成必须满足）：${intent.preferences.join('；')}`]
+      : []),
+    ...(intent.language ? [`- 语言：${intent.language}`] : []),
+    ...(intent.timeRange ? [`- 时间范围：${intent.timeRange}`] : []),
+    ...(intent.ambiguities.length > 0 ? [`- 待澄清：${intent.ambiguities.join('；')}`] : []),
+    ...(queries.length > 0 ? [`起手查询可以从这些开始：${queries.join(' ｜ ')}`] : []),
+    '条件核对要逐条覆盖上面"必须满足"和"必须排除"里的每一项。',
+  ].join('\n')
+}
+
+/**
+ * 解析意图；失败就当没有这一步。
+ *
+ * 这是一次锦上添花的额外模型请求，解析不出来不该让整次提问失败——循环没有它
+ * 也照样能跑。取消同样在这里被吞掉，由循环自己的 throwIfAborted 统一负责。
+ */
+async function settleIntent(
+  extract: IntentExtractor,
+  input: string,
+  signal: AbortSignal,
+): Promise<RetrievalIntent | undefined> {
+  try {
+    return await extract(input, signal)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * 只有第一句提问才拿去解析意图。
+ *
+ * 解析器接的是一句话。追问（"那 Coze 呢"）单独拿出来解析只会得到一份跑偏的意图，
+ * 还会盖掉前面已经谈定的条件；这种时候历史消息本身就是上下文，不需要再提炼一遍。
+ */
+function readInitialQuestion(messages: ChatMessage[]) {
+  const [only] = messages
+
+  return messages.length === 1 && only?.role === 'user' ? only.content.trim() : ''
 }
 
 async function* requestDeepSeekStream(
@@ -336,19 +310,32 @@ async function* requestDeepSeekStream(
 export async function* askAgentStream(
   messages: ChatMessage[],
   context: AgentRunContext,
-  dependencies: { requestModel?: ModelRequest; runTool?: typeof executeTool } = {},
+  dependencies: {
+    requestModel?: ModelRequest
+    runTool?: typeof executeTool
+    extractIntent?: IntentExtractor
+  } = {},
 ): AsyncGenerator<AgentStreamEvent> {
   const requestModel = dependencies.requestModel ?? requestDeepSeekStream
   const runTool = dependencies.runTool ?? executeTool
+  const history = messages.filter((message) => message.role !== 'system')
 
-  // transcript 是循环自己的账本：tool_calls 和 role:'tool' 只允许由本函数写入。
-  const transcript: ChatCompletionMessageParam[] = [
-    { role: 'system', content: agentSystemPrompt },
-    ...messages.filter((message) => message.role !== 'system'),
-  ]
+  // 账本归循环所有：tool 结果、引用编号、上下文预算都只允许由这里写入。
+  const ledger = createRetrievalLedger(agentSystemPrompt, history)
   const budget: ToolBudget = {
     search: agentLimits.maxSearchCalls,
     read_page: agentLimits.maxPageReads,
+  }
+  const question = dependencies.extractIntent ? readInitialQuestion(history) : ''
+
+  /*
+   * 意图解析排在第一轮之前，这一两秒是有代价的：用户要多等一会儿才看到第一个字。
+   * 换来的是第一次搜索就带上硬条件——搜偏一次要重来一整轮，那是四五秒。
+   */
+  if (dependencies.extractIntent && question) {
+    const intent = await settleIntent(dependencies.extractIntent, question, context.signal)
+
+    if (intent) setLedgerIntent(ledger, renderIntent(intent))
   }
 
   for (let round = 1; round <= agentLimits.maxRounds; round++) {
@@ -360,7 +347,7 @@ export async function* askAgentStream(
 
     let turn: AssistantTurn | undefined
 
-    for await (const chunk of requestModel(transcript, { withTools }, context)) {
+    for await (const chunk of requestModel(projectContext(ledger), { withTools }, context)) {
       if (chunk.type === 'turn_end') {
         turn = chunk.turn
         continue
@@ -373,6 +360,12 @@ export async function* askAgentStream(
     // 没有工具调用 = 模型认为可以回答了。这是唯一的正常出口。
     if (turn.toolCalls.length === 0) {
       if (!turn.text.trim()) throw new Error('Model returned an empty answer')
+
+      const sources = ledgerEvidence(ledger)
+
+      // 一条来源都没有的时候不发这个事件：答案下面挂一份空清单只是噪音。
+      if (sources.length > 0) yield { type: 'evidence', sources }
+
       yield { type: 'done' }
       return
     }
@@ -387,7 +380,7 @@ export async function* askAgentStream(
     // 漏掉这一条，下一轮就是 400——所以这个字段是协议要求，不是给人看的附赠品。
     if (turn.reasoning) assistantMessage.reasoning_content = turn.reasoning
 
-    transcript.push(assistantMessage)
+    recordMessage(ledger, assistantMessage)
 
     // 模型一轮里常常并行发多个调用（两次 search、两次 read_page）。串行执行会把
     // 两个 12s 超时叠成 24s，所以这里先让它们全部起飞，再按原顺序收结果。
@@ -413,15 +406,31 @@ export async function* askAgentStream(
       }
     }
 
+    /*
+     * 跟着结果一起告诉模型"这一步之后还剩多少"。
+     *
+     * 预算在上面已经扣完了，所以这里读到的就是同一轮所有调用之后的余量：
+     * 一轮里并行发了三次搜索，三条结果上写的都是扣掉三次之后的数，这是对的——
+     * 它下一次决策时面对的正是这个余量。
+     */
+    const status: RunStatus = {
+      roundsLeft: Math.max(agentLimits.maxRounds - 1 - round, 0),
+      searchLeft: budget.search,
+      pageLeft: budget.read_page,
+    }
+
     // 每个 tool_call.id 必须恰好有一条 tool 消息回应，缺一条下一轮就会 400。
     for (const { toolCall, outcome } of executions) {
       const settled = await outcome
 
       if (!('content' in settled)) throw settled.failure
 
-      const { ok, preview, sources } = readToolOutcome(settled.content)
+      const { ok, preview, sources } = recordToolResult(ledger, {
+        toolCall,
+        content: settled.content,
+        status,
+      })
 
-      transcript.push({ role: 'tool', tool_call_id: toolCall.id, content: settled.content })
       yield {
         type: 'tool_result',
         id: toolCall.id,

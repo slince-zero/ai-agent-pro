@@ -1,6 +1,7 @@
 import express from 'express'
 import type { ChatMessage, MessageStreamEvent } from '@ai-agent-pro/shared/type.js'
 import { askAgentStream } from './agent.js'
+import { extractRetrievalIntent } from './retrieval/extract-retrieval-intent.js'
 import { reportErrorLog } from './util.js'
 
 /**
@@ -65,9 +66,16 @@ export function createApp() {
     }
 
     try {
-      for await (const event of askAgentStream(messages, {
-        signal: controller.signal,
-      })) {
+      /*
+       * 意图解析在这里接上，而不是在循环里给默认值：它是一次额外的模型请求，
+       * 组装点决定用不用它，循环本身没有它也能跑，测试也就不必先把网络挡掉。
+       */
+      for await (const event of askAgentStream(
+        messages,
+        { signal: controller.signal },
+        // 包一层：extractRetrievalIntent 末尾还留着一个可注入的模型参数，这里只要前两个
+        { extractIntent: (input, signal) => extractRetrievalIntent(input, signal) },
+      )) {
         if (controller.signal.aborted) {
           return
         }
