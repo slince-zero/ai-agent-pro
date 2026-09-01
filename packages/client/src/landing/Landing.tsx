@@ -1,6 +1,7 @@
 import { ContextLogo, SendIcon } from '../icons'
 import { Demo } from './Demo'
 import { Hero, REPO_URL } from './Hero'
+import { Loop } from './Loop'
 import { Navbar } from './Navbar'
 import { Pipeline } from './Pipeline'
 import { Reveal } from './Reveal'
@@ -28,6 +29,9 @@ export function Landing() {
         <div id="demo">
           <Demo />
         </div>
+        <div id="loop">
+          <Loop />
+        </div>
         <div id="roadmap">
           <Roadmap />
         </div>
@@ -38,7 +42,8 @@ export function Landing() {
               给它一个真实的、带条件的问题
             </h2>
             <p className="mx-auto mt-5 mb-0 max-w-[560px] text-[16px] leading-7 text-[#5c5a54]">
-              目前已经可以完整跑通对话与流式回答，检索链路正在逐阶段接入。
+              循环、搜索、页面读取和思维链都已经跑通；接下来补的是证据怎么排序、
+              以及有限预算里该带哪些上下文。
             </p>
             <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
               <a className={primaryButton} href="/app">

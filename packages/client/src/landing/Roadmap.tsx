@@ -7,7 +7,9 @@ type Stage = {
   index: string
   title: string
   question: string
-  state: 'done' | 'active' | 'planned'
+  state: 'done' | 'next' | 'planned'
+  /** 已完成但还没接进循环的阶段，在卡片上说清这一点，否则"已完成"会被读成"已生效" */
+  note?: string
 }
 
 /** 与 docs/product-plan.md 的分阶段计划一一对应 */
@@ -28,30 +30,32 @@ const stages: Stage[] = [
     index: '02',
     title: '检索意图与条件更新',
     question: '如何稳定区分硬条件、排除项、软偏好和未知',
-    state: 'active',
+    state: 'done',
+    note: '结构与解析已写完并有测试，还没接进循环',
   },
   {
     index: '03',
     title: '搜索来源与候选标准化',
     question: '哪些字段可靠，哪些必须进一步检查',
-    state: 'planned',
-  },
-  {
-    index: '04',
-    title: '过滤、证据与重排',
-    question: '确定性规则与模型判断如何分工',
-    state: 'planned',
-  },
-  {
-    index: '05',
-    title: '上下文构建',
-    question: '有限预算内，什么信息最值得进入下一次请求',
-    state: 'planned',
+    state: 'done',
   },
   {
     index: '06',
     title: '最小检索 Agent loop',
     question: '什么时候继续检索，什么时候停下来回答',
+    state: 'done',
+    note: '有限轮次、并行调用、逐类预算、可见的过程',
+  },
+  {
+    index: '04',
+    title: '过滤、证据与重排',
+    question: '确定性规则与模型判断如何分工',
+    state: 'next',
+  },
+  {
+    index: '05',
+    title: '上下文构建',
+    question: '有限预算内，什么信息最值得进入下一次请求',
     state: 'planned',
   },
   {
@@ -68,9 +72,9 @@ const stateMeta = {
     label: '已完成',
     className: 'text-[#3f7d4f] border-[#3f7d4f]/25 bg-[#f1f6f1]',
   },
-  active: {
+  next: {
     Icon: ThinkingIcon,
-    label: '进行中',
+    label: '下一步',
     className: 'text-[#d4491f] border-[#f05a2a]/30 bg-[#fff7f2]',
   },
   planned: {
@@ -83,7 +87,7 @@ const stateMeta = {
 const stack = [
   { label: '前端', value: 'React 19 · Vite 8 · Tailwind CSS 4' },
   { label: '服务端', value: 'Express 5 · NDJSON 流式响应' },
-  { label: '模型', value: 'DeepSeek · 手写 fetch 客户端' },
+  { label: '模型', value: 'DeepSeek · 思考模式 · OpenAI 协议' },
   { label: '约束', value: '不引入任何 Agent framework' },
 ]
 
@@ -93,11 +97,11 @@ export function Roadmap() {
       <SectionHeading
         eyebrow={<Eyebrow icon={EvidenceIcon}>项目阶段</Eyebrow>}
         title="按学习问题推进，而不是按功能堆叠"
-        description="每个阶段先回答一个具体的工程问题，再进入下一步；核心链路由项目所有者先写第一版。"
+        description="每个阶段先回答一个具体的工程问题，再进入下一步。卡片按完成情况排列，编号仍对应计划里的阶段序号——循环（06）先于过滤和上下文构建（04、05）落地，所以这里不是顺序推进的。"
       />
 
       <ol className="mt-14 grid list-none grid-cols-2 gap-4 p-0 max-[820px]:grid-cols-1">
-        {stages.map(({ index, title, question, state }, order) => {
+        {stages.map(({ index, title, question, state, note }, order) => {
           const meta = stateMeta[state]
 
           return (
@@ -119,6 +123,9 @@ export function Roadmap() {
                   <span className="mt-1 block text-[13px] leading-6 text-[#77746d]">
                     {question}
                   </span>
+                  {note ? (
+                    <span className="mt-1.5 block text-xs leading-5 text-[#a29e96]">{note}</span>
+                  ) : null}
                 </span>
               </div>
             </Reveal>

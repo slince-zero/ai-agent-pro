@@ -20,6 +20,7 @@ import { REPO_URL } from './Hero'
 const NAV_LINKS = [
   { href: '#how', label: '工作方式' },
   { href: '#demo', label: '界面' },
+  { href: '#loop', label: 'Agent loop' },
   { href: '#roadmap', label: '进度' },
 ] as const
 
