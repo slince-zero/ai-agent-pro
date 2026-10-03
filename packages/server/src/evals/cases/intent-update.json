@@ -1,0 +1,318 @@
+[
+  {
+    "id": "add-exclusion",
+    "why": "增加一条排除：原有排除要保留，其他字段一个都不能动",
+    "tags": ["add"],
+    "current": {
+      "target": "Agent context engineering 教程",
+      "contentType": "教程",
+      "hardConstraints": ["适合初学者", "包含完整示例"],
+      "exclusions": ["只介绍框架用法"],
+      "preferences": ["使用 TypeScript"],
+      "ambiguities": [],
+      "language": "中文",
+      "timeRange": "最近两年"
+    },
+    "instruction": "另外排除视频教程",
+    "expect": {
+      "exclusions": {
+        "has": ["视频", "框架"]
+      }
+    },
+    "unchanged": [
+      "target",
+      "contentType",
+      "hardConstraints",
+      "preferences",
+      "ambiguities",
+      "language",
+      "timeRange"
+    ]
+  },
+  {
+    "id": "add-preference",
+    "why": "增加偏好不能顺手变成硬条件",
+    "tags": ["add"],
+    "current": {
+      "target": "Agent context engineering 教程",
+      "contentType": "教程",
+      "hardConstraints": ["适合初学者", "包含完整示例"],
+      "exclusions": ["只介绍框架用法"],
+      "preferences": ["使用 TypeScript"],
+      "ambiguities": [],
+      "language": "中文",
+      "timeRange": "最近两年"
+    },
+    "instruction": "最好有配套的视频讲解",
+    "expect": {
+      "preferences": {
+        "has": ["视频", "TypeScript"]
+      },
+      "hardConstraints": {
+        "lacks": ["视频"]
+      }
+    },
+    "unchanged": [
+      "target",
+      "contentType",
+      "hardConstraints",
+      "exclusions",
+      "ambiguities",
+      "language",
+      "timeRange"
+    ]
+  },
+  {
+    "id": "add-duplicate",
+    "why": "加一条已经存在的硬条件：不能出现重复项",
+    "tags": ["add"],
+    "current": {
+      "target": "Agent context engineering 教程",
+      "contentType": "教程",
+      "hardConstraints": ["适合初学者", "包含完整示例"],
+      "exclusions": ["只介绍框架用法"],
+      "preferences": ["使用 TypeScript"],
+      "ambiguities": [],
+      "language": "中文",
+      "timeRange": "最近两年"
+    },
+    "instruction": "必须适合初学者",
+    "expect": {},
+    "unchanged": [
+      "target",
+      "contentType",
+      "hardConstraints",
+      "exclusions",
+      "preferences",
+      "ambiguities",
+      "language",
+      "timeRange"
+    ]
+  },
+  {
+    "id": "promote-preference",
+    "why": "偏好升级为硬条件：两边数组都要改，旧位置不能留",
+    "tags": ["move"],
+    "current": {
+      "target": "Agent context engineering 教程",
+      "contentType": "教程",
+      "hardConstraints": ["适合初学者", "包含完整示例"],
+      "exclusions": ["只介绍框架用法"],
+      "preferences": ["使用 TypeScript"],
+      "ambiguities": [],
+      "language": "中文",
+      "timeRange": "最近两年"
+    },
+    "instruction": "TypeScript 必须有",
+    "expect": {
+      "hardConstraints": {
+        "has": ["TypeScript", "初学者", "示例"]
+      },
+      "preferences": {
+        "lacks": ["TypeScript"]
+      }
+    },
+    "unchanged": ["target", "contentType", "exclusions", "ambiguities", "language", "timeRange"]
+  },
+  {
+    "id": "demote-hard",
+    "why": "硬条件降级为偏好：和上一条方向相反",
+    "tags": ["move"],
+    "current": {
+      "target": "Agent context engineering 教程",
+      "contentType": "教程",
+      "hardConstraints": ["适合初学者", "包含完整示例"],
+      "exclusions": ["只介绍框架用法"],
+      "preferences": ["使用 TypeScript"],
+      "ambiguities": [],
+      "language": "中文",
+      "timeRange": "最近两年"
+    },
+    "instruction": "完整示例不是必须的，有更好",
+    "expect": {
+      "hardConstraints": {
+        "has": ["初学者"],
+        "lacks": ["示例"]
+      },
+      "preferences": {
+        "has": ["示例", "TypeScript"]
+      }
+    },
+    "unchanged": ["target", "contentType", "exclusions", "ambiguities", "language", "timeRange"]
+  },
+  {
+    "id": "remove-hard",
+    "why": "删除一条硬条件，同数组里另一条要保留",
+    "tags": ["remove"],
+    "current": {
+      "target": "Agent context engineering 教程",
+      "contentType": "教程",
+      "hardConstraints": ["适合初学者", "包含完整示例"],
+      "exclusions": ["只介绍框架用法"],
+      "preferences": ["使用 TypeScript"],
+      "ambiguities": [],
+      "language": "中文",
+      "timeRange": "最近两年"
+    },
+    "instruction": "不要求适合初学者了",
+    "expect": {
+      "hardConstraints": {
+        "has": ["示例"],
+        "lacks": ["初学者"]
+      }
+    },
+    "unchanged": [
+      "target",
+      "contentType",
+      "exclusions",
+      "preferences",
+      "ambiguities",
+      "language",
+      "timeRange"
+    ]
+  },
+  {
+    "id": "remove-exclusion",
+    "why": "删除唯一的排除条件，结果应是空数组而不是保持原样",
+    "tags": ["remove"],
+    "current": {
+      "target": "Agent context engineering 教程",
+      "contentType": "教程",
+      "hardConstraints": ["适合初学者", "包含完整示例"],
+      "exclusions": ["只介绍框架用法"],
+      "preferences": ["使用 TypeScript"],
+      "ambiguities": [],
+      "language": "中文",
+      "timeRange": "最近两年"
+    },
+    "instruction": "只讲框架用法的也可以了",
+    "expect": {
+      "exclusions": {
+        "empty": true
+      }
+    },
+    "unchanged": [
+      "target",
+      "contentType",
+      "hardConstraints",
+      "preferences",
+      "ambiguities",
+      "language",
+      "timeRange"
+    ]
+  },
+  {
+    "id": "replace-hard",
+    "why": "替换一条硬条件：新的进来、旧的出去、旁边那条不受影响",
+    "tags": ["replace"],
+    "current": {
+      "target": "Agent context engineering 教程",
+      "contentType": "教程",
+      "hardConstraints": ["适合初学者", "包含完整示例"],
+      "exclusions": ["只介绍框架用法"],
+      "preferences": ["使用 TypeScript"],
+      "ambiguities": [],
+      "language": "中文",
+      "timeRange": "最近两年"
+    },
+    "instruction": "把适合初学者改成适合有 JavaScript 基础的人",
+    "expect": {
+      "hardConstraints": {
+        "has": ["JavaScript", "示例"],
+        "lacks": ["初学者"]
+      }
+    },
+    "unchanged": [
+      "target",
+      "contentType",
+      "exclusions",
+      "preferences",
+      "ambiguities",
+      "language",
+      "timeRange"
+    ]
+  },
+  {
+    "id": "clear-time",
+    "why": "取消标量限制要用 null，而不是空字符串或保持原值",
+    "tags": ["scalar"],
+    "current": {
+      "target": "Agent context engineering 教程",
+      "contentType": "教程",
+      "hardConstraints": ["适合初学者", "包含完整示例"],
+      "exclusions": ["只介绍框架用法"],
+      "preferences": ["使用 TypeScript"],
+      "ambiguities": [],
+      "language": "中文",
+      "timeRange": "最近两年"
+    },
+    "instruction": "不限制发布时间了",
+    "expect": {
+      "timeRange": null
+    },
+    "unchanged": [
+      "target",
+      "contentType",
+      "hardConstraints",
+      "exclusions",
+      "preferences",
+      "ambiguities",
+      "language"
+    ]
+  },
+  {
+    "id": "clear-language",
+    "why": "同上，换一个标量字段",
+    "tags": ["scalar"],
+    "current": {
+      "target": "Agent context engineering 教程",
+      "contentType": "教程",
+      "hardConstraints": ["适合初学者", "包含完整示例"],
+      "exclusions": ["只介绍框架用法"],
+      "preferences": ["使用 TypeScript"],
+      "ambiguities": [],
+      "language": "中文",
+      "timeRange": "最近两年"
+    },
+    "instruction": "语言不限了",
+    "expect": {
+      "language": null
+    },
+    "unchanged": [
+      "target",
+      "contentType",
+      "hardConstraints",
+      "exclusions",
+      "preferences",
+      "ambiguities",
+      "timeRange"
+    ]
+  },
+  {
+    "id": "chitchat-no-op",
+    "why": "一句不含修改的话：意图应该原封不动",
+    "tags": ["no-op"],
+    "current": {
+      "target": "Agent context engineering 教程",
+      "contentType": "教程",
+      "hardConstraints": ["适合初学者", "包含完整示例"],
+      "exclusions": ["只介绍框架用法"],
+      "preferences": ["使用 TypeScript"],
+      "ambiguities": [],
+      "language": "中文",
+      "timeRange": "最近两年"
+    },
+    "instruction": "好的，谢谢",
+    "expect": {},
+    "unchanged": [
+      "target",
+      "contentType",
+      "hardConstraints",
+      "exclusions",
+      "preferences",
+      "ambiguities",
+      "language",
+      "timeRange"
+    ]
+  }
+]

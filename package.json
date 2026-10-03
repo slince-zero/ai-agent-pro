@@ -8,6 +8,7 @@
     "dev": "pnpm --parallel --filter @ai-agent-pro/client --filter @ai-agent-pro/server dev",
     "build": "pnpm --filter './packages/*' build",
     "test": "pnpm --filter './packages/*' test",
+    "eval": "pnpm --filter @ai-agent-pro/server eval",
     "typecheck": "pnpm --filter './packages/*' typecheck",
     "lint": "oxlint",
     "fmt": "oxfmt",

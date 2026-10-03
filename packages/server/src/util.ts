@@ -20,7 +20,6 @@ export const agentLimits = {
    * 页面正文是这里唯一的实证据，宁可少读几页也不要把前面的证据挤出窗口。
    */
   maxPageReads: 6,
-  maxCandidates: 10,
   maxPageContentLength: 20_000,
   /*
    * 上下文里能同时放多少页正文。

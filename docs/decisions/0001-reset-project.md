@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted on 2026-08-13.
+Accepted on 2026-08-13. The CLI surface was later replaced by the web chat; see [0002](0002-web-chat-surface.md).
 
 ## Context
 

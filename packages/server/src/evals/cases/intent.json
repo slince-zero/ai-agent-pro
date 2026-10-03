@@ -1,0 +1,219 @@
+[
+  {
+    "id": "baseline-tutorial",
+    "why": "产品计划里的标准例句：四类条件各有一条，任何一类分错都说明解析器的基本盘有问题",
+    "tags": ["baseline"],
+    "input": "帮我找适合初学者的 Agent context engineering 教程，需要有完整示例，最好是 TypeScript，排除只介绍框架用法的文章。",
+    "expect": {
+      "target": ["context"],
+      "contentType": ["教程", "文章"],
+      "hardConstraints": {
+        "has": [["初学", "入门", "新手"], "示例"],
+        "lacks": ["TypeScript"]
+      },
+      "exclusions": { "has": ["框架"] },
+      "preferences": { "has": ["TypeScript"] }
+    }
+  },
+  {
+    "id": "preference-not-promoted",
+    "why": "只有'最好''优先'，没有任何硬条件：偏好不能被升级成硬条件",
+    "tags": ["preference"],
+    "input": "推荐几个 Node.js 的 ORM，最好支持 SQLite，优先选 GitHub star 多的。",
+    "expect": {
+      "target": ["ORM"],
+      "hardConstraints": { "lacks": ["SQLite", ["star", "星"]] },
+      "preferences": { "has": ["SQLite", ["star", "星"]] },
+      "exclusions": { "empty": true }
+    }
+  },
+  {
+    "id": "exclusion-named",
+    "why": "排除的是具体名字，不能落进硬条件或偏好",
+    "tags": ["exclusion"],
+    "input": "找 Node.js 的 ORM，不要 Prisma，也不要 TypeORM。",
+    "expect": {
+      "target": ["ORM"],
+      "exclusions": { "has": ["Prisma", "TypeORM"] },
+      "hardConstraints": { "lacks": ["Prisma", "TypeORM"] },
+      "preferences": { "lacks": ["Prisma", "TypeORM"] }
+    }
+  },
+  {
+    "id": "explicit-must",
+    "why": "每个条件都带'必须'，一条都不能掉到偏好里",
+    "tags": ["hard"],
+    "input": "我需要一个开源的向量数据库，必须支持 Docker 部署，必须是 Apache 2.0 许可。",
+    "expect": {
+      "target": ["向量", "vector"],
+      "hardConstraints": { "has": ["Docker", "Apache"] },
+      "preferences": { "lacks": ["Docker", "Apache"] }
+    }
+  },
+  {
+    "id": "multiple-hard",
+    "why": "三条硬条件、零偏好：检查条件有没有被合并、丢失，或者凭空长出偏好",
+    "tags": ["hard"],
+    "input": "找一个 TypeScript 的 schema 校验库：必须支持导出 JSON Schema，必须支持 tree-shaking，必须零依赖。",
+    "expect": {
+      "target": ["schema", "校验"],
+      "hardConstraints": { "has": ["JSON Schema", "tree", "依赖"] },
+      "preferences": { "empty": true }
+    }
+  },
+  {
+    "id": "no-constraints",
+    "why": "一句没有任何条件的问题：条件数组都应该为空，不能编出条件",
+    "tags": ["empty"],
+    "input": "React 是什么？",
+    "expect": {
+      "target": ["React"],
+      "hardConstraints": { "empty": true },
+      "exclusions": { "empty": true },
+      "preferences": { "empty": true },
+      "timeRange": null
+    }
+  },
+  {
+    "id": "no-invented-scalars",
+    "why": "用户没说语言、时间：对应字段必须是 null，不能因为提问是中文就填'中文'",
+    "tags": ["null"],
+    "input": "找 Vite 插件开发的文档。",
+    "expect": {
+      "target": ["Vite"],
+      "contentType": ["文档"],
+      "language": null,
+      "timeRange": null,
+      "exclusions": { "empty": true },
+      "preferences": { "empty": true }
+    }
+  },
+  {
+    "id": "english-input",
+    "why": "英文输入：分类规则写的是中文关键词，换一种语言还要能分对",
+    "tags": ["language"],
+    "input": "Find beginner-friendly Rust async tutorials. They must include runnable code. Avoid video content. Ideally written in 2024 or later.",
+    "expect": {
+      "target": ["async", "异步"],
+      "hardConstraints": { "has": [["code", "代码"]], "lacks": ["2024"] },
+      "exclusions": { "has": [["video", "视频"]] }
+    }
+  },
+  {
+    "id": "time-range",
+    "why": "时间条件应该进 timeRange",
+    "tags": ["scalar"],
+    "input": "找 2024 年以后发布的 LLM 评测方法综述文章。",
+    "expect": {
+      "target": ["评测", "evaluation", "eval"],
+      "timeRange": ["2024"]
+    }
+  },
+  {
+    "id": "relative-time",
+    "why": "相对时间不能被换算成某个具体年份，原样保留才不会随运行日期出错",
+    "tags": ["scalar"],
+    "input": "最近半年 Bun 有哪些重要更新？",
+    "expect": {
+      "target": ["Bun"],
+      "timeRange": ["半年", "6 个月", "六个月", "6个月"]
+    }
+  },
+  {
+    "id": "language-explicit",
+    "why": "明确要求了语言：language 不能是 null",
+    "tags": ["scalar"],
+    "input": "找英文的 Kubernetes 网络入门文章，中文的不要。",
+    "expect": {
+      "target": ["Kubernetes", "K8s"],
+      "language": ["英", "English", "en"]
+    }
+  },
+  {
+    "id": "vague-to-ambiguity",
+    "why": "'不要太长''通俗一点'没法稳定执行，产品计划里明确把它们归为模糊条件",
+    "tags": ["ambiguity"],
+    "input": "找一些不要太长、讲得通俗一点的 Transformer 介绍。",
+    "expect": {
+      "target": ["Transformer"],
+      "ambiguities": { "empty": false },
+      "hardConstraints": { "lacks": ["太长", "通俗"] }
+    }
+  },
+  {
+    "id": "ambiguous-entity",
+    "why": "目标本身有歧义（行星、元素、乐手），应该记进 ambiguities 而不是自己挑一个",
+    "tags": ["ambiguity"],
+    "input": "找一些 Mercury 的资料。",
+    "expect": {
+      "target": ["Mercury", "水星", "水银"],
+      "ambiguities": { "empty": false }
+    }
+  },
+  {
+    "id": "negative-preference",
+    "why": "'最好不要'是负向偏好，不是排除条件；'就算了'才是排除",
+    "tags": ["preference", "exclusion"],
+    "input": "找 Python 的 Web 框架，最好不要太重，Django 就算了。",
+    "expect": {
+      "target": ["Web", "框架"],
+      "exclusions": { "has": ["Django"] },
+      "hardConstraints": { "lacks": ["Django", ["太重", "轻量"]] }
+    }
+  },
+  {
+    "id": "preference-on-alternative",
+    "why": "'最好用 X 以外的方案'容易被误判成硬性排除",
+    "tags": ["preference"],
+    "input": "找 2023 年之后的中文 RAG 实战教程，必须有可运行代码，不要只讲概念的，最好用 LlamaIndex 以外的方案。",
+    "expect": {
+      "target": ["RAG"],
+      "timeRange": ["2023"],
+      "language": ["中"],
+      "hardConstraints": { "has": ["代码"], "lacks": ["LlamaIndex"] },
+      "exclusions": { "has": ["概念"] }
+    }
+  },
+  {
+    "id": "exclusion-casual",
+    "why": "口语化的排除：'别给我'",
+    "tags": ["exclusion"],
+    "input": "找讲 Docker 多阶段构建的文章，别给我官方文档。",
+    "expect": {
+      "target": ["Docker", "多阶段"],
+      "exclusions": { "has": ["官方"] },
+      "hardConstraints": { "lacks": ["官方"] }
+    }
+  },
+  {
+    "id": "priority-word",
+    "why": "'优先考虑'是偏好；同一句里还有'要'字开头的条件，两者不能混",
+    "tags": ["preference"],
+    "input": "找 Go 的 HTTP 路由库，优先考虑零依赖的，要支持中间件。",
+    "expect": {
+      "target": ["路由", "router"],
+      "hardConstraints": { "has": ["中间件"], "lacks": ["依赖"] },
+      "preferences": { "has": ["依赖"] }
+    }
+  },
+  {
+    "id": "mixed-language",
+    "why": "中英混写的口语输入",
+    "tags": ["language"],
+    "input": "find 一些 good 的 prompt engineering 资料, no 付费 content please",
+    "expect": {
+      "target": ["prompt"],
+      "exclusions": { "has": [["付费", "paid"]] }
+    }
+  },
+  {
+    "id": "platform-hard",
+    "why": "'要支持 Mac'和'免费'都是硬条件；'推荐 3 个'是数量，不是内容属性",
+    "tags": ["hard"],
+    "input": "推荐 3 个免费的 Markdown 编辑器，要支持 Mac。",
+    "expect": {
+      "target": ["Markdown"],
+      "hardConstraints": { "has": [["Mac", "macOS"], "免费"] }
+    }
+  }
+]

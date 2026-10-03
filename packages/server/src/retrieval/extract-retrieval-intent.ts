@@ -1,5 +1,6 @@
+import type { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/index.mjs'
 import type { ChatMessage } from '@ai-agent-pro/shared/type.js'
-import { createDeepSeekClient } from '../deepseek-client.js'
+import { createDeepSeekClient, DEEPSEEK_MODEL } from '../deepseek-client.js'
 import { retrievalIntentSchema } from './retrieval-intent.js'
 import type { RetrievalIntent } from './retrieval-intent.js'
 
@@ -55,26 +56,39 @@ const updateRetrievalIntentSystemPrompt = `
 
 const retrievalIntentPatchSchema = retrievalIntentSchema.partial()
 
+/** 同 agent.ts：OpenAI 的参数类型里没有 DeepSeek 的思考开关，交叉进请求体 */
+type ThinkingParams = {
+  thinking: { type: 'enabled' | 'disabled' }
+}
+
 async function requestDeepSeekIntent(
   messages: ChatMessage[],
   signal: AbortSignal,
 ): Promise<string> {
-  const response = await createDeepSeekClient().chat.completions.create(
-    {
-      model: 'deepseek-v4-flash',
-      messages,
-      stream: false,
-      response_format: {
-        type: 'json_object',
-      },
-      max_tokens: 800,
+  const body: ChatCompletionCreateParamsNonStreaming & ThinkingParams = {
+    model: DEEPSEEK_MODEL,
+    messages,
+    stream: false,
+    response_format: {
+      type: 'json_object',
     },
-    {
-      signal,
-    },
-  )
+    max_tokens: 800,
+    /*
+     * v4 默认开着思考模式，思维链和 JSON 共用 max_tokens：思维链一长，JSON 就被截成空串。
+     * 评测里 19 条有 6 条这样失败，而循环会把这个错误吞掉、当作没有意图继续跑。
+     * 分类任务用不着思维链，关掉之后还省下两三秒首字延迟。
+     */
+    thinking: { type: 'disabled' },
+  }
+  const response = await createDeepSeekClient().chat.completions.create(body, { signal })
+  const choice = response.choices[0]
 
-  return response.choices[0]?.message.content ?? ''
+  // 被截断的 JSON 解析不出来，但报"空"会把人引到错误的方向上
+  if (choice?.finish_reason === 'length') {
+    throw new Error('Retrieval intent was cut off by max_tokens')
+  }
+
+  return choice?.message.content ?? ''
 }
 
 export async function extractRetrievalIntent(

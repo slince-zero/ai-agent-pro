@@ -4,7 +4,7 @@ import type {
   ChatCompletionMessageParam,
 } from 'openai/resources/index.mjs'
 import type { AgentStreamEvent, ChatMessage } from '@ai-agent-pro/shared/type.js'
-import { createDeepSeekClient } from './deepseek-client.js'
+import { createDeepSeekClient, DEEPSEEK_MODEL } from './deepseek-client.js'
 import { agentLimits } from './util.js'
 import {
   createRetrievalLedger,
@@ -239,7 +239,7 @@ async function* requestDeepSeekStream(
   context: AgentRunContext,
 ): AsyncGenerator<ModelStreamChunk> {
   const body: ChatCompletionCreateParamsStreaming & ThinkingParams = {
-    model: 'deepseek-v4-flash',
+    model: DEEPSEEK_MODEL,
     messages,
     stream: true,
     stream_options: { include_usage: true },

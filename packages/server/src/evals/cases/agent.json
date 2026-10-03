@@ -1,0 +1,112 @@
+[
+  {
+    "id": "chitchat-no-tools",
+    "why": "普通对话不该触发联网检索（产品计划阶段 7 的完成条件）",
+    "tags": ["no-tools"],
+    "messages": [{ "role": "user", "content": "你好，你能帮我做什么？" }],
+    "expect": { "tools": "none" }
+  },
+  {
+    "id": "translate-no-tools",
+    "why": "模型自己能完成的任务，不该为了'看起来认真'去搜索",
+    "tags": ["no-tools"],
+    "messages": [{ "role": "user", "content": "把这句话翻译成英文：上下文比模型更重要。" }],
+    "expect": { "tools": "none", "answerHas": ["context"] }
+  },
+  {
+    "id": "fact-express-node",
+    "why": "单一事实题：答案稳定，而且必须读页面才能确认版本号",
+    "tags": ["fact"],
+    "messages": [{ "role": "user", "content": "Express 5 要求的最低 Node.js 版本是多少？" }],
+    "expect": { "tools": "required", "readPage": true, "answerHas": ["18"] }
+  },
+  {
+    "id": "fact-zod-license",
+    "why": "许可证是提示词点名'必须有正文支持'的那类断言",
+    "tags": ["fact"],
+    "messages": [{ "role": "user", "content": "zod 这个 TypeScript 库用的是什么开源许可证？" }],
+    "expect": { "tools": "required", "readPage": true, "answerHas": ["MIT"] }
+  },
+  {
+    "id": "fact-ts-release-date",
+    "why": "时间类事实：摘要里常有错误日期，读正文才可靠",
+    "tags": ["fact"],
+    "messages": [{ "role": "user", "content": "TypeScript 5.0 正式版是哪一年哪个月发布的？" }],
+    "expect": {
+      "tools": "required",
+      "answerHas": ["2023", ["3 月", "3月", "三月", "March", "2023-03"]]
+    }
+  },
+  {
+    "id": "compare-licenses",
+    "why": "三个互不依赖的子问题：检验并行发起工具调用，以及在预算内收敛",
+    "tags": ["parallel"],
+    "messages": [
+      { "role": "user", "content": "对比一下 Vite、Rspack 和 Turbopack 的开源许可证。" }
+    ],
+    "expect": {
+      "tools": "required",
+      "readPage": true,
+      "answerHas": ["Vite", "Rspack", "Turbopack", "MIT"]
+    }
+  },
+  {
+    "id": "constraint-tutorials",
+    "why": "产品的核心场景：多条件检索，答案必须带逐条的条件核对",
+    "tags": ["constraints"],
+    "messages": [
+      {
+        "role": "user",
+        "content": "帮我找 2 篇适合初学者的 Agent context engineering 英文文章，必须有代码示例，排除只介绍某个框架用法的文章。"
+      }
+    ],
+    "expect": { "tools": "required", "readPage": true, "checklist": true }
+  },
+  {
+    "id": "constraint-orm",
+    "why": "硬条件、排除、偏好同时出现：检验三类条件在条件核对里都被处理",
+    "tags": ["constraints"],
+    "messages": [
+      {
+        "role": "user",
+        "content": "推荐几个 Node.js 的 ORM，必须支持 SQLite，不要 Prisma，最好有 TypeScript 类型推导。"
+      }
+    ],
+    "expect": { "tools": "required", "checklist": true, "answerHas": ["SQLite"] }
+  },
+  {
+    "id": "impossible-honest",
+    "why": "条件互相矛盾（Bun 2023 年才发布 1.0）：没有合格结果时必须诚实停止，不能硬凑",
+    "tags": ["honesty"],
+    "messages": [
+      { "role": "user", "content": "找一个 2015 年之前就发布了 1.0 版本的 Bun 专用 ORM。" }
+    ],
+    "expect": {
+      "tools": "required",
+      "answerHas": [["没有", "不存在", "无法", "不满足", "找不到", "未找到"]]
+    }
+  },
+  {
+    "id": "unconfirmable-condition",
+    "why": "作者是否在职几乎没法从公开网页确认：应该落进'无法确认'，而不是用常识补齐",
+    "tags": ["honesty", "constraints"],
+    "messages": [
+      {
+        "role": "user",
+        "content": "找一篇讲 RAG 的英文技术文章，作者必须是目前在职的 Google 员工。"
+      }
+    ],
+    "expect": { "tools": "required", "checklist": true, "answerHas": ["无法确认"] }
+  },
+  {
+    "id": "follow-up-question",
+    "why": "追问会跳过意图解析，只靠历史消息理解'那 Koa 3 呢'指的是什么",
+    "tags": ["multi-turn"],
+    "messages": [
+      { "role": "user", "content": "Express 5 要求的最低 Node.js 版本是多少？" },
+      { "role": "assistant", "content": "Express 5 要求 Node.js 18 或更高版本。" },
+      { "role": "user", "content": "那 Koa 3 呢？" }
+    ],
+    "expect": { "tools": "required", "answerHas": ["Koa", "Node"] }
+  }
+]

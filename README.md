@@ -38,24 +38,68 @@ user request
 
 ![Context chat view](docs/assets/chat.png)
 
-**Retrieval groundwork**
+One question runs this path: `POST /api/questions/stream` → intent extraction → agent loop
+(search, read, answer) → an NDJSON event stream back to the UI.
+
+**Retrieval intent**
 
 - `retrievalIntentSchema`: a strict zod schema for goal, hard constraints, exclusions, soft
   preferences, and ambiguities.
-- `extractRetrievalIntent()`: a real DeepSeek call in JSON mode whose output is validated against
-  that schema. The model client is injectable, so the tests run without a network call.
-- A tool contract for search (`zod` → JSON Schema) plus a dispatcher that validates arguments
-  before calling a tool.
+- `extractRetrievalIntent()`: DeepSeek in JSON mode (thinking disabled) parses the first question;
+  the output must pass the schema. It is rendered as a checklist inside the system prompt, and the
+  answer's condition check must cover every item.
+- `buildSearchQueries()`: seed queries from the intent; exclusions and ambiguities stay out.
+- `updateRetrievalIntent()`: applies "add / remove / replace a condition" instructions. Tested and
+  evaluated, **not yet wired into the chat route**.
+
+**Tools**
+
+- `search`: Tavily Search, at most 5 hits per call, 8 s timeout.
+- `read_page`: Tavily Extract, markdown body capped at 20 000 characters, 12 s timeout.
+- `executeTool()`: validates arguments with zod before running. Bad arguments, rate limits, and
+  provider failures come back as `{ ok: false, error }` results the model can read, instead of
+  ending the run.
+
+**Agent loop** (`agent.ts`, no framework)
+
+- At most 8 rounds; the last round has no tools, so the loop always terminates.
+- Tool calls within a round run concurrently and are answered in the model's order.
+- Tool budgets are enforced by code, not by the prompt: 10 searches and 6 page reads. A spent
+  budget comes back as an ordinary tool result, and every result carries the remaining budget.
+- Requests with tools send the previous turn's `reasoning_content` back, as DeepSeek's thinking
+  mode requires.
+
+**Retrieval ledger and context** (`context/retrieval-ledger.ts`)
+
+- The server issues citation numbers: one URL (ignoring `#hash` and a trailing slash) keeps one
+  number for the whole run.
+- Page bodies are stored separately and re-projected before every request: the most recent pages
+  go in full; past 60 000 characters, older pages drop to a 600-character excerpt with a note not
+  to read them again.
+- `projectContext()` is pure: the same ledger always projects the same context.
+
+**UI**
+
+- Streaming answers, collapsible reasoning, a per-round tool timeline, token usage, stop/retry.
+- `[n]` in the answer becomes a clickable citation; the answer lists the sources it actually cited
+  and marks which ones were read in full.
+- Markdown, mermaid, and sanitized raw HTML rendering.
+
+**Evals** ([docs/evals.md](docs/evals.md))
+
+- `pnpm eval`: intent extraction, intent update, and end-to-end agent suites against the real
+  model, reported as individual checks.
+- Every agent run is checked for citations that resolve to real sources and for "confirmed"
+  claims backed by a page that was actually read.
 
 ## What does not work yet
 
-Be clear about the gap: **there is still no real internet retrieval.**
-
-- `search()` deliberately throws `Search is not implemented` — only the contract exists.
-- Intent extraction is a tested module, not yet wired into the chat route.
-- No page reading, no agent loop, no candidate filtering, no evidence context.
-
-Those land one small step at a time, each with its own tests.
+- **Candidate filtering and re-ranking**: the model answers straight from the evidence. There is no
+  candidate structure, deterministic hard filter, or explainable ranking yet.
+- **Multi-turn condition updates**: follow-up questions skip intent extraction and rely on chat
+  history alone; `updateRetrievalIntent()` is not wired in.
+- **Clarification**: parsed `ambiguities` only go into the prompt; the agent never asks back.
+- **Page-reading boundaries**: robots, paywalls, and non-text content are left to Tavily.
 
 ## Context design
 
@@ -77,7 +121,9 @@ must be marked unknown; guessing to satisfy a constraint is not allowed.
 
 - Node.js 22+
 - pnpm 11+
-- A DeepSeek API key
+- A DeepSeek API key (chat and intent extraction)
+- A Tavily API key (search and read_page; without it every tool call returns
+  `tool_unavailable` and the model can only answer "cannot confirm")
 
 ### Run locally
 
@@ -87,7 +133,7 @@ cd ai-agent-pro
 pnpm install
 cp packages/server/.env.example packages/server/.env
 
-# edit packages/server/.env and paste your DeepSeek API key
+# edit packages/server/.env and paste your DeepSeek and Tavily API keys
 
 pnpm dev
 ```
@@ -96,12 +142,14 @@ Then open [http://localhost:5173](http://localhost:5173). The dev server proxies
 `http://127.0.0.1:3001`. Set `PORT` to run the client on a different port.
 
 > The env var keeps the OpenAI SDK name `OPENAI_API_KEY`, but requests go to the DeepSeek API.
+> The model is fixed to `deepseek-v4-flash` (see `packages/server/src/deepseek-client.ts`).
 
 ## Commands
 
 ```bash
 pnpm dev        # start client and server together
-pnpm test       # run tests
+pnpm test       # run tests (offline, runs in CI)
+pnpm eval       # run evals (real model, not in CI) — see docs/evals.md
 pnpm typecheck  # TypeScript type check
 pnpm lint:ci    # lint + format check
 pnpm build      # build every workspace package
@@ -113,21 +161,29 @@ pnpm build      # build every workspace package
 packages/
   client/
     src/App.tsx              chat view: streaming, paced reveal, usage, stop/retry
+    src/agent-trace.tsx      per-round reasoning and tool-call timeline
+    src/citations.tsx        inline citation markers and the source list
     src/landing/             landing page sections
     src/markdown.tsx         Markdown pipeline: GFM, sanitized raw HTML, image fallback
     src/mermaid-diagram.tsx  lazily loaded mermaid renderer with an error boundary
     src/streaming-markdown.ts closes half-written syntax while streaming
     src/icons/               hand-drawn icon set (gallery at /?icons)
+    src/pet/                 pixel pet above the input box
     src/util.ts              NDJSON stream consumer
   server/
-    src/app.ts               Express routes and request validation
-    src/agent.ts             DeepSeek streaming agent core
-    src/retrieval/           retrieval-intent schema and extraction
-    src/tools/               tool contracts and the dispatcher
+    src/app.ts               Express route and validation; wires intent extraction into the loop
+    src/agent.ts             agent loop: rounds, concurrent tool calls, budgets, system prompt
+    src/deepseek-client.ts   DeepSeek client and model name
+    src/context/             retrieval ledger: citation numbers, page budget, context projection
+    src/retrieval/           retrieval-intent schema, extraction, update, seed queries
+    src/tools/               search, read_page, and the validating dispatcher
+    src/evals/               eval cases, scorers, and the runner
+    src/util.ts              agentLimits: rounds, tool budgets, context budget
   shared/
     type.ts                  message and stream-event types shared by both sides
 docs/
   product-plan.md            scope, order of work, acceptance criteria
+  evals.md                   how evals run, how they score, how to add a case
   learning-contract.md       the learning-first working agreement
   decisions/                 architecture decision records
 ```
@@ -137,11 +193,14 @@ docs/
 - [x] Streaming chat pipeline with token accounting
 - [x] Markdown, mermaid, and sanitized raw HTML rendering
 - [x] Structured retrieval intent: goal, hard constraints, exclusions, soft preferences
-- [ ] Search tool with a unified result type
-- [ ] Page fetching and main-content extraction
-- [ ] Raw tool-call protocol and the agent loop
+- [x] Search tool with a unified result type
+- [x] Page fetching and main-content extraction
+- [x] Raw tool-call protocol and the agent loop
+- [x] Bounded evidence context: citation numbers, page budget, clickable sources
+- [x] Eval suites: intent extraction, intent update, end-to-end agent
 - [ ] Candidate filtering, evidence selection, explainable re-ranking
-- [ ] Adding, changing, or revoking constraints across turns
+- [ ] Adding, changing, or revoking constraints across turns (`updateRetrievalIntent` exists, not wired)
+- [ ] Asking back on ambiguous conditions
 
 Full plan and per-stage acceptance criteria: [product plan](docs/product-plan.md).
 
