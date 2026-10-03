@@ -24,6 +24,7 @@ const { createRoot } = await import('react-dom/client')
 const { Demo } = await import('./Demo')
 const { Navbar } = await import('./Navbar')
 const { Reveal } = await import('./Reveal')
+const { App } = await import('../App')
 
 const observers: FakeIntersectionObserver[] = []
 const frames = new Map<number, FrameRequestCallback>()
@@ -183,4 +184,65 @@ test('导航高亮跟随键盘焦点，并在焦点离开导航时消失', async
   assert.equal(pill.dataset.on, 'true', '鼠标离开时仍保留键盘焦点的高亮')
   await act(() => cta.focus())
   assert.equal(pill.dataset.on, undefined)
+})
+
+test('回答校验失败时清除草稿，保留条件和错误提示，不提供复制按钮', async () => {
+  dom.window.HTMLElement.prototype.scrollIntoView = () => {}
+  installGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  )
+  installGlobal(
+    'fetch',
+    async () =>
+      new Response(
+        [
+          {
+            type: 'retrieval_task',
+            task: {
+              mode: 'retrieve',
+              intent: {
+                target: 'Express 5 入门资料',
+                contentType: '教程',
+                hardConstraints: ['中文'],
+                exclusions: [],
+                preferences: [],
+                ambiguities: [],
+                language: '中文',
+                timeRange: null,
+              },
+            },
+          },
+          { type: 'round_start', round: 1 },
+          { type: 'text_delta', delta: '已确认：这是一份没有验证的草稿 [999]' },
+          { type: 'error', message: '回答的来源核对未通过，请重试。' },
+        ]
+          .map((event) => JSON.stringify(event))
+          .join('\n'),
+      ),
+  )
+  await act(() => root.render(<App />))
+  const textarea = container.querySelector('textarea')!
+  await act(() => {
+    Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value')!.set!.call(
+      textarea,
+      '找中文 Express 5 教程',
+    )
+    textarea.dispatchEvent(new dom.window.Event('input', { bubbles: true }))
+  })
+  await act(async () => {
+    container
+      .querySelector('form')!
+      .dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }))
+  })
+  assert.match(container.querySelector('[role="alert"]')?.textContent ?? '', /来源核对未通过/)
+  assert.ok(container.querySelector('[aria-label="本轮检索条件"]'))
+  assert.doesNotMatch(
+    container.querySelector('.assistant-prose')?.textContent ?? '',
+    /没有验证的草稿/,
+  )
+  assert.equal(container.querySelector('[aria-label="复制回答"]'), null)
 })

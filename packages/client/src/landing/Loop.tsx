@@ -107,7 +107,7 @@ const facts: { Icon: ComponentType<IconProps>; title: string; body: string }[] =
   {
     Icon: ConfirmedIcon,
     title: '停下来的方式是有限的',
-    body: '最多 8 轮，最后一轮不带工具；证据不足时，提示词要求说明「无法确认」。确定性的条件过滤和证据判定仍待实现。',
+    body: '最多 8 轮，最后一轮不带工具；引用或条件覆盖不合格时继续修正，仍不合格则明确失败。证据不足应说明「无法确认」，语义证据判定仍待实现。',
   },
 ]
 

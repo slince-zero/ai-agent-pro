@@ -4,6 +4,7 @@ import type {
   ChatMessage as RequestMessage,
   EvidenceSource,
   TokenUsage,
+  RetrievalTask,
 } from '@ai-agent-pro/shared/type.js'
 import {
   AccountIcon,
@@ -29,6 +30,7 @@ import { AnswerSources } from './citations'
 import { AssistantMarkdown } from './markdown'
 import { PetCompanion } from './pet'
 import { consumeNDJSON } from './util'
+import { RetrievalTaskCard } from './RetrievalTaskCard'
 
 type ChatMessage = RequestMessage & {
   usage?: TokenUsage
@@ -38,6 +40,7 @@ type ChatMessage = RequestMessage & {
   evidence?: EvidenceSource[]
   /** 这条回答停下来的时刻，用来给最后一轮结算耗时 */
   finishedAt?: number
+  task?: RetrievalTask
 }
 
 /**
@@ -175,7 +178,11 @@ function readAnswer(message: ChatMessage) {
 }
 
 function hasRenderableContent(message: ChatMessage) {
-  return Boolean(message.content) || (message.trace?.length ?? 0) > 0
+  return (
+    Boolean(message.content) ||
+    (message.trace?.length ?? 0) > 0 ||
+    (message.task !== undefined && message.task.mode !== 'chat')
+  )
 }
 
 function addUsage(total: TokenUsage | undefined, next: TokenUsage): TokenUsage {
@@ -220,6 +227,7 @@ export function App() {
   const [status, setStatus] = useState<UIStatus>('idle')
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+  const [errorMessage, setErrorMessage] = useState('')
 
   /**
    * 没有内容的助手消息不渲染，否则只会留下一个孤零零的头像。
@@ -267,7 +275,7 @@ export function App() {
   /**
    * 把一段文字追加到最后一条助手消息的某一轮上。
    * 服务端每个 token 一个 NDJSON 事件，逐个 setState 会让 Markdown 每秒重新解析几十次，
-   * 所以调用它的只有 revealFrame（每帧最多一次）和收尾时的 flushPendingText。
+   * 所以调用它的只有 revealFrame（每帧最多一次）。
    */
   function appendRevealedText(chunk: PendingChunk, text: string) {
     setMessages((previousMessages) =>
@@ -359,20 +367,6 @@ export function App() {
     revealFrameRef.current = requestAnimationFrame(revealFrame)
   }
 
-  /** 不再讲节奏，把积压一次性显示出来：出错时该立刻看到已经写出来的部分 */
-  function flushPendingText() {
-    cancelReveal()
-
-    const pending = pendingRef.current
-
-    pendingRef.current = []
-    afterDrainRef.current = null
-
-    for (const chunk of pending) {
-      if (chunk.text) appendRevealedText(chunk, chunk.text)
-    }
-  }
-
   /** 流结束后等屏幕上的字追上来再收尾，否则光标会在文字还在出的时候就消失 */
   function settleAfterDrain(settle: () => void) {
     if (pendingRef.current.length === 0) {
@@ -408,6 +402,7 @@ export function App() {
 
     cancelController.abort()
     setStatus('idle')
+    setErrorMessage('')
 
     resetReveal()
 
@@ -446,6 +441,7 @@ export function App() {
     setAttachment('')
     setStatus('idle')
     setCopiedIndex(null)
+    setErrorMessage('')
     // 新对话之后光标就该在输入框里，省掉一次多余的点击
     composerRef.current?.focus()
   }
@@ -500,6 +496,23 @@ export function App() {
     ])
 
     setStatus('loading')
+    setErrorMessage('')
+    let terminalEvent = false
+
+    function discardDraft() {
+      resetReveal()
+      finishTrace()
+      setMessages((previousMessages) =>
+        updateLastAssistant(previousMessages, (message) => ({
+          ...message,
+          content: '',
+          evidence: undefined,
+          trace: message.trace?.map((round, index, rounds) =>
+            index === rounds.length - 1 ? { ...round, text: '' } : round,
+          ),
+        })),
+      )
+    }
 
     try {
       /**
@@ -526,6 +539,12 @@ export function App() {
 
       await consumeNDJSON(response, (e) => {
         if (controller.signal.aborted) return
+
+        if (e.type === 'retrieval_task') {
+          setMessages((previousMessages) =>
+            updateLastAssistant(previousMessages, (message) => ({ ...message, task: e.task })),
+          )
+        }
 
         if (e.type === 'round_start') {
           currentRoundRef.current = e.round
@@ -596,6 +615,7 @@ export function App() {
         }
 
         if (e.type === 'done') {
+          terminalEvent = true
           settleAfterDrain(() => {
             setMessages((previousMessages) =>
               updateLastAssistant(previousMessages, (message) =>
@@ -607,15 +627,17 @@ export function App() {
         }
 
         if (e.type === 'error') {
-          flushPendingText()
-          finishTrace()
+          terminalEvent = true
+          discardDraft()
+          setErrorMessage(e.message)
           setStatus('error')
         }
       })
+      if (!terminalEvent) throw new Error('Stream ended without a terminal event')
     } catch {
       if (!controller.signal.aborted) {
-        flushPendingText()
-        finishTrace()
+        discardDraft()
+        setErrorMessage('暂时无法获取完整回答，请重试。')
         setStatus('error')
       }
     } finally {
@@ -710,6 +732,7 @@ export function App() {
                       <ContextAvatar size={20} />
                     </div>
                     <div className="min-w-0 pt-1">
+                      <RetrievalTaskCard task={message.task} />
                       <AgentTrace
                         rounds={message.trace ?? []}
                         live={isStreamingMessage}
@@ -730,7 +753,7 @@ export function App() {
                       {message.cancelled ? (
                         <p className="mt-3 mb-0 text-xs leading-5 text-[#8a8881]">已停止生成</p>
                       ) : null}
-                      {!isBusy && hasRenderableContent(message) ? (
+                      {!isBusy && Boolean(answer) ? (
                         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
                           <button
                             type="button"
@@ -886,7 +909,7 @@ export function App() {
               role="alert"
             >
               <UnmetIcon size={15} play="once" />
-              <span>暂时无法获取回答，请检查服务后重试。</span>
+              <span>{errorMessage || '暂时无法获取回答，请重试。'}</span>
               <button
                 type="button"
                 className={`${focusRing} cursor-pointer rounded-md border-0 bg-transparent px-1 font-semibold text-[#d4491f] underline underline-offset-2 transition-colors hover:text-[#a93412]`}

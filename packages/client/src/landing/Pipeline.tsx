@@ -36,8 +36,8 @@ const steps: Step[] = [
   {
     Icon: IntentIcon,
     title: '解析检索意图',
-    status: '首轮已接入',
-    body: '首轮需求被拆成目标、硬条件、排除项、软偏好和待澄清表述，并生成初始查询。多轮条件更新和主动澄清尚未接入。',
+    status: '多轮与澄清已接入',
+    body: '每轮从当前任务的对话重建目标、硬条件、排除项与软偏好，增删条件只修改用户指定的项。模糊标准先询问，再检索。',
     tags: [
       { Icon: MustIcon, label: '硬条件' },
       { Icon: ExcludeIcon, label: '排除项' },
@@ -61,7 +61,7 @@ const steps: Step[] = [
     Icon: EvidenceIcon,
     title: '用证据排序和解释',
     status: '过滤与重排待实现',
-    body: '目标是先用元数据硬过滤，再基于证据评分重排。目前证据判断由提示词约束；上下文账本已负责正文预算和确定性投影。',
+    body: '已校验本轮引用、正文读取和条件核对覆盖，失败时在预算内修正。上下文账本负责正文预算；候选硬过滤与证据评分重排待实现。',
     tags: [
       { Icon: RerankIcon, label: '语义重排' },
       { Icon: FilterIcon, label: '确定性过滤' },
@@ -83,7 +83,7 @@ export function Pipeline() {
       <SectionHeading
         eyebrow={<Eyebrow icon={AgentLoopIcon}>它怎么工作</Eyebrow>}
         title="一条可以追踪的检索链路"
-        description="首轮意图解析、搜索、页面读取和上下文账本已经接通。下面同时展示目标链路与当前进度，过滤与重排是下一步。"
+        description="条件更新、主动澄清、搜索、页面读取和上下文账本已经接通。下面同时展示目标链路与当前进度，过滤与重排是下一步。"
       />
 
       <ol className="mt-14 grid list-none grid-cols-3 gap-5 p-0 max-[900px]:grid-cols-1">

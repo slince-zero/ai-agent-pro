@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "tsx --test 'src/landing/*.test.tsx'",
+    "test": "tsx --test 'src/**/*.test.ts' 'src/**/*.test.tsx'",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

@@ -1,5 +1,163 @@
 [
   {
+    "id": "thanks-does-not-repeat-fact",
+    "why": "真实闭环中观察到：致谢被正确分为 chat 且没有联网，但回答仍重复上轮 TypeScript 发布日期并称无法确认。致谢应该自然收尾。",
+    "tags": ["multi-turn", "no-tools", "regression"],
+    "messages": [
+      { "role": "user", "content": "TypeScript 5.0 正式版是哪年哪月发布的？" },
+      {
+        "role": "assistant",
+        "content": "TypeScript 5.0 正式版发布于 2023 年 3 月，官方公告日期为 3 月 16 日 [2]。"
+      },
+      { "role": "user", "content": "谢谢，今天先到这里。" }
+    ],
+    "expect": { "mode": "chat", "tools": "none", "answerLacks": ["TypeScript", "2023", "无法确认"] }
+  },
+  {
+    "id": "clarify-then-retrieve",
+    "why": "模糊篇幅先询问可执行标准；用户给出标准后继续检索，保留 RAG 目标且不把中文偏好升为硬条件。浏览器观察到希望20分钟以内偶发被降为偏好，明确上限必须进入硬条件。",
+    "tags": ["multi-turn", "clarify", "closure"],
+    "messages": [{ "role": "user", "content": "帮我找 RAG 教程，不要太长。" }],
+    "expect": {
+      "mode": "clarify",
+      "tools": "none",
+      "intent": { "target": "RAG", "ambiguities": { "empty": false } }
+    },
+    "followUps": [
+      {
+        "input": "希望阅读时间在 20 分钟以内，最好中文，发布日期不限。",
+        "expect": {
+          "mode": "retrieve",
+          "tools": "required",
+          "readPage": true,
+          "checklist": true,
+          "intent": {
+            "target": "RAG",
+            "hardConstraints": { "has": ["20"], "lacks": ["中文"] },
+            "preferences": { "has": ["中文"] },
+            "ambiguities": { "empty": true },
+            "language": null,
+            "timeRange": null
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "fact-target-not-constraint",
+    "why": "浏览器闭环中观察到：单一事实问题的“正式版”有时被额外放进硬条件。版本及正式版是当前目标的一部分，不能新增用户没有提出的筛选条件。",
+    "tags": ["fact", "constraints", "regression"],
+    "messages": [
+      {
+        "role": "user",
+        "content": "开始一个新任务：TypeScript 5.0 正式版是哪年哪月发布的？前面的资料条件不用了。"
+      }
+    ],
+    "expect": {
+      "tools": "required",
+      "readPage": true,
+      "mode": "retrieve",
+      "intent": {
+        "target": "TypeScript",
+        "hardConstraints": { "empty": true },
+        "exclusions": { "empty": true },
+        "preferences": { "empty": true }
+      }
+    }
+  },
+  {
+    "id": "new-task-clears-official-condition",
+    "why": "真实闭环中已观察到：明确开始新任务后，模型仍把旧任务的官方来源带进 hardConstraints。新事实问题不应继承官方、中文或排除 Express 4。",
+    "tags": ["multi-turn", "reset", "regression"],
+    "messages": [
+      {
+        "role": "user",
+        "content": "帮我找 Express 5 官方入门资料，必须有可运行的代码示例，排除 Express 4，最好是中文。"
+      },
+      { "role": "assistant", "content": "已找到 Express 5 官方入门资料，含可运行示例和中文版。" },
+      { "role": "user", "content": "代码示例不要求了，把中文改成必须，仍然排除 Express 4。" },
+      { "role": "assistant", "content": "当前条件为官方来源、中文，排除 Express 4。" },
+      {
+        "role": "user",
+        "content": "开始一个新任务：TypeScript 5.0 正式版是哪年哪月发布的？前面的资料条件不用了。"
+      }
+    ],
+    "expect": {
+      "tools": "required",
+      "readPage": true,
+      "mode": "retrieve",
+      "intent": {
+        "target": "TypeScript",
+        "hardConstraints": { "empty": true },
+        "exclusions": { "empty": true },
+        "preferences": { "empty": true }
+      }
+    }
+  },
+  {
+    "id": "retrieval-closure-express",
+    "why": "真实多轮闭环：硬条件与偏好可见；追问把中文升为必须并删除代码要求；新任务清空旧约束；日常对话不联网且不重复旧问题。重复运行观察到未读候选引用和代码内本机 URL 使最终校验失败，保留该失败作为回归检查。",
+    "tags": ["multi-turn", "constraints", "closure"],
+    "messages": [
+      {
+        "role": "user",
+        "content": "帮我找 Express 5 官方入门资料，必须有可运行的代码示例，排除 Express 4，最好是中文。"
+      }
+    ],
+    "expect": {
+      "tools": "required",
+      "readPage": true,
+      "checklist": true,
+      "mode": "retrieve",
+      "intent": {
+        "target": "Express",
+        "hardConstraints": { "has": [["代码", "示例"]], "lacks": ["中文"] },
+        "exclusions": { "has": ["Express 4"] },
+        "preferences": { "has": ["中文"] }
+      }
+    },
+    "followUps": [
+      {
+        "input": "代码示例不要求了，把中文改成必须，仍然排除 Express 4。",
+        "expect": {
+          "tools": "required",
+          "readPage": true,
+          "checklist": true,
+          "mode": "retrieve",
+          "intent": {
+            "target": "Express",
+            "hardConstraints": { "has": ["中文"], "lacks": [["代码", "示例"]] },
+            "exclusions": { "has": ["Express 4"] },
+            "preferences": { "lacks": ["中文"] }
+          }
+        }
+      },
+      {
+        "input": "开始一个新任务：TypeScript 5.0 正式版是哪年哪月发布的？前面的资料条件不用了。",
+        "expect": {
+          "tools": "required",
+          "readPage": true,
+          "mode": "retrieve",
+          "answerHas": ["2023", ["3月", "3 月", "March", "2023-03"]],
+          "intent": {
+            "target": "TypeScript",
+            "hardConstraints": { "empty": true },
+            "exclusions": { "empty": true },
+            "preferences": { "empty": true }
+          }
+        }
+      },
+      {
+        "input": "谢谢，今天先到这里。",
+        "expect": {
+          "tools": "none",
+          "mode": "chat",
+          "answerLacks": ["TypeScript", "2023", "无法确认"]
+        }
+      }
+    ]
+  },
+  {
     "id": "chitchat-no-tools",
     "why": "普通对话不该触发联网检索（产品计划阶段 7 的完成条件）",
     "tags": ["no-tools"],
@@ -88,7 +246,7 @@
   },
   {
     "id": "unconfirmable-condition",
-    "why": "作者是否在职几乎没法从公开网页确认：应该落进'无法确认'，而不是用常识补齐",
+    "why": "作者目前是否在职应有时效依据：已观察到模型拿2025年文章署名或无时间依据的个人自述确认当前状态，缺少当前证据应该落进无法确认",
     "tags": ["honesty", "constraints"],
     "messages": [
       {
@@ -96,11 +254,11 @@
         "content": "找一篇讲 RAG 的英文技术文章，作者必须是目前在职的 Google 员工。"
       }
     ],
-    "expect": { "tools": "required", "checklist": true, "answerHas": ["无法确认"] }
+    "expect": { "tools": "required", "checklist": true, "answerHas": [["无法确认", "无法核对"]] }
   },
   {
     "id": "follow-up-question",
-    "why": "追问会跳过意图解析，只靠历史消息理解'那 Koa 3 呢'指的是什么",
+    "why": "追问重建当前任务，用历史理解'那 Koa 3 呢'仍在问最低 Node.js 版本，并在本轮重新读取依据",
     "tags": ["multi-turn"],
     "messages": [
       { "role": "user", "content": "Express 5 要求的最低 Node.js 版本是多少？" },

@@ -43,7 +43,7 @@ export function Landing() {
             </h2>
             <p className="mx-auto mt-5 mb-0 max-w-[560px] text-[16px] leading-7 text-[#5c5a54]">
               首轮意图解析、搜索、页面读取和有预算的上下文账本已经跑通；
-              接下来补的是确定性过滤、证据重排和多轮条件更新。
+              接下来补的是候选标准化、确定性过滤和证据重排。
             </p>
             <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
               <a className={primaryButton} href="/app">

@@ -34,17 +34,18 @@ Context 希望逐步完成这条链路：理解需求、生成查询、获取候
 
 ![Context 对话界面](docs/assets/chat.png)
 
-一次提问会走完这条链路：`POST /api/questions/stream` → 意图解析 → Agent loop（搜索、读页、
-回答）→ 以 NDJSON 事件流回到界面。
+每次提问会走完这条链路：`POST /api/questions/stream` → 重建当前任务与条件 → 澄清、日常对话或检索
+→ 回答校验 → 以 NDJSON 事件流回到界面。
 
 **检索意图**
 
 - `retrievalIntentSchema`：目标、硬条件、排除条件、软偏好与待澄清项的严格 zod schema；
-- `extractRetrievalIntent()`：DeepSeek JSON 模式（关闭思考模式）解析首轮提问，输出必须通过
-  schema 校验；结果渲染成条件清单并进 system prompt，"条件核对"要逐条回答它；
+- `resolveRetrievalTask()`：DeepSeek JSON 模式（关闭思考模式）逐轮重建当前条件；明确的新任务切断旧上下文，
+  模糊条件先澄清，普通对话禁用检索工具；
+- `extractRetrievalIntent()` 保留为独立测试的单句解析学习函数；
 - `buildSearchQueries()`：从意图生成起手查询，排除条件和待澄清项不进查询；
-- `updateRetrievalIntent()`：根据"增加 / 删除 / 替换条件"的指令更新意图，已有测试和评测，
-  **还没有接进对话链路**。
+- `updateRetrievalIntent()` 保留为有测试与评测的补丁学习函数；对话链路选择从历史重建完整意图，
+  不接收客户端传回的条件，也不保存服务端会话。
 
 **工具**
 
@@ -60,6 +61,7 @@ Context 希望逐步完成这条链路：理解需求、生成查询、获取候
 - 工具预算由代码而不是 prompt 执行：search 10 次、read_page 6 次，用尽后以普通工具结果的
   形式告诉模型，每条结果都带上剩余额度；
 - 带 tools 的请求把上一轮的 `reasoning_content` 原样发回，这是 DeepSeek 思考模式的协议要求。
+- `done` 之前检查引用归属、是否读过正文和当前条件是否覆盖；校验失败在原有八轮内修正，失败草稿不保留为答案。
 
 **检索账本与上下文**（`context/retrieval-ledger.ts`）
 
@@ -71,6 +73,7 @@ Context 希望逐步完成这条链路：理解需求、生成查询、获取候
 **界面**
 
 - 流式回答、思维链折叠、每轮的工具调用时间轴、token 用量、停止与重试；
+- 本轮条件卡片区分必须满足、排除、偏好和待澄清项；
 - 答案里的 `[n]` 变成可点开的角标，答案下方列出真正被引用过的来源，并标出哪些读过正文；
 - Markdown、mermaid 与净化后的原始 HTML 渲染。
 
@@ -82,8 +85,7 @@ Context 希望逐步完成这条链路：理解需求、生成查询、获取候
 ## 还没有做到
 
 - **候选过滤与重排**：模型直接根据证据作答，还没有统一的候选结构、确定性硬过滤和可解释排序；
-- **多轮条件更新**：追问时不重新解析意图，只依靠聊天历史；`updateRetrievalIntent()` 还没接上；
-- **澄清**：解析出的 `ambiguities` 只作为提示进 prompt，不会主动向用户提问；
+- **语义证据验证**：读过页面不代表每条结论都得到该页面支持，逐项来源摘录与确定性候选判定仍未完成；
 - **页面读取边界**：robots、付费墙、非文本内容依赖 Tavily 自己的处理，项目里没有额外限制。
 
 ## 上下文设计
@@ -153,7 +155,7 @@ packages/
     src/pet/                 输入框上方的像素宠物
     src/util.ts              NDJSON 流式消费
   server/
-    src/app.ts               Express 路由、请求校验，组装意图解析与 Agent loop
+    src/app.ts               Express 路由、请求校验，组装当前任务解析与 Agent loop
     src/agent.ts             Agent loop：轮次、并行工具调用、预算、system prompt
     src/deepseek-client.ts   DeepSeek 客户端与模型名
     src/context/             检索账本：引用编号、正文预算、上下文投影
@@ -181,10 +183,11 @@ docs/
 - [x] 有界的证据上下文：引用编号、正文预算、可点开的来源
 - [x] 评测集：意图解析、意图更新、端到端 Agent
 - [ ] 候选过滤、证据选择与可解释重排
-- [ ] 基于后续对话增加、修改或撤销检索条件（`updateRetrievalIntent` 已有，待接入）
-- [ ] 对模糊条件主动澄清
+- [x] 逐轮重建当前条件，明确开始新任务时清空旧上下文
+- [x] 检索前对模糊条件主动澄清
 
 完整计划与阶段验收标准见 [产品与工程计划](docs/product-plan.md)。
+可复现的问题、数据流和当前边界见 [最小检索闭环](docs/retrieval-closure.md)。
 
 ## 开发原则
 

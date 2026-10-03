@@ -30,7 +30,7 @@ const stages: Stage[] = [
     title: '检索意图与条件更新',
     question: '如何稳定区分硬条件、排除项、软偏好和未知',
     state: 'partial',
-    note: '首轮解析已接入；条件更新已有测试与评测，尚未接入，主动澄清未做',
+    note: '每轮重建条件，支持增删与偏好升降级；模糊标准先澄清，复杂表述仍需评测',
   },
   {
     index: '03',
@@ -51,6 +51,7 @@ const stages: Stage[] = [
     title: '过滤、证据与重排',
     question: '确定性规则与模型判断如何分工',
     state: 'next',
+    note: '已校验引用、正文读取与条件覆盖；候选过滤、证据摘录和重排待实现',
   },
   {
     index: '05',
@@ -63,7 +64,8 @@ const stages: Stage[] = [
     index: '07',
     title: '多轮细化与日常对话',
     question: '如何在保留条件的同时自然地修改任务',
-    state: 'planned',
+    state: 'partial',
+    note: '追问更新、明确新任务与日常对话已接入；复杂指代仍依赖模型',
   },
 ]
 
@@ -103,7 +105,7 @@ export function Roadmap() {
       <SectionHeading
         eyebrow={<Eyebrow icon={EvidenceIcon}>项目阶段</Eyebrow>}
         title="按学习问题推进，而不是按功能堆叠"
-        description="每个阶段回答一个具体的工程问题，编号对应产品计划。循环（06）与上下文账本（05）已落地；意图更新和候选标准化仍有待补齐，过滤与重排（04）是下一步。"
+        description="每个阶段回答一个具体的工程问题，编号对应产品计划。循环、上下文账本与多轮条件更新已接通；候选标准化、过滤与重排是下一步。"
       />
 
       <ol className="mt-14 grid list-none grid-cols-2 gap-4 p-0 max-[820px]:grid-cols-1">

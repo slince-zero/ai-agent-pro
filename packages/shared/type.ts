@@ -9,6 +9,23 @@ export type ChatMessage = {
   content: string
 }
 
+/** 每次从完整对话重建的当前检索条件，不保存跨会话记忆。 */
+export type RetrievalIntent = {
+  target: string
+  contentType: string | null
+  hardConstraints: string[]
+  exclusions: string[]
+  preferences: string[]
+  ambiguities: string[]
+  language: string | null
+  timeRange: string | null
+}
+
+export type RetrievalTask =
+  | { mode: 'retrieve'; intent: RetrievalIntent }
+  | { mode: 'clarify'; intent: RetrievalIntent; question: string }
+  | { mode: 'chat' }
+
 /**
  * 一条搜索命中在界面上的样子。
  *
@@ -43,6 +60,10 @@ export type EvidenceSource = ToolSource & {
 }
 
 export type AgentStreamEvent =
+  | {
+      type: 'retrieval_task'
+      task: RetrievalTask
+    }
   | {
       type: 'text_delta'
       delta: string

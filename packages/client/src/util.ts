@@ -1,4 +1,5 @@
 import type { EvidenceSource, MessageStreamEvent, TokenUsage } from '@ai-agent-pro/shared/type.js'
+import { isRetrievalTask } from './retrieval-task'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -56,6 +57,8 @@ function isMessageStreamEvent(value: unknown): value is MessageStreamEvent {
   if (!isRecord(value)) return false
 
   switch (value.type) {
+    case 'retrieval_task':
+      return isRetrievalTask(value.task)
     case 'text_delta':
       return typeof value.delta === 'string'
     case 'reasoning_delta':

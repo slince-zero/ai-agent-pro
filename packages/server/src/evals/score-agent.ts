@@ -1,6 +1,6 @@
-import type { AgentStreamEvent, EvidenceSource } from '@ai-agent-pro/shared/type.js'
+import type { AgentStreamEvent, EvidenceSource, RetrievalTask } from '@ai-agent-pro/shared/type.js'
 import type { AgentCase } from './dataset.js'
-import { describeMatch, matches } from './score-intent.js'
+import { describeMatch, matches, scoreIntent } from './score-intent.js'
 import type { Check } from './score-intent.js'
 
 /** 一次运行留下的、评测需要的全部东西。由事件流还原，不碰账本内部 */
@@ -14,6 +14,7 @@ export type Trajectory = {
   done: boolean
   inputTokens: number
   outputTokens: number
+  task?: RetrievalTask
   error?: string
 }
 
@@ -40,6 +41,9 @@ export async function collectTrajectory(
   try {
     for await (const event of events) {
       switch (event.type) {
+        case 'retrieval_task':
+          trajectory.task = event.task
+          break
         case 'round_start':
           trajectory.rounds = event.round
           trajectory.answer = ''
@@ -135,6 +139,21 @@ export function scoreInvariants(trajectory: Trajectory): Check[] {
 export function scoreAgentExpect(trajectory: Trajectory, expect: AgentCase['expect']): Check[] {
   const checks: Check[] = []
   const calls = trajectory.toolCalls.length
+
+  if (expect.mode) {
+    checks.push({
+      name: '当前任务模式正确',
+      pass: trajectory.task?.mode === expect.mode,
+      actual: trajectory.task?.mode ?? null,
+    })
+  }
+  if (expect.intent) {
+    if (trajectory.task && trajectory.task.mode !== 'chat') {
+      checks.push(...scoreIntent(trajectory.task.intent, expect.intent))
+    } else {
+      checks.push({ name: '当前检索条件可核对', pass: false })
+    }
+  }
 
   if (expect.tools === 'none') {
     checks.push({ name: '没有调用工具', pass: calls === 0, actual: calls })

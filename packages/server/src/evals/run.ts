@@ -9,6 +9,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { parseArgs } from 'node:util'
 import { askAgentStream } from '../agent.js'
 import { DEEPSEEK_MODEL } from '../deepseek-client.js'
+import { resolveRetrievalTask } from '../retrieval/resolve-retrieval-task.js'
 import {
   extractRetrievalIntent,
   updateRetrievalIntent,
@@ -80,18 +81,31 @@ async function runIntentUpdateCase(item: IntentUpdateCase, signal: AbortSignal) 
 
 /** 和 app.ts 里的组装方式保持一致：评的是用户真正用到的那条链路 */
 async function runAgentCase(item: AgentCase, signal: AbortSignal) {
-  const trajectory = await collectTrajectory(
-    askAgentStream(
-      item.messages,
-      { signal },
-      { extractIntent: (input, intentSignal) => extractRetrievalIntent(input, intentSignal) },
-    ),
-  )
-  const count = (name: string) => trajectory.toolCalls.filter((call) => call.name === name).length
-
-  return {
-    checks: [...scoreInvariants(trajectory), ...scoreAgentExpect(trajectory, item.expect)],
-    output: {
+  const history = [...item.messages]
+  const turns = [{ expect: item.expect }, ...(item.followUps ?? [])]
+  const checks: Check[] = []
+  const outputs: Record<string, unknown>[] = []
+  for (const [index, turn] of turns.entries()) {
+    if ('input' in turn) history.push({ role: 'user', content: turn.input })
+    const trajectory = await collectTrajectory(
+      askAgentStream(
+        history,
+        { signal },
+        {
+          resolveTask: (taskMessages, taskSignal) => resolveRetrievalTask(taskMessages, taskSignal),
+        },
+      ),
+    )
+    const count = (name: string) => trajectory.toolCalls.filter((call) => call.name === name).length
+    checks.push(
+      ...[...scoreInvariants(trajectory), ...scoreAgentExpect(trajectory, turn.expect)].map(
+        (check) => ({
+          ...check,
+          name: turns.length > 1 ? `第 ${index + 1} 次提问：${check.name}` : check.name,
+        }),
+      ),
+    )
+    outputs.push({
       answer: trajectory.answer,
       rounds: trajectory.rounds,
       searches: count('search'),
@@ -101,8 +115,27 @@ async function runAgentCase(item: AgentCase, signal: AbortSignal) {
       inputTokens: trajectory.inputTokens,
       outputTokens: trajectory.outputTokens,
       toolCalls: trajectory.toolCalls,
+      evidence: trajectory.evidence,
+      task: trajectory.task,
       ...(trajectory.error ? { error: trajectory.error } : {}),
-    },
+    })
+    if (!trajectory.done || trajectory.error) break
+    history.push({ role: 'assistant', content: trajectory.answer })
+  }
+  const totals = Object.fromEntries(
+    [
+      'rounds',
+      'searches',
+      'pageReads',
+      'failedTools',
+      'sources',
+      'inputTokens',
+      'outputTokens',
+    ].map((key) => [key, outputs.reduce((sum, output) => sum + Number(output[key] ?? 0), 0)]),
+  )
+  return {
+    checks,
+    output: { ...outputs.at(-1), ...totals, ...(turns.length > 1 ? { turns: outputs } : {}) },
   }
 }
 

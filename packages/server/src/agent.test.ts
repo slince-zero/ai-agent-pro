@@ -4,7 +4,12 @@ import type {
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
 } from 'openai/resources/index.mjs'
-import type { AgentStreamEvent, ChatMessage, TokenUsage } from '@ai-agent-pro/shared/type.js'
+import type {
+  AgentStreamEvent,
+  ChatMessage,
+  TokenUsage,
+  RetrievalTask,
+} from '@ai-agent-pro/shared/type.js'
 import { askAgentStream } from './agent.js'
 import type { AgentRunContext, ModelRequest, ModelStreamChunk } from './agent.js'
 import type { RetrievalIntent } from './retrieval/retrieval-intent.js'
@@ -22,6 +27,229 @@ const intent: RetrievalIntent = {
   language: '中文',
   timeRange: null,
 }
+
+const retrievalTask: RetrievalTask = { mode: 'retrieve', intent }
+const verifiedAnswer =
+  '找到候选 [1]。\n条件核对\n已确认：包含完整示例 [1]\n已确认：排除只讲框架用法 [1]\n已确认：偏好 TypeScript [1]'
+
+test('uses the updated follow-up conditions in every round and sends them to the client', async () => {
+  const history: ChatMessage[] = [
+    { role: 'user', content: '找教程，必须完整示例，最好 TypeScript，排除只讲框架用法' },
+    { role: 'assistant', content: '旧回答 [8]' },
+    { role: 'user', content: '完整示例不要求了，TypeScript 改成必须' },
+  ]
+  const updated: RetrievalTask = {
+    mode: 'retrieve',
+    intent: { ...intent, hardConstraints: ['TypeScript'], preferences: [] },
+  }
+  const { requestModel, calls } = scriptModel([
+    {
+      text: '',
+      toolCalls: [
+        { id: 'read', name: 'read_page', arguments: '{"url":"https://example.com/new"}' },
+      ],
+    },
+    { text: '推荐 [1]。\n条件核对\n已确认：TypeScript [1]\n已确认：排除只讲框架用法 [1]' },
+  ])
+  const events = await collectEvents(
+    askAgentStream(
+      history,
+      { signal: new AbortController().signal },
+      {
+        requestModel,
+        resolveTask: async (received) => {
+          assert.deepEqual(received, history)
+          return updated
+        },
+        runTool: async () =>
+          JSON.stringify({
+            ok: true,
+            result: { url: 'https://example.com/new', content: 'TypeScript 教程，独立实现示例' },
+          }),
+      },
+    ),
+  )
+  assert.deepEqual(events[0], { type: 'retrieval_task', task: updated })
+  for (const call of calls) {
+    assert.match(String(call.transcript[0].content), /必须满足：TypeScript/)
+    assert.doesNotMatch(String(call.transcript[0].content), /必须满足：包含完整示例/)
+  }
+  assert.deepEqual(events.at(-1), { type: 'done' })
+  assert.equal(pickEvents(events, 'evidence')[0].sources[0].read, true)
+})
+
+test('clarifies an ambiguous condition before requesting either the model or tools', async () => {
+  const task: RetrievalTask = {
+    mode: 'clarify',
+    intent: { ...intent, ambiguities: ['短一点'] },
+    question: '希望几分钟读完？',
+  }
+  const events = await collectEvents(
+    askAgentStream(
+      messages,
+      { signal: new AbortController().signal },
+      {
+        resolveTask: async () => task,
+        requestModel: async function* () {
+          assert.fail('不应生成检索回答')
+          yield* []
+        },
+        runTool: async () => {
+          assert.fail('不应调用工具')
+        },
+      },
+    ),
+  )
+  assert.deepEqual(events, [
+    { type: 'retrieval_task', task },
+    { type: 'round_start', round: 1 },
+    { type: 'text_delta', delta: task.question },
+    { type: 'done' },
+  ])
+})
+
+test('ordinary conversation uses its own prompt, has no tools and repairs stale citations', async () => {
+  const { requestModel, calls } = scriptModel([
+    { text: '谢谢。旧结论 [9]' },
+    { text: '不客气，下次见。' },
+  ])
+  const events = await collectEvents(
+    askAgentStream(
+      messages,
+      { signal: new AbortController().signal },
+      {
+        requestModel,
+        resolveTask: async () => ({ mode: 'chat' }),
+        runTool: async () => {
+          assert.fail('日常对话不应联网')
+        },
+      },
+    ),
+  )
+  assert.equal(calls.length, 2)
+  assert.ok(calls.every((call) => !call.withTools))
+  assert.match(String(calls[0].transcript[0].content), /简短自然地回应/)
+  assert.doesNotMatch(String(calls[0].transcript[0].content), /你只有四个动作/)
+  assert.deepEqual(events.at(-1), { type: 'done' })
+  assert.match(String(calls[1].transcript.at(-1)?.content), /不属于本轮账本/)
+})
+
+test('a fresh task cannot see the previous task’s conditions or assistant evidence', async () => {
+  const newest: ChatMessage = { role: 'user', content: '开始一个新任务：TypeScript 5.0 哪月发布？' }
+  const history: ChatMessage[] = [
+    { role: 'user', content: '必须中文的 Express 教程' },
+    { role: 'assistant', content: '旧来源 [1]' },
+    newest,
+  ]
+  const { requestModel, calls } = scriptModel([{ text: '无法确认：目前没有可读取的来源。' }])
+  await collectEvents(
+    askAgentStream(
+      history,
+      { signal: new AbortController().signal },
+      {
+        requestModel,
+        resolveTask: async (received) => {
+          assert.deepEqual(received, [newest])
+          return {
+            mode: 'retrieve',
+            intent: {
+              ...intent,
+              target: 'TypeScript 5.0 发布时间',
+              hardConstraints: [],
+              exclusions: [],
+              preferences: [],
+              language: null,
+            },
+          }
+        },
+      },
+    ),
+  )
+  assert.deepEqual(calls[0].transcript.slice(1), [newest])
+  assert.doesNotMatch(String(calls[0].transcript[0].content), /必须中文|旧来源/)
+})
+
+test('an unresolved task fails before tools rather than silently dropping its conditions', async () => {
+  await assert.rejects(
+    collectEvents(
+      askAgentStream(
+        messages,
+        { signal: new AbortController().signal },
+        {
+          resolveTask: async () => {
+            throw new Error('invalid task')
+          },
+          requestModel: async function* () {
+            assert.fail('不应请求回答模型')
+            yield* []
+          },
+        },
+      ),
+    ),
+    /invalid task/,
+  )
+})
+
+test('reading the page repairs a claim that initially cited only a search snippet', async () => {
+  const { requestModel, calls } = scriptModel([
+    searchTurn('search'),
+    { text: verifiedAnswer },
+    {
+      text: '',
+      toolCalls: [
+        { id: 'read', name: 'read_page', arguments: '{"url":"https://example.com/page"}' },
+      ],
+    },
+    { text: verifiedAnswer },
+  ])
+  const events = await collectEvents(
+    askAgentStream(
+      messages,
+      { signal: new AbortController().signal },
+      {
+        requestModel,
+        resolveTask: async () => retrievalTask,
+        runTool: async (call) =>
+          call.function.name === 'search'
+            ? JSON.stringify({
+                ok: true,
+                results: [{ url: 'https://example.com/page', title: '候选', snippet: '只有摘要' }],
+              })
+            : JSON.stringify({
+                ok: true,
+                result: {
+                  url: 'https://example.com/page',
+                  content: '有独立实现的完整 TypeScript 示例',
+                },
+              }),
+      },
+    ),
+  )
+  assert.equal(calls.length, 4)
+  assert.match(String(calls[2].transcript.at(-1)?.content), /未读取正文/)
+  assert.equal(pickEvents(events, 'evidence').length, 1)
+  assert.equal(pickEvents(events, 'evidence')[0].sources[0].read, true)
+  assert.deepEqual(events.at(-1), { type: 'done' })
+})
+
+test('evidence repair stays within the existing round limit and cannot emit done on failure', async () => {
+  const { requestModel, calls } = scriptModel([{ text: '已确认：错误引用 [999]' }])
+  await assert.rejects(
+    collectEvents(
+      askAgentStream(
+        messages,
+        { signal: new AbortController().signal },
+        {
+          requestModel,
+          resolveTask: async () => retrievalTask,
+        },
+      ),
+    ),
+    /failed evidence validation/,
+  )
+  assert.equal(calls.length, agentLimits.maxRounds)
+  assert.equal(calls.at(-1)?.withTools, false)
+})
 
 type ScriptedCall = { id: string; name: string; arguments: string }
 type ScriptedTurn = { text: string; reasoning?: string; toolCalls?: ScriptedCall[] }

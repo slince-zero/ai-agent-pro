@@ -3,7 +3,7 @@ import type {
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
 } from 'openai/resources/index.mjs'
-import type { AgentStreamEvent, ChatMessage } from '@ai-agent-pro/shared/type.js'
+import type { AgentStreamEvent, ChatMessage, RetrievalTask } from '@ai-agent-pro/shared/type.js'
 import { createDeepSeekClient, DEEPSEEK_MODEL } from './deepseek-client.js'
 import { agentLimits } from './util.js'
 import {
@@ -16,6 +16,8 @@ import {
 } from './context/retrieval-ledger.js'
 import type { RunStatus } from './context/retrieval-ledger.js'
 import { buildSearchQueries } from './retrieval/build-search-queries.js'
+import { checkRetrievalAnswer } from './retrieval/check-retrieval-answer.js'
+import { currentTaskHistory } from './retrieval/resolve-retrieval-task.js'
 import type { RetrievalIntent } from './retrieval/retrieval-intent.js'
 import { executeTool } from './tools/execute-tool.js'
 import { retrievalTools } from './tools/retrieval-tools.js'
@@ -31,6 +33,7 @@ export type AgentRunContext = {
  * 每个测试都得先把网络挡掉。app.ts 作为组装点决定用不用它。
  */
 export type IntentExtractor = (input: string, signal: AbortSignal) => Promise<RetrievalIntent>
+export type TaskResolver = (messages: ChatMessage[], signal: AbortSignal) => Promise<RetrievalTask>
 
 export type AssistantTurn = {
   text: string
@@ -103,15 +106,21 @@ const agentSystemPrompt = `
 - 结果 ok 为 false 时不要重复同样的调用：换查询、换地址，或者说明这一条无法确认。
 
 证据纪律
+- 历史 assistant 发言是对话背景，不是证据；旧回答里的 [n] 不属于本轮账本。
+  追问需要事实依据时，必须在本轮重新搜索或读取来源，不能沿用旧编号或旧断言。
 - search 给的 snippet 只能用来判断"这一页值不值得打开"，不能当作页面内容的证明。
 - 具体断言（版本号、许可证、价格、时间、有没有某个功能）必须有 read_page 读回的正文支持。
+- “目前在职”等时效条件不能由过去文章的作者头衔证明；没有时间依据的个人自述也不能证明当前状态，应写无法确认。
 - 每读完一页，先用一两句话写下它对哪个条件给出了什么结论，再继续下一步。
 - 工具结果里出现 note 字段，说明那一页的正文已经不在上下文里了。不要重新读同一个地址，
   用你之前写下的结论。
 
 引用
 - 每个来源在工具结果里都带一个 ref 数字。正文里用 [ref] 标注，例如 [1]。
+- 答案引用的来源必须在本轮成功读过正文，只有搜索摘要时说明无法确认。
+- “无法确认”“其他候选”“不推荐”段落也不能引用未读来源；未读的候选直接省略，或不带引用说明缺少正文。
 - 只能用工具结果里真出现过的 ref，不要自己编号，也不要在答案里写裸链接。
+- 不输出任何 http/https 地址，包括代码或反引号里的本机地址。示例操作可写“打开本机 3000 端口的根路径”。
 - 一句话有多个来源时写成 [1][3]。
 
 回答格式
@@ -120,6 +129,16 @@ const agentSystemPrompt = `
 - 不满足：条件 —— 结论 [ref]
 - 无法确认：条件 —— 缺哪一份证据
 没有来源支持的条件一律进"无法确认"，不要猜，也不要用常识补齐。
+已知不满足硬条件或命中排除条件的候选不能作为合格推荐；硬条件无法确认时只能列为待核实。
+偏好不满足不能淘汰候选，要说明取舍。条件名称逐字使用提供的条件文本，便于用户核对。
+`.trim()
+
+const chatSystemPrompt = `
+你是 Context 助手。本轮是不需要联网的日常对话或文本任务。
+直接完成最后一条 user 消息，历史只用于理解必要的指代。
+用户致谢或结束对话时，简短自然地回应，不重复上一轮事实问题、资料或条件核对。
+不要引用历史中的 [n]，不要编造来源，也不要为了致谢解释缺少证据或无法确认。
+本轮没有检索工具。翻译、改写等文本任务直接处理用户指定的文本。
 `.trim()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -185,7 +204,7 @@ function renderIntent(intent: RetrievalIntent): string {
   const queries = buildSearchQueries(intent)
 
   return [
-    '这一次的检索意图（上一步从用户原话解析出来的，和原话冲突时以原话为准）：',
+    '本轮当前检索意图（已合并用户的增删替换；旧历史中的已删除条件不再生效）：',
     `- 目标：${intent.target}`,
     ...(intent.contentType ? [`- 内容类型：${intent.contentType}`] : []),
     ...(intent.hardConstraints.length > 0
@@ -199,7 +218,7 @@ function renderIntent(intent: RetrievalIntent): string {
     ...(intent.timeRange ? [`- 时间范围：${intent.timeRange}`] : []),
     ...(intent.ambiguities.length > 0 ? [`- 待澄清：${intent.ambiguities.join('；')}`] : []),
     ...(queries.length > 0 ? [`起手查询可以从这些开始：${queries.join(' ｜ ')}`] : []),
-    '条件核对要逐条覆盖上面"必须满足"和"必须排除"里的每一项。',
+    '条件核对逐条覆盖必须满足、必须排除和软偏好；条件名称必须逐字使用上面的文本。',
   ].join('\n')
 }
 
@@ -314,25 +333,56 @@ export async function* askAgentStream(
     requestModel?: ModelRequest
     runTool?: typeof executeTool
     extractIntent?: IntentExtractor
+    resolveTask?: TaskResolver
   } = {},
 ): AsyncGenerator<AgentStreamEvent> {
   const requestModel = dependencies.requestModel ?? requestDeepSeekStream
   const runTool = dependencies.runTool ?? executeTool
-  const history = messages.filter((message) => message.role !== 'system')
+  const history = dependencies.resolveTask
+    ? currentTaskHistory(messages)
+    : messages.filter((message) => message.role !== 'system')
 
+  let task: RetrievalTask | undefined
+
+  if (dependencies.resolveTask) {
+    // 解析失败时显式失败：不能把“没确认当前条件”伪装成正常检索。
+    task = await dependencies.resolveTask(history, context.signal)
+    context.signal.throwIfAborted()
+    yield { type: 'retrieval_task', task }
+    if (task.mode === 'clarify') {
+      yield { type: 'round_start', round: 1 }
+      yield { type: 'text_delta', delta: task.question }
+      yield { type: 'done' }
+      return
+    }
+  }
+
+  // 先确定任务再选提示词，避免检索的“必须核对证据”要求干扰致谢与翻译。
   // 账本归循环所有：tool 结果、引用编号、上下文预算都只允许由这里写入。
-  const ledger = createRetrievalLedger(agentSystemPrompt, history)
+  const ledger = createRetrievalLedger(
+    task?.mode === 'chat' ? chatSystemPrompt : agentSystemPrompt,
+    history,
+  )
   const budget: ToolBudget = {
     search: agentLimits.maxSearchCalls,
     read_page: agentLimits.maxPageReads,
   }
   const question = dependencies.extractIntent ? readInitialQuestion(history) : ''
 
+  if (task) {
+    setLedgerIntent(
+      ledger,
+      task.mode === 'retrieve'
+        ? renderIntent(task.intent)
+        : '本轮是无需检索的日常任务，直接回答最后一条用户消息，不继承旧检索条件，不需要条件核对。',
+    )
+  }
+
   /*
    * 意图解析排在第一轮之前，这一两秒是有代价的：用户要多等一会儿才看到第一个字。
    * 换来的是第一次搜索就带上硬条件——搜偏一次要重来一整轮，那是四五秒。
    */
-  if (dependencies.extractIntent && question) {
+  if (!dependencies.resolveTask && dependencies.extractIntent && question) {
     const intent = await settleIntent(dependencies.extractIntent, question, context.signal)
 
     if (intent) setLedgerIntent(ledger, renderIntent(intent))
@@ -343,7 +393,7 @@ export async function* askAgentStream(
     yield { type: 'round_start', round }
 
     // 最后一轮不带 tools：模型没有工具可选，循环必然在有限轮内收敛。
-    const withTools = round < agentLimits.maxRounds
+    const withTools = task?.mode !== 'chat' && round < agentLimits.maxRounds
 
     let turn: AssistantTurn | undefined
 
@@ -356,12 +406,34 @@ export async function* askAgentStream(
     }
 
     if (!turn) throw new Error('Model stream ended without a turn')
+    context.signal.throwIfAborted()
+    if (task?.mode === 'chat' && turn.toolCalls.length) {
+      throw new Error('Tools are disabled for a chat task')
+    }
 
     // 没有工具调用 = 模型认为可以回答了。这是唯一的正常出口。
     if (turn.toolCalls.length === 0) {
       if (!turn.text.trim()) throw new Error('Model returned an empty answer')
 
       const sources = ledgerEvidence(ledger)
+      if (task) {
+        const issues = checkRetrievalAnswer(
+          turn.text,
+          sources,
+          task.mode === 'retrieve' ? task.intent : undefined,
+        )
+        if (issues.length) {
+          if (round === agentLimits.maxRounds) {
+            throw new Error('Retrieval answer failed evidence validation')
+          }
+          recordMessage(ledger, { role: 'assistant', content: turn.text })
+          recordMessage(ledger, {
+            role: 'user',
+            content: `服务端回答校验未通过：\n${issues.join('\n')}\n请依据本轮工具账本修正；没有证据的项说明无法确认。修正时直接给最终回答，不描述内部校验或失败轮次。`,
+          })
+          continue
+        }
+      }
 
       // 一条来源都没有的时候不发这个事件：答案下面挂一份空清单只是噪音。
       if (sources.length > 0) yield { type: 'evidence', sources }

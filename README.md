@@ -38,19 +38,20 @@ user request
 
 ![Context chat view](docs/assets/chat.png)
 
-One question runs this path: `POST /api/questions/stream` → intent extraction → agent loop
-(search, read, answer) → an NDJSON event stream back to the UI.
+Each question runs this path: `POST /api/questions/stream` → resolve the current task and
+conditions → clarify, chat, or retrieve → validate the answer → an NDJSON event stream back to the UI.
 
 **Retrieval intent**
 
 - `retrievalIntentSchema`: a strict zod schema for goal, hard constraints, exclusions, soft
   preferences, and ambiguities.
-- `extractRetrievalIntent()`: DeepSeek in JSON mode (thinking disabled) parses the first question;
-  the output must pass the schema. It is rendered as a checklist inside the system prompt, and the
-  answer's condition check must cover every item.
+- `resolveRetrievalTask()`: DeepSeek in JSON mode (thinking disabled) reconstructs current
+  conditions on every turn. Explicit new-task instructions cut off old context; ambiguous
+  conditions trigger clarification, and ordinary conversation runs without tools.
+- `extractRetrievalIntent()` remains an independently tested single-question learning helper.
 - `buildSearchQueries()`: seed queries from the intent; exclusions and ambiguities stay out.
-- `updateRetrievalIntent()`: applies "add / remove / replace a condition" instructions. Tested and
-  evaluated, **not yet wired into the chat route**.
+- `updateRetrievalIntent()` remains a tested patch helper. The chat route reconstructs the full
+  intent from history instead of accepting client-supplied state or storing server sessions.
 
 **Tools**
 
@@ -68,6 +69,8 @@ One question runs this path: `POST /api/questions/stream` → intent extraction 
   budget comes back as an ordinary tool result, and every result carries the remaining budget.
 - Requests with tools send the previous turn's `reasoning_content` back, as DeepSeek's thinking
   mode requires.
+- Citation ownership, page reads, and active-condition coverage are checked before `done`.
+  Invalid answers are repaired within the same eight-round budget; failed drafts are discarded.
 
 **Retrieval ledger and context** (`context/retrieval-ledger.ts`)
 
@@ -81,6 +84,7 @@ One question runs this path: `POST /api/questions/stream` → intent extraction 
 **UI**
 
 - Streaming answers, collapsible reasoning, a per-round tool timeline, token usage, stop/retry.
+- A current-condition card distinguishes requirements, exclusions, preferences, and ambiguities.
 - `[n]` in the answer becomes a clickable citation; the answer lists the sources it actually cited
   and marks which ones were read in full.
 - Markdown, mermaid, and sanitized raw HTML rendering.
@@ -96,9 +100,8 @@ One question runs this path: `POST /api/questions/stream` → intent extraction 
 
 - **Candidate filtering and re-ranking**: the model answers straight from the evidence. There is no
   candidate structure, deterministic hard filter, or explainable ranking yet.
-- **Multi-turn condition updates**: follow-up questions skip intent extraction and rely on chat
-  history alone; `updateRetrievalIntent()` is not wired in.
-- **Clarification**: parsed `ambiguities` only go into the prompt; the agent never asks back.
+- **Semantic proof**: reading a page does not prove every claim is supported by that page.
+  Statement-level evidence excerpts and deterministic candidate decisions remain unfinished.
 - **Page-reading boundaries**: robots, paywalls, and non-text content are left to Tavily.
 
 ## Context design
@@ -171,7 +174,7 @@ packages/
     src/pet/                 pixel pet above the input box
     src/util.ts              NDJSON stream consumer
   server/
-    src/app.ts               Express route and validation; wires intent extraction into the loop
+    src/app.ts               Express route and validation; wires current-task resolution into the loop
     src/agent.ts             agent loop: rounds, concurrent tool calls, budgets, system prompt
     src/deepseek-client.ts   DeepSeek client and model name
     src/context/             retrieval ledger: citation numbers, page budget, context projection
@@ -199,10 +202,11 @@ docs/
 - [x] Bounded evidence context: citation numbers, page budget, clickable sources
 - [x] Eval suites: intent extraction, intent update, end-to-end agent
 - [ ] Candidate filtering, evidence selection, explainable re-ranking
-- [ ] Adding, changing, or revoking constraints across turns (`updateRetrievalIntent` exists, not wired)
-- [ ] Asking back on ambiguous conditions
+- [x] Reconstructing active conditions across turns and clearing explicitly restarted tasks
+- [x] Asking back on ambiguous conditions before retrieval
 
 Full plan and per-stage acceptance criteria: [product plan](docs/product-plan.md).
+Runnable example, data flow, and limits: [retrieval closure](docs/retrieval-closure.md).
 
 ## Development principles
 

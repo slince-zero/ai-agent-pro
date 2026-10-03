@@ -4,7 +4,7 @@ import { createDeepSeekClient, DEEPSEEK_MODEL } from '../deepseek-client.js'
 import { retrievalIntentSchema } from './retrieval-intent.js'
 import type { RetrievalIntent } from './retrieval-intent.js'
 
-type IntentModelRequest = (messages: ChatMessage[], signal: AbortSignal) => Promise<string>
+export type IntentModelRequest = (messages: ChatMessage[], signal: AbortSignal) => Promise<string>
 
 const retrievalIntentSystemPrompt = `
 你是一个检索意图解析器。请将用户的检索需求转换成 JSON。
@@ -61,7 +61,7 @@ type ThinkingParams = {
   thinking: { type: 'enabled' | 'disabled' }
 }
 
-async function requestDeepSeekIntent(
+export async function requestDeepSeekIntent(
   messages: ChatMessage[],
   signal: AbortSignal,
 ): Promise<string> {

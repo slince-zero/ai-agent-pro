@@ -64,6 +64,16 @@ export const intentUpdateCaseSchema = z.strictObject({
   unchanged: z.array(retrievalIntentSchema.keyof()).default([]),
 })
 
+const agentExpectSchema = z.strictObject({
+  tools: z.enum(['none', 'required']).optional(),
+  readPage: z.boolean().optional(),
+  checklist: z.boolean().optional(),
+  answerHas: z.array(matchSchema).optional(),
+  answerLacks: z.array(matchSchema).optional(),
+  mode: z.enum(['retrieve', 'clarify', 'chat']).optional(),
+  intent: intentExpectSchema.optional(),
+})
+
 export const agentCaseSchema = z.strictObject({
   ...caseMetaSchema,
   messages: z
@@ -75,18 +85,11 @@ export const agentCaseSchema = z.strictObject({
     )
     .min(1)
     .refine((messages) => messages.at(-1)?.role === 'user', '最后一条必须是 user'),
-  expect: z.strictObject({
-    /** none：不该联网；required：至少调一次工具 */
-    tools: z.enum(['none', 'required']).optional(),
-    /** 至少成功读回一页正文 */
-    readPage: z.boolean().optional(),
-    /** 答案里必须有"条件核对"一段 */
-    checklist: z.boolean().optional(),
-    /** 最终答案必须命中的片段（每一项独立检查） */
-    answerHas: z.array(matchSchema).optional(),
-    /** 最终答案不能出现的片段 */
-    answerLacks: z.array(matchSchema).optional(),
-  }),
+  expect: agentExpectSchema,
+  /** 真实上一轮回答会进入下一轮历史，不能用手写答案代替闭环。 */
+  followUps: z
+    .array(z.strictObject({ input: z.string().trim().min(1), expect: agentExpectSchema }))
+    .optional(),
 })
 
 export type IntentCase = z.infer<typeof intentCaseSchema>

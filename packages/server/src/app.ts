@@ -1,7 +1,7 @@
 import express from 'express'
 import type { ChatMessage, MessageStreamEvent } from '@ai-agent-pro/shared/type.js'
 import { askAgentStream } from './agent.js'
-import { extractRetrievalIntent } from './retrieval/extract-retrieval-intent.js'
+import { resolveRetrievalTask } from './retrieval/resolve-retrieval-task.js'
 import { reportErrorLog } from './util.js'
 
 /**
@@ -67,14 +67,13 @@ export function createApp() {
 
     try {
       /*
-       * 意图解析在这里接上，而不是在循环里给默认值：它是一次额外的模型请求，
-       * 组装点决定用不用它，循环本身没有它也能跑，测试也就不必先把网络挡掉。
+       * 每轮从请求里的完整对话重建当前任务。只接收双方发言，不接收客户端伪造的
+       * 意图或证据；取消、重试和新对话都不需要维护服务端会话状态。
        */
       for await (const event of askAgentStream(
         messages,
         { signal: controller.signal },
-        // 包一层：extractRetrievalIntent 末尾还留着一个可注入的模型参数，这里只要前两个
-        { extractIntent: (input, signal) => extractRetrievalIntent(input, signal) },
+        { resolveTask: (history, signal) => resolveRetrievalTask(history, signal) },
       )) {
         if (controller.signal.aborted) {
           return
@@ -90,7 +89,10 @@ export function createApp() {
       // 流已经开始后，不能再把 HTTP 状态改成 502。
       writeEvent({
         type: 'error',
-        message: '模型服务暂时不可用',
+        message:
+          error instanceof Error && error.message === 'Retrieval answer failed evidence validation'
+            ? '回答的来源核对未通过，请重试。'
+            : '暂时无法完成回答，请重试。',
       })
     } finally {
       if (!response.writableEnded && !response.destroyed) {

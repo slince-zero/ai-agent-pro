@@ -63,7 +63,7 @@ export function Hero() {
         <Reveal order={2} className="mt-6">
           <p className="mx-auto m-0 max-w-[620px] text-[17px] leading-7 text-[#5c5a54] max-[640px]:text-[15px]">
             Context 会把「必须满足什么、要排除什么、更偏好什么」拆成结构化条件，
-            再搜索、读取页面，围绕来源证据回答。确定性过滤、证据重排和多轮条件更新仍在建设中。
+            再搜索、读取页面，围绕来源证据回答。支持多轮修改条件与主动澄清，确定性过滤和证据重排仍在建设中。
           </p>
         </Reveal>
 
