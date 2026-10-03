@@ -92,7 +92,21 @@ export function Navbar() {
           className="relative flex flex-1 items-center justify-center gap-1 max-[820px]:hidden"
           aria-label="页面导航"
           ref={navRef}
-          onPointerLeave={() => setPill((current) => ({ ...current, on: false }))}
+          onPointerLeave={() => {
+            const focused = document.activeElement
+
+            if (focused instanceof HTMLElement && navRef.current?.contains(focused)) {
+              movePill(focused)
+              return
+            }
+
+            setPill((current) => ({ ...current, on: false }))
+          }}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+              setPill((current) => ({ ...current, on: false }))
+            }
+          }}
         >
           <span
             className="glass-pill"

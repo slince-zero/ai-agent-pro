@@ -25,7 +25,7 @@ function ComposerPreview() {
             <AttachIcon size={20} />
           </span>
           <span className="text-xs text-[#8a8881] max-[520px]:hidden">
-            Enter 发送 · Shift + Enter 换行
+            点击进入对话，输入你的问题
           </span>
         </span>
         <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#1f1f1f] text-white shadow-[0_4px_10px_rgba(31,31,31,0.18)] transition-colors duration-200 group-hover:bg-[#f05a2a]">
@@ -63,7 +63,7 @@ export function Hero() {
         <Reveal order={2} className="mt-6">
           <p className="mx-auto m-0 max-w-[620px] text-[17px] leading-7 text-[#5c5a54] max-[640px]:text-[15px]">
             Context 会把「必须满足什么、要排除什么、更偏好什么」拆成结构化条件，
-            再围绕来源证据回答：哪些条件已确认，哪些不满足，哪些仍然无法确认。
+            再搜索、读取页面，围绕来源证据回答。确定性过滤、证据重排和多轮条件更新仍在建设中。
           </p>
         </Reveal>
 

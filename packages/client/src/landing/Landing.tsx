@@ -11,17 +11,17 @@ import './landing.css'
 
 export function Landing() {
   return (
-    <div className="min-w-[320px] bg-[#faf9f5] font-sans text-[#1f1f1f] antialiased">
+    <div className="landing min-w-[320px] bg-[#faf9f5] font-sans text-[#1f1f1f] antialiased">
       <a
-        className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:rounded-lg focus:bg-[#1f1f1f] focus:px-3 focus:py-2 focus:text-sm focus:text-white"
-        href="#how"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-[60] focus:rounded-lg focus:bg-[#1f1f1f] focus:px-3 focus:py-2 focus:text-sm focus:text-white"
+        href="#main-content"
       >
         跳到正文
       </a>
 
       <Navbar />
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <Hero />
         <div id="how">
           <Pipeline />
@@ -42,8 +42,8 @@ export function Landing() {
               给它一个真实的、带条件的问题
             </h2>
             <p className="mx-auto mt-5 mb-0 max-w-[560px] text-[16px] leading-7 text-[#5c5a54]">
-              循环、搜索、页面读取和思维链都已经跑通；接下来补的是证据怎么排序、
-              以及有限预算里该带哪些上下文。
+              首轮意图解析、搜索、页面读取和有预算的上下文账本已经跑通；
+              接下来补的是确定性过滤、证据重排和多轮条件更新。
             </p>
             <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
               <a className={primaryButton} href="/app">

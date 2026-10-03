@@ -7,8 +7,7 @@ type Stage = {
   index: string
   title: string
   question: string
-  state: 'done' | 'next' | 'planned'
-  /** 已完成但还没接进循环的阶段，在卡片上说清这一点，否则"已完成"会被读成"已生效" */
+  state: 'done' | 'partial' | 'next' | 'planned'
   note?: string
 }
 
@@ -30,14 +29,15 @@ const stages: Stage[] = [
     index: '02',
     title: '检索意图与条件更新',
     question: '如何稳定区分硬条件、排除项、软偏好和未知',
-    state: 'done',
-    note: '结构与解析已写完并有测试，还没接进循环',
+    state: 'partial',
+    note: '首轮解析已接入；条件更新已有测试与评测，尚未接入，主动澄清未做',
   },
   {
     index: '03',
     title: '搜索来源与候选标准化',
     question: '哪些字段可靠，哪些必须进一步检查',
-    state: 'done',
+    state: 'partial',
+    note: '搜索与页面读取已接入；统一候选结构尚未完成',
   },
   {
     index: '06',
@@ -56,7 +56,8 @@ const stages: Stage[] = [
     index: '05',
     title: '上下文构建',
     question: '有限预算内，什么信息最值得进入下一次请求',
-    state: 'planned',
+    state: 'done',
+    note: '检索账本已实现引用编号、正文预算和确定性上下文投影',
   },
   {
     index: '07',
@@ -67,6 +68,11 @@ const stages: Stage[] = [
 ]
 
 const stateMeta = {
+  partial: {
+    Icon: ThinkingIcon,
+    label: '部分完成',
+    className: 'text-[#a56a21] border-[#a56a21]/25 bg-[#fff9ed]',
+  },
   done: {
     Icon: ConfirmedIcon,
     label: '已完成',
@@ -97,7 +103,7 @@ export function Roadmap() {
       <SectionHeading
         eyebrow={<Eyebrow icon={EvidenceIcon}>项目阶段</Eyebrow>}
         title="按学习问题推进，而不是按功能堆叠"
-        description="每个阶段先回答一个具体的工程问题，再进入下一步。卡片按完成情况排列，编号仍对应计划里的阶段序号——循环（06）先于过滤和上下文构建（04、05）落地，所以这里不是顺序推进的。"
+        description="每个阶段回答一个具体的工程问题，编号对应产品计划。循环（06）与上下文账本（05）已落地；意图更新和候选标准化仍有待补齐，过滤与重排（04）是下一步。"
       />
 
       <ol className="mt-14 grid list-none grid-cols-2 gap-4 p-0 max-[820px]:grid-cols-1">

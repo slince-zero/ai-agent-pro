@@ -23,7 +23,7 @@ export function IconGallery() {
   const activeHint = playModes.find((mode) => mode.value === play)?.hint ?? ''
 
   return (
-    <div className="min-h-svh bg-[#faf9f5] bg-[url('/assets/grid-paper.png')] bg-[length:1440px_auto] font-sans text-[#1f1f1f] antialiased">
+    <div className="paper-grid min-h-svh font-sans text-[#1f1f1f] antialiased">
       <header className="sticky top-0 z-10 border-b border-[#deddd7] bg-[#faf9f5]/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-[1080px] flex-wrap items-center justify-between gap-4 px-6 py-4">
           <ContextLogo size={26} />

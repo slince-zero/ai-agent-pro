@@ -1,8 +1,7 @@
 /**
  * Landing 专用样式
  *
- * 只做三件事：入场揭示、纸感底纹、以及首屏之外的渲染延迟。
- * 动画一律只改 opacity / transform，避免触发布局与重绘。
+ * 入场揭示、纸感底纹、渲染延迟和悬浮导航。
  */
 
 /**
@@ -16,40 +15,23 @@
     opacity 640ms cubic-bezier(0.22, 0.61, 0.36, 1),
     transform 640ms cubic-bezier(0.22, 0.61, 0.36, 1);
   transition-delay: calc(var(--r, 0) * 90ms);
-  will-change: opacity, transform;
 }
 
 .reveal[data-shown='true'] {
   opacity: 1;
   transform: none;
-  will-change: auto;
 }
 
-/**
- * 渐进增强：支持滚动驱动动画的浏览器（Chrome / Safari 系）直接交给合成线程，
- * 不再需要 JS 观察器。Firefox 尚未支持 view()，仍走上面的 transition 版本。
- * 注意 animation-timeline 必须写在 animation 简写之后，否则会被重置。
- */
-@supports (animation-timeline: view()) {
-  .reveal {
-    opacity: 1;
-    transform: none;
-    transition: none;
-    animation: landing-reveal 1s linear both;
-    animation-timeline: view();
-    animation-range: entry 6% cover 24%;
-  }
+/* 键盘进入内容时立即显示，避免焦点落在透明的链接上。 */
+.reveal:focus-within {
+  opacity: 1;
+  transform: none;
+  transition: none;
 }
 
-@keyframes landing-reveal {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 18px, 0);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+.landing :where(a, button):focus-visible {
+  outline: 3px solid #d4491f;
+  outline-offset: 3px;
 }
 
 /** 首屏之外的分节：滚动到附近才排版，缩短首帧时间 */
@@ -72,22 +54,6 @@
     28px 28px,
     28px 28px;
   background-position: center top;
-}
-
-/** 链路示意里连接两段的竖线：随所在分节一起长出来 */
-.landing-link {
-  transform-origin: center top;
-  animation: landing-grow 520ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
-  animation-delay: calc(var(--r, 0) * 90ms + 160ms);
-}
-
-@keyframes landing-grow {
-  from {
-    transform: scaleY(0);
-  }
-  to {
-    transform: scaleY(1);
-  }
 }
 
 /**
@@ -284,6 +250,7 @@
 /** 导航是悬浮的，锚点滚动要给它留出高度，否则标题会被玻璃压住 */
 #how,
 #demo,
+#loop,
 #roadmap {
   scroll-margin-top: 96px;
 }
@@ -296,14 +263,9 @@
     animation: none;
   }
 
-  .landing-link {
-    animation: none;
-  }
-
-  .glass-pill,
-  .glass-bar,
-  .glass-bar::after,
-  .glass-cta {
+  .landing *,
+  .landing *::before,
+  .landing *::after {
     transition: none;
   }
 }

@@ -31,13 +31,7 @@ type ReplayRound = {
 }
 
 /**
- * 一次真实运行的静态复刻。
- *
- * 这些数字不是装饰：两次搜索确实在同一轮里并行起飞，读页面确实发生在下一轮，
- * 失败的那一次确实只是一条普通的工具结果、循环照样往下走——把界面上能看到的
- * 东西照抄下来，比再写一段"我们支持工具调用"更能说明循环到了哪一步。
- *
- * 失败那行的文案取自服务端 toolErrorPreview 里真实的说法，别在这里自己编一个。
+ * 工具过程的静态演示，不发起真实请求；耗时和数量属于示例数据。
  */
 const rounds: ReplayRound[] = [
   {
@@ -108,12 +102,12 @@ const facts: { Icon: ComponentType<IconProps>; title: string; body: string }[] =
   {
     Icon: EvidenceIcon,
     title: '证据留在服务端',
-    body: '页面正文上限两万字符，只进服务端自己的账本；客户端拿到的是服务端提炼的摘要，伪造不了工具结果。',
+    body: '每页正文最多两万字符，账本内正文总预算六万字符；客户端收到来源摘要，发送的聊天历史只接受用户和助手消息。',
   },
   {
     Icon: ConfirmedIcon,
     title: '停下来的方式是有限的',
-    body: '最多 8 轮，最后一轮不带工具，因此循环必然收敛；没有来源同时满足条件时输出「无法确认」，而不是猜一个答案。',
+    body: '最多 8 轮，最后一轮不带工具；证据不足时，提示词要求说明「无法确认」。确定性的条件过滤和证据判定仍待实现。',
   },
 ]
 
@@ -183,7 +177,7 @@ export function Loop() {
       <SectionHeading
         eyebrow={<Eyebrow icon={AgentLoopIcon}>已经跑通</Eyebrow>}
         title="循环、工具和思维链已经在跑"
-        description="下面这段是界面上真实的检索过程：哪一轮在想什么、同时调了哪些工具、每一步拿回了什么，以及某一步失败之后循环怎么接着往下走。"
+        description="下面用示例数据展示已经实现的工具过程：同轮并行调用、逐步返回结果和显式失败。耗时与数量为静态演示，打开对话可查看实际运行。"
       />
 
       <div className="mt-14 grid grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-6 max-[980px]:grid-cols-1">
